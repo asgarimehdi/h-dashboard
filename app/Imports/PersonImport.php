@@ -10,6 +10,7 @@ use App\Models\Tahsil;
 use App\Models\Unit;
 use App\Services\AccessService;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Traits\PersianNormalizer;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
@@ -17,6 +18,8 @@ use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
 class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRow
 {
+    use PersianNormalizer;
+
     /**
      * Same chunking contract as HardwareImport (#1167): each statement stays
      * under PostgreSQL's bind-parameter ceiling and a 5,000-row sheet becomes
@@ -28,6 +31,25 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
      * Fields Person::boot() folds on save; bulk writes must reproduce it.
      */
     private const NORMALIZED_FIELDS = ['f_name', 'l_name'];
+
+    /**
+     * #1697: Persian label per numeric lookup column — the single source of the
+     * row-rejection messages, in sheet-column order.
+     */
+    private const LOOKUP_LABELS = [
+        't_id' => 'تحصیلات',
+        'e_id' => 'نوع استخدام',
+        'r_id' => 'ردیف سازمانی',
+        's_id' => 'سمت',
+        'u_id' => 'واحد',
+    ];
+
+    /**
+     * #1697: `persons.t_id`/`e_id`/`r_id`/`s_id` are NOT NULL, so an empty cell
+     * would abort the whole sheet with 23502 on confirm. `u_id` has its own
+     * empty check in `buildPreview()`.
+     */
+    private const REQUIRED_LOOKUP_COLUMNS = ['t_id', 'e_id', 'r_id', 's_id'];
 
     private array $accessibleUnitIds = [];
 
@@ -93,13 +115,16 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
     {
         // Map once: the mapped rows drive the lookup window and both passes.
         $dataByRow = [];
+        $invalidByRow = [];
 
         foreach ($rows as $index => $row) {
-            $dataByRow[$index + 2] = $this->mapRowToData($row->toArray());
+            $mapped = $this->mapRowToData($row->toArray());
+            $dataByRow[$index + 2] = $mapped['data'];
+            $invalidByRow[$index + 2] = $mapped['invalid'];
         }
 
         // #1167: collect every cache bump into one flush per namespace.
-        app(CacheInvalidationServiceInterface::class)->batch(function () use ($dataByRow) {
+        app(CacheInvalidationServiceInterface::class)->batch(function () use ($dataByRow, $invalidByRow) {
             // Pre-load existing person records by n_code for comparison
             $this->loadExistingRecords($dataByRow);
 
@@ -108,7 +133,7 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
 
             // First pass: build preview data
             foreach ($dataByRow as $rowNumber => $data) {
-                $this->buildPreview($data, $rowNumber);
+                $this->buildPreview($data, $rowNumber, $invalidByRow[$rowNumber]);
             }
 
             // Second pass: apply selected actions if provided
@@ -268,12 +293,23 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  array<string, string>  $invalidLookups
      */
-    private function buildPreview(array $data, int $rowNumber): void
+    private function buildPreview(array $data, int $rowNumber, array $invalidLookups = []): void
     {
         // Validate required fields
         if (empty($data['n_code']) || empty($data['f_name']) || empty($data['l_name'])) {
             $this->recordRejectedRow($rowNumber, 'فیلدهای اجباری n_code، f_name و l_name خالی هستند', $data);
+
+            return;
+        }
+
+        // #1697: a non-numeric (or missing required) lookup id must reject the
+        // row here — the confirm pass reuses this rejection (#1209), so the
+        // bulk insert never sees a fabricated `0` or a NOT NULL violation.
+        $lookupError = $this->lookupRejectionMessage($data, $invalidLookups);
+        if ($lookupError !== null) {
+            $this->recordRejectedRow($rowNumber, $lookupError, $data);
 
             return;
         }
@@ -369,34 +405,77 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         return null;
     }
 
+    /**
+     * #1697: build one merged rejection message per row.
+     *
+     * A row must produce exactly one `preview` entry — the operator UI derives
+     * the sheet row number from the entry's position — so several bad columns
+     * are joined with «؛ » in sheet-column order instead of being queued
+     * separately.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, string>  $invalidLookups
+     */
+    private function lookupRejectionMessage(array $data, array $invalidLookups): ?string
+    {
+        $messages = [];
+
+        foreach ($invalidLookups as $column => $cell) {
+            $messages[] = 'شناسه '.self::LOOKUP_LABELS[$column]." ({$column}) باید یک عدد صحیح باشد؛ مقدار سلول: {$cell}";
+        }
+
+        foreach (self::REQUIRED_LOOKUP_COLUMNS as $column) {
+            if (! array_key_exists($column, $invalidLookups) && ($data[$column] ?? null) === null) {
+                $messages[] = 'شناسه '.self::LOOKUP_LABELS[$column]." ({$column}) خالی است";
+            }
+        }
+
+        return $messages === [] ? null : implode('؛ ', $messages);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array{data: array<string, mixed>, invalid: array<string, string>}
+     */
     private function mapRowToData(array $row): array
     {
+        $ids = [];
+        $invalid = [];
+
+        foreach (self::LOOKUP_LABELS as $column => $_) {
+            $parsed = $this->parseLookupId($row[$column] ?? null);
+            $ids[$column] = $parsed['value'];
+
+            if ($parsed['invalid'] !== null) {
+                $invalid[$column] = $parsed['invalid'];
+            }
+        }
+
         // Expected CSV headers: n_code, f_name, l_name, t_id, e_id, r_id, s_id, u_id, phone
         return [
-            'n_code' => $this->clean($row['n_code'] ?? null),
-            'f_name' => $this->clean($row['f_name'] ?? null),
-            'l_name' => $this->clean($row['l_name'] ?? null),
-            't_id' => $this->parseInt($row['t_id'] ?? null),
-            'e_id' => $this->parseInt($row['e_id'] ?? null),
-            'r_id' => $this->parseInt($row['r_id'] ?? null),
-            's_id' => $this->parseInt($row['s_id'] ?? null),
-            'u_id' => $this->parseInt($row['u_id'] ?? null),
-            'phone' => $this->clean($row['phone'] ?? null),
+            'data' => [
+                'n_code' => $this->clean($row['n_code'] ?? null),
+                'f_name' => $this->clean($row['f_name'] ?? null),
+                'l_name' => $this->clean($row['l_name'] ?? null),
+                ...$ids,
+                'phone' => $this->clean($row['phone'] ?? null),
+            ],
+            'invalid' => $invalid,
         ];
     }
 
     private function validateRelatedModels(array $data): ?string
     {
-        if (! empty($data['t_id']) && ! isset($this->tahsils[$data['t_id']])) {
+        if ($data['t_id'] !== null && ! isset($this->tahsils[$data['t_id']])) {
             return "تحصیلات با شناسه {$data['t_id']} یافت نشد";
         }
-        if (! empty($data['e_id']) && ! isset($this->estekhdams[$data['e_id']])) {
+        if ($data['e_id'] !== null && ! isset($this->estekhdams[$data['e_id']])) {
             return "نوع استخدام با شناسه {$data['e_id']} یافت نشد";
         }
-        if (! empty($data['r_id']) && ! isset($this->radifs[$data['r_id']])) {
+        if ($data['r_id'] !== null && ! isset($this->radifs[$data['r_id']])) {
             return "ردیف سازمانی با شناسه {$data['r_id']} یافت نشد";
         }
-        if (! empty($data['s_id']) && ! isset($this->semats[$data['s_id']])) {
+        if ($data['s_id'] !== null && ! isset($this->semats[$data['s_id']])) {
             return "سمت با شناسه {$data['s_id']} یافت نشد";
         }
 
@@ -687,17 +766,59 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
         return trim((string) $value);
     }
 
-    private function parseInt($value): ?int
+    /**
+     * #1697: parse one numeric lookup cell without a silent cast.
+     *
+     * The cell may arrive as int/float (PhpSpreadsheet types CSV/XLSX cells)
+     * or string. Accepted: integers >= 1 and whole floats; strings are
+     * trimmed, Persian/Arabic-Indic digits are folded via `digitMap()`, and
+     * only `[0-9]+` is accepted — never `\d` with `/u`, which also matches
+     * Persian digits and casts them to 0. Fractions, `0`, negatives and
+     * bigint overflow are invalid, not truncated.
+     *
+     * @return array{value: int|null, invalid: string|null}
+     */
+    private function parseLookupId(mixed $value): array
     {
-        if ($value === null || $value === '' || $value === '\\N') {
-            return null;
-        }
-        $val = trim((string) $value);
-        if ($val === '' || $val === '\\N') {
-            return null;
+        if ($value === null) {
+            return ['value' => null, 'invalid' => null];
         }
 
-        return (int) $val;
+        if (is_int($value)) {
+            return $value >= 1
+                ? ['value' => $value, 'invalid' => null]
+                : ['value' => null, 'invalid' => (string) $value];
+        }
+
+        if (is_float($value)) {
+            if (is_finite($value) && $value >= 1 && $value <= PHP_INT_MAX && floor($value) === $value) {
+                return ['value' => (int) $value, 'invalid' => null];
+            }
+
+            return ['value' => null, 'invalid' => mb_substr((string) $value, 0, 30)];
+        }
+
+        $raw = mb_substr(trim((string) $value), 0, 30);
+        $digits = trim(strtr((string) $value, self::digitMap()));
+
+        if ($digits === '' || $digits === '\\N') {
+            return ['value' => null, 'invalid' => null];
+        }
+
+        // Deliberately `[0-9]`, not `\d`: under `/u`, `\d` matches Persian
+        // digits too and `(int)` then turns them into 0 — the original bug.
+        if (! preg_match('/^[0-9]+$/', $digits)) {
+            return ['value' => null, 'invalid' => $raw];
+        }
+
+        $number = (int) $digits;
+
+        // Reject 0 and bigint overflow (`(string) $number` stops matching).
+        if ($number <= 0 || (string) $number !== ltrim($digits, '0')) {
+            return ['value' => null, 'invalid' => $raw];
+        }
+
+        return ['value' => $number, 'invalid' => null];
     }
 
     private function clean($value): ?string

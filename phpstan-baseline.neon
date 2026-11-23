@@ -535,25 +535,7 @@ parameters:
 			path: app/Imports/PersonImport.php
 
 		-
-			message: '#^Method App\\Imports\\PersonImport\:\:mapRowToData\(\) has parameter \$row with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Method App\\Imports\\PersonImport\:\:mapRowToData\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
 			message: '#^Method App\\Imports\\PersonImport\:\:normalizeForComparison\(\) has parameter \$value with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: app/Imports/PersonImport.php
-
-		-
-			message: '#^Method App\\Imports\\PersonImport\:\:parseInt\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: app/Imports/PersonImport.php

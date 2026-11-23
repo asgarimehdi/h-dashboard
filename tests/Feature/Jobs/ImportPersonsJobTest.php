@@ -3,6 +3,7 @@
 namespace Tests\Feature\Jobs;
 
 use App\Jobs\ImportPersonsJob;
+use App\Models\Person;
 use App\Models\Unit;
 use App\Support\ImportStatus;
 use Database\Seeders\PermissionSeeder;
@@ -341,6 +342,38 @@ class ImportPersonsJobTest extends TestCase
             ->once()
             ->withArgs(fn (string $message, array $context) => str_contains($message, 'ImportPersonsJob')
                 && ($context['user_id'] ?? null) === 9);
+    }
+
+    /**
+     * #1697: a non-numeric lookup id used to parse to `0`, pass the preview,
+     * and then abort the whole queued import with a foreign-key violation
+     * (`tries = 1`, so nothing else was ever written).
+     */
+    public function test_job_imports_the_rest_of_the_sheet_when_one_lookup_id_is_invalid(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+
+        Storage::disk('local')->put('imports/mixed-persons.csv',
+            "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n"
+            ."9000000120\tعلی\tرضایی\tabc\t1\t1\t1\t{$unit->id}\n"
+            ."9000000121\tحسن\tکریمی\t1\t1\t1\t1\t{$unit->id}\n"
+        );
+
+        (new ImportPersonsJob(
+            path: 'imports/mixed-persons.csv',
+            compareKey: 'n_code',
+            selectedActions: ['row_2' => 'create', 'row_3' => 'create'],
+            accessibleUnitIds: [$unit->id],
+            userId: $user->id,
+        ))->handle();
+
+        $this->assertDatabaseHas('persons', ['n_code' => '9000000121', 'u_id' => $unit->id, 't_id' => 1]);
+        $this->assertDatabaseMissing('persons', ['n_code' => '9000000120']);
+        $this->assertSame(
+            1,
+            Person::query()->whereIn('n_code', ['9000000120', '9000000121'])->count()
+        );
+        Storage::disk('local')->assertMissing('imports/mixed-persons.csv');
     }
 
     public function test_job_bumps_hr_cache_namespaces_exactly_once(): void
