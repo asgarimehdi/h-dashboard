@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Services\AccessService;
+use App\Support\Bbox;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\JsonResponse;
 
@@ -19,6 +20,21 @@ class UnitScopedRequest extends FormRequest
     {
         return $this->accessibleIds ??= app(AccessService::class)
             ->accessibleUnitIds($this->user());
+    }
+
+    /**
+     * The parsed `bbox` viewport, or null when the parameter is absent.
+     *
+     * Malformed values never reach this helper from a validated request (#1721);
+     * callers that do not validate still get null rather than a bogus box.
+     *
+     * @return array{minLon: float, minLat: float, maxLon: float, maxLat: float}|null
+     */
+    public function bboxOrNull(): ?array
+    {
+        $raw = $this->input('bbox');
+
+        return Bbox::normalize(is_string($raw) ? $raw : null);
     }
 
     /**
