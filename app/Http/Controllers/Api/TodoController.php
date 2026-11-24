@@ -16,6 +16,19 @@ class TodoController extends Controller
 {
     public function index(UnitScopedRequest $request): AnonymousResourceCollection
     {
+        // Issue #1750: `date`, `month` and `year` used to reach the query
+        // builder unvalidated — a garbage `date`/`year` became an invalid
+        // Postgres literal (500), and a garbage `month` was silently padded to
+        // `00` (200 with 0 rows). Validate them here, before the query runs.
+        // `nullable` keeps an empty `?date=` the no-op it is today.
+        // `month` must stay numeric-based: the `integer` rule rejects '08'.
+        $validated = $request->validate([
+            'date' => ['sometimes', 'nullable', 'date'],
+            'month' => ['sometimes', 'nullable', 'numeric', 'between:1,12', 'digits_between:1,2'],
+            'year' => ['sometimes', 'nullable', 'numeric', 'between:1,9999'],
+            'per_page' => ['sometimes', new PerPage(100)],
+        ]);
+
         $accessibleIds = $request->accessibleIds();
         $userId = $request->user()->id;
 
@@ -35,12 +48,16 @@ class TodoController extends Controller
             ->with('unit:id,name');
 
         if ($request->filled('date')) {
-            $query->whereDate('start_at', $request->date);
+            // Postgres rejects several strings the `date` rule accepts (e.g.
+            // `26-07-15`), so bind a normalized Y-m-d literal, never the raw input.
+            $query->whereDate('start_at', Carbon::parse($validated['date'])->toDateString());
         }
 
         if ($request->filled('month') && $request->filled('year')) {
-            $query->whereMonth('start_at', $request->month)
-                ->whereYear('start_at', $request->year);
+            // A well-formed lone `month` or `year` still applies no filter: the
+            // pair is required, as before. Garbage alone is a 422 above.
+            $query->whereMonth('start_at', $validated['month'])
+                ->whereYear('start_at', $validated['year']);
         }
 
         if ($request->filled('is_completed')) {
@@ -48,8 +65,8 @@ class TodoController extends Controller
         }
 
         // Issue #894: see UnitController::index(). 422 instead of a silent one-sided
-        // clamp; `min()` kept as defence in depth.
-        $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
+        // clamp; `min()` kept as defence in depth. Validation lives at the top of
+        // this method (issue #1750).
         $perPage = min((int) $request->input('per_page', 15), 100);
         $todos = $query->latest()->paginate($perPage);
 

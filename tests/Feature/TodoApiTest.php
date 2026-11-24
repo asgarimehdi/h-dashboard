@@ -515,6 +515,179 @@ class TodoApiTest extends TestCase
         $this->assertCount(1, $response->json('data'));
     }
 
+    // --- Issue #1750: query-parameter validation on GET /api/todos ---
+    // Before this fix `date`, `month` and `year` were bound straight into
+    // whereDate/whereMonth/whereYear: garbage `date`/`year` reached Postgres as
+    // a raw literal and 500'd, while garbage `month` was silently zero-padded
+    // to `00` by the query builder (200 with 0 rows).
+
+    public function test_todo_list_rejects_garbage_date(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['calendar']);
+        $token = $this->createApiToken($user, ['todos:read']);
+
+        foreach (['date=xyz', 'date=2026-02-30', 'date[]=xyz'] as $query) {
+            $this->apiGet("/api/todos?{$query}", $token)
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('date');
+        }
+    }
+
+    public function test_todo_list_rejects_garbage_month_year(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['calendar']);
+        $token = $this->createApiToken($user, ['todos:read']);
+
+        // Garbage alone is a 422 even though a well-formed lone `month`/`year`
+        // stays a 200 no-op (see test_todo_list_ignores_half_supplied_month_year).
+        $cases = [
+            'month=abc' => 'month',
+            'month=abc&year=2026' => 'month',
+            'month=13&year=2026' => 'month',
+            'month=0&year=2026' => 'month',
+            'year=abc&month=1' => 'year',
+            'year=99999&month=1' => 'year',
+        ];
+
+        foreach ($cases as $query => $field) {
+            $this->apiGet("/api/todos?{$query}", $token)
+                ->assertStatus(422)
+                ->assertJsonValidationErrors($field);
+        }
+    }
+
+    public function test_todo_list_keeps_valid_date_filters(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        $matching = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'start_at' => '2026-07-15 10:00:00',
+        ]);
+        Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'start_at' => '2026-07-20 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read']);
+
+        // The last two were already 200 before the fix; they must keep matching
+        // the same row so the added rules do not narrow the accepted formats.
+        foreach (['2026-07-15', '2026-07-15 10:00:00', '2026-07-15T10:00:00Z'] as $date) {
+            $response = $this->apiGet('/api/todos?date='.urlencode($date), $token);
+
+            $response->assertStatus(200);
+            $this->assertSame([$matching->id], array_column($response->json('data'), 'id'), "date={$date}");
+        }
+    }
+
+    public function test_todo_list_normalizes_date_postgres_would_reject(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        $matching = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'start_at' => '2026-07-15 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read']);
+
+        // `26-07-15` passes Laravel's `date` rule but Postgres rejects the raw
+        // literal, so it 500'd before; Carbon normalization makes it a valid
+        // Y-m-d filter instead.
+        $response = $this->apiGet('/api/todos?date='.urlencode('26-07-15'), $token);
+
+        $response->assertStatus(200);
+        $this->assertSame([$matching->id], array_column($response->json('data'), 'id'));
+    }
+
+    public function test_todo_list_does_not_narrow_accepted_date_formats(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'start_at' => '2026-07-15 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read']);
+
+        // Both were 200 with no rows before the fix; the rules must not start
+        // rejecting formats the endpoint already accepted.
+        $this->apiGet('/api/todos?date='.urlencode('2026-7-5'), $token)
+            ->assertStatus(200)
+            ->assertJsonCount(0, 'data');
+
+        $this->apiGet('/api/todos?date='.urlencode('1405/08/02'), $token)
+            ->assertStatus(200)
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_todo_list_ignores_half_supplied_month_year(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        $july = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'start_at' => '2026-07-15 10:00:00',
+        ]);
+        $august = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'start_at' => '2026-08-15 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read']);
+
+        // Unchanged contract: a well-formed lone `month` or `year` applies no
+        // filter at all (the pair is required), so every row is returned.
+        foreach (['month=8', 'year=2026'] as $query) {
+            $response = $this->apiGet("/api/todos?{$query}", $token);
+
+            $response->assertStatus(200);
+            $ids = array_column($response->json('data'), 'id');
+            sort($ids);
+            $this->assertSame([$july->id, $august->id], $ids, $query);
+        }
+    }
+
+    public function test_todo_list_accepts_zero_padded_month(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        $matching = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'start_at' => '2026-08-15 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read']);
+
+        // `integer` rejects '08' (FILTER_VALIDATE_INT), which would regress a
+        // request that works today — the rules must stay numeric-based.
+        $response = $this->apiGet('/api/todos?month=08&year=2026', $token);
+
+        $response->assertStatus(200);
+        $this->assertSame([$matching->id], array_column($response->json('data'), 'id'));
+    }
+
+    public function test_todo_list_treats_empty_date_as_noop(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+
+        $first = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'start_at' => '2026-07-15 10:00:00',
+        ]);
+        $second = Todo::factory()->create([
+            'unit_id' => $unit->id,
+            'start_at' => '2026-07-20 10:00:00',
+        ]);
+        $token = $this->createApiToken($user, ['todos:read']);
+
+        // ConvertEmptyStringsToNull turns `?date=` into null; without a
+        // `nullable` rule this becomes a 422 where it is a 200 no-op today.
+        $response = $this->apiGet('/api/todos?date=', $token);
+
+        $response->assertStatus(200);
+        $ids = array_column($response->json('data'), 'id');
+        sort($ids);
+        $this->assertSame([$first->id, $second->id], $ids);
+    }
+
     public function test_todo_list_filters_by_is_completed(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
