@@ -37,6 +37,19 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         'vlan', 'motherboard', 'comments',
     ];
 
+    /**
+     * #1758: the exact columns `updateRows()` upserts. `detectChanges()` must
+     * compare THIS list — a column that is written but not compared is a
+     * silent change the operator never approved in the preview.
+     *
+     * @var list<string>
+     */
+    private const WRITE_FIELDS = [
+        'n_code', 'pc_name', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
+        'net_type', 'switch', 'port', 'shutdown', 'vlan', 'motherboard',
+        'cpu', 'ram', 'hdd', 'comments', 'mark', 'clean_at',
+    ];
+
     private array $accessibleUnitIds = [];
 
     private array $existingRecords = [];
@@ -925,11 +938,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      */
     private function updateColumns(): array
     {
-        return [
-            'n_code', 'pc_name', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
-            'net_type', 'switch', 'port', 'shutdown', 'vlan', 'motherboard',
-            'cpu', 'ram', 'hdd', 'comments', 'mark', 'clean_at',
-        ];
+        return self::WRITE_FIELDS;
     }
 
     /**
@@ -968,14 +977,18 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
 
     private function detectChanges(Hardware $existing, array $newData): array
     {
-        $changes = [];
-        $compareFields = [
-            'n_code', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
-            'net_type', 'switch', 'port', 'shutdown', 'vlan',
-            'motherboard', 'cpu', 'ram', 'hdd', 'comments', 'mark', 'clean_at',
-        ];
+        // #1758: compare what will actually be WRITTEN. `normalizeWriteData()`
+        // applies the same folding the model's `saving` hook applies, so a
+        // sheet cell that only differs in Persian variants (or digits) is not
+        // reported as a rename the write would then not perform. It also puts
+        // `pc_name` in the compared set: a mac-match that renames the device is
+        // a real write, so it has to appear in the preview the operator
+        // approves.
+        $newData = $this->normalizeWriteData($newData);
 
-        foreach ($compareFields as $field) {
+        $changes = [];
+
+        foreach (self::WRITE_FIELDS as $field) {
             $oldValue = $existing->$field;
             $newValue = $newData[$field] ?? null;
 
