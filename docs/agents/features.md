@@ -23,6 +23,10 @@ These components and routes were removed — do not recreate:
 - Blade views: `welcome.blade.php`, `tools/index.blade.php`, `livewire/reports/index.blade.php`, `components/stitch-parrot.blade.php`
 - Test: `ReportsIndexLivewireTest.php` (covered a component that no longer exists)
 
+**Removed as dead code (issue #1714, 2026-11-24) — do not recreate:**
+- `App\Services\Disease\PatientService` + `tests/Feature/PatientServiceTest.php` — the second, unused patient write path (raw `digits:10`, Gregorian `birth_date`, no digit folding). `App\Services\PatientService` is the only patient write path; its create/duplicate/audit contract is pinned by `PatientRegistryServiceTest` and `PatientSearchTest`.
+- Patient **update/delete are not features**: no route, no Livewire action, no service method. Do not resurrect the old `update()`/`delete()` — including its "refuse delete while cases exist" guard — without a product decision. If delete ever lands, `disease_cases.patient_id` is a `NO ACTION` FK, so surface the refusal as a friendly `ValidationException` and audit with `ActivityLogService::deleted()`.
+
 ---
 
 ### Units Export (issue #701)
