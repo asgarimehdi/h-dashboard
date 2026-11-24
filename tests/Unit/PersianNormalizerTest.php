@@ -45,6 +45,10 @@ test('escapeLikeWildcards escapes both wildcards in mixed text', function () {
     expect(NormalizerHelper::escapeLikeWildcards('%test_case%'))->toBe('\\%test\\_case\\%');
 });
 
+test('escapeLikeWildcards escapes a backslash before the wildcards', function () {
+    expect(NormalizerHelper::escapeLikeWildcards('a\\b%c_d'))->toBe('a\\\\b\\%c\\_d');
+});
+
 test('escapeLikeWildcards returns text unchanged when no wildcards present', function () {
     expect(NormalizerHelper::escapeLikeWildcards('سلام دنیا'))->toBe('سلام دنیا');
 });

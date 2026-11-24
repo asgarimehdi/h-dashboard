@@ -80,7 +80,12 @@ trait PersianNormalizer
      */
     public static function escapeLikeWildcards(string $text): string
     {
-        return str_replace(['%', '_'], ['\\%', '\\_'], $text);
+        // Issue #1722: the backslash is PostgreSQL's default LIKE escape
+        // character, so it must be escaped FIRST — otherwise "%" becomes "\%"
+        // and a user-supplied "\%" becomes "\\%" (a literal backslash plus a
+        // live wildcard). str_replace() does not rescan its own replacements,
+        // so the order is safe.
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $text);
     }
 
     /**
