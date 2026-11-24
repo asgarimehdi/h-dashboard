@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Observers\HardwareAuditObserver;
 use App\Services\HardwareAuditScope;
 use App\Support\HardwareAuditChange;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -640,22 +641,40 @@ trait HardwareIndexHelpers
         $restoreData['n_code'] = $nCode;
         $restoreData['id'] = $audit->hardware_id;
 
-        $restoredHardware = new Hardware;
-        $restoredHardware->forceFill($restoreData)->save();
-
-        $this->advanceHardwareSequence();
-
-        // Hardware::create()/save() already fires HardwareAuditObserver::created(),
-        // which writes the 'created' audit — so only the explicit rollback
-        // entry is logged here (mirrors HardwareAuditController::restoreRecord()).
-        app(HardwareAuditObserver::class)->recordRollbackAudit(
-            $restoredHardware,
-            array_map(
-                fn ($c) => ['field' => $c['field'], 'old' => 'حذف شده', 'new' => $c['new'] ?? '—'],
-                $audit->changes
-            ),
-            auth()->id()
+        // #1698: the write block is one transaction. The explicit id means the
+        // primary key serialises two concurrent restores — the loser fails with
+        // a unique violation that is mapped to the existing "still exists" toast.
+        $rollbackChanges = array_map(
+            fn ($c) => ['field' => $c['field'], 'old' => 'حذف شده', 'new' => $c['new'] ?? '—'],
+            $audit->changes
         );
+
+        try {
+            DB::transaction(function () use ($restoreData, $rollbackChanges): void {
+                $restoredHardware = new Hardware;
+                $restoredHardware->forceFill($restoreData)->save();
+
+                // #1698: inside the transaction on purpose — setval is
+                // non-transactional, so a rollback leaves only a harmless id gap,
+                // while after-commit would risk the sequence lagging the row.
+                $this->advanceHardwareSequence();
+
+                // Hardware::save() already fired HardwareAuditObserver::created()
+                // inside this transaction, so only the explicit rollback entry is
+                // logged here (mirrors HardwareAuditController::restoreRecord()).
+                app(HardwareAuditObserver::class)->recordRollbackAudit(
+                    $restoredHardware,
+                    $rollbackChanges,
+                    auth()->id()
+                );
+            });
+        } catch (UniqueConstraintViolationException) {
+            // Caught OUTSIDE the transaction: catching inside would leave the
+            // Postgres transaction aborted (25P02).
+            $this->error('این سخت‌افزار هنوز وجود دارد — از بازگردانی فیلد استفاده کنید.', position: 'toast-bottom');
+
+            return;
+        }
 
         $this->success("سخت‌افزار {$pcName} با موفقیت بازگردانده شد.", position: 'toast-bottom');
 

@@ -12,6 +12,7 @@ use App\Observers\HardwareAuditObserver;
 use App\Rules\PerPage;
 use App\Services\HardwareAuditScope;
 use App\Support\HardwareAuditChange;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -242,37 +243,53 @@ class HardwareAuditController extends Controller
         // created a duplicate row and orphaned the audit trail. forceFill()
         // bypasses $fillable; this mirrors HardwareIndexHelpers::restoreRecord()
         // so the two paths cannot drift apart again.
-        $hardware = new Hardware;
-        $hardware->forceFill($restoreData)->save();
-
-        // Advance the Postgres sequence past the restored id so the next
-        // auto-increment does not collide (duplicate key on hardwares_pkey).
-        // pg_get_serial_sequence resolves the sequence name regardless of
-        // SERIAL vs IDENTITY column definition.
-        // This is NOT redundant now that the id is genuinely reused: MAX(id)
-        // already includes the restored row, so setval to MAX(id) is exactly
-        // what keeps the next auto-insert from colliding with it.
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            $seq = DB::selectOne("SELECT pg_get_serial_sequence('hardwares','id') as seq");
-            if ($seq && $seq->seq) {
-                DB::statement('SELECT setval(?, (SELECT COALESCE(MAX(id), 0) FROM hardwares))', [$seq->seq]);
-            }
-        }
-
-        // Note: Hardware::create() already fires HardwareAuditObserver::created()
-        // (registered in AppServiceProvider), which writes the 'created' audit —
-        // so we must NOT call it again here (would duplicate the audit row).
-
-        // Log an explicit 'rollback' audit for traceability
+        //
+        // #1698: the write block is one transaction. Because the id is explicit,
+        // the primary key itself serialises two concurrent restores — the loser
+        // fails with a unique violation that we map to the existing 422 below.
         $rollbackChanges = array_map(
-            fn ($change) => ['field' => $change['field'], 'old' => 'حذف شده', 'new' => $change['new']],
+            fn ($change) => ['field' => $change['field'], 'old' => 'حذف شده', 'new' => $change['new'] ?? '—'],
             $audit->changes
         );
-        app(HardwareAuditObserver::class)->recordRollbackAudit(
-            $hardware,
-            $rollbackChanges,
-            $user?->id
-        );
+
+        try {
+            $hardware = DB::transaction(function () use ($restoreData, $rollbackChanges, $user): Hardware {
+                $hardware = new Hardware;
+                $hardware->forceFill($restoreData)->save();
+
+                // Advance the Postgres sequence past the restored id so the next
+                // auto-increment does not collide (duplicate key on hardwares_pkey).
+                // pg_get_serial_sequence resolves the sequence name regardless of
+                // SERIAL vs IDENTITY column definition.
+                // #1698: setval is non-transactional and deliberately stays inside
+                // the transaction — a rollback only leaves a harmless id gap,
+                // whereas running it after commit risks the sequence lagging the
+                // restored row if the process dies in between.
+                if (DB::connection()->getDriverName() === 'pgsql') {
+                    $seq = DB::selectOne("SELECT pg_get_serial_sequence('hardwares','id') as seq");
+                    if ($seq && $seq->seq) {
+                        DB::statement('SELECT setval(?, (SELECT COALESCE(MAX(id), 0) FROM hardwares))', [$seq->seq]);
+                    }
+                }
+
+                // Hardware::save() already fired HardwareAuditObserver::created()
+                // inside this transaction, so only the explicit 'rollback' audit
+                // is written here (calling created() again would duplicate it).
+                app(HardwareAuditObserver::class)->recordRollbackAudit(
+                    $hardware,
+                    $rollbackChanges,
+                    $user?->id
+                );
+
+                return $hardware;
+            });
+        } catch (UniqueConstraintViolationException) {
+            // hardwares has exactly one unique constraint — the primary key — so
+            // losing the race can only mean the row was already restored.
+            // Caught OUTSIDE the transaction: catching inside would leave the
+            // Postgres transaction aborted (25P02).
+            return response()->json(['message' => 'This hardware record still exists — use rollback instead.'], 422);
+        }
 
         return response()->json([
             'success' => true,
