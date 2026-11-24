@@ -7,6 +7,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
@@ -99,6 +100,15 @@ class ChangePasswordTest extends TestCase
                 ]],
             ])
             ->assertOk();
+    }
+
+    /**
+     * #1719: mirror of the component's per-account throttle key so the tests
+     * can assert the budget directly.
+     */
+    private function throttleKey(User $user): string
+    {
+        return 'change-password-account:'.hash('sha256', 'user:'.$user->id);
     }
 
     public function test_other_web_session_is_invalidated_on_password_change(): void
@@ -249,5 +259,178 @@ class ChangePasswordTest extends TestCase
         $this->assertDatabaseMissing('personal_access_tokens', [
             'id' => $tokenId,
         ]);
+    }
+
+    /**
+     * #1719: five failed current-password guesses lock the action; the sixth
+     * attempt is rejected even with the correct password, before Hash::check.
+     */
+    public function test_five_wrong_current_passwords_lock_even_a_correct_attempt(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        for ($i = 0; $i < 5; $i++) {
+            Livewire::test('auth.changepassword')
+                ->set('currentPassword', 'wrong-current')
+                ->set('newPassword', 'new-password-123')
+                ->set('newPasswordConfirmation', 'new-password-123')
+                ->call('changePassword')
+                ->assertHasErrors(['currentPassword' => 'رمز فعلی اشتباه است.']);
+        }
+
+        $this->assertSame(5, RateLimiter::attempts($this->throttleKey($user)));
+        $this->assertTrue(RateLimiter::tooManyAttempts($this->throttleKey($user), 5));
+
+        $component = Livewire::test('auth.changepassword')
+            ->set('currentPassword', 'password')
+            ->set('newPassword', 'new-password-123')
+            ->set('newPasswordConfirmation', 'new-password-123')
+            ->call('changePassword');
+
+        $component->assertHasErrors(['currentPassword']);
+        $this->assertNotSame('رمز فعلی اشتباه است.', $component->errors()->first('currentPassword'));
+
+        $this->assertTrue(Hash::check('password', $user->fresh()->password));
+        // The locked attempt returns before hit(), so the budget stays at 5.
+        $this->assertSame(5, RateLimiter::attempts($this->throttleKey($user)));
+    }
+
+    /**
+     * #1719: validation failures never reach the password check, so they must
+     * not consume the throttle budget.
+     */
+    public function test_validation_failures_do_not_consume_the_budget(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        for ($i = 0; $i < 6; $i++) {
+            Livewire::test('auth.changepassword')
+                ->set('currentPassword', '')
+                ->set('newPassword', 'short')
+                ->set('newPasswordConfirmation', 'short')
+                ->call('changePassword')
+                ->assertHasErrors(['currentPassword', 'newPassword']);
+        }
+
+        $this->assertSame(0, RateLimiter::attempts($this->throttleKey($user)));
+
+        Livewire::test('auth.changepassword')
+            ->set('currentPassword', 'password')
+            ->set('newPassword', 'new-password-123')
+            ->set('newPasswordConfirmation', 'new-password-123')
+            ->call('changePassword')
+            ->assertHasNoErrors();
+
+        $this->assertTrue(Hash::check('new-password-123', $user->fresh()->password));
+    }
+
+    /**
+     * #1719: a successful change clears this action's budget.
+     */
+    public function test_successful_change_clears_the_budget(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        for ($i = 0; $i < 4; $i++) {
+            Livewire::test('auth.changepassword')
+                ->set('currentPassword', 'wrong-current')
+                ->set('newPassword', 'new-password-123')
+                ->set('newPasswordConfirmation', 'new-password-123')
+                ->call('changePassword')
+                ->assertHasErrors(['currentPassword']);
+        }
+
+        $this->assertSame(4, RateLimiter::attempts($this->throttleKey($user)));
+
+        Livewire::test('auth.changepassword')
+            ->set('currentPassword', 'password')
+            ->set('newPassword', 'new-password-123')
+            ->set('newPasswordConfirmation', 'new-password-123')
+            ->call('changePassword')
+            ->assertHasNoErrors();
+
+        $this->assertSame(0, RateLimiter::attempts($this->throttleKey($user)));
+        $this->assertFalse(RateLimiter::tooManyAttempts($this->throttleKey($user), 5));
+
+        // The next wrong guess starts over and shows the normal message.
+        Livewire::test('auth.changepassword')
+            ->set('currentPassword', 'password')
+            ->set('newPassword', 'another-password-456')
+            ->set('newPasswordConfirmation', 'another-password-456')
+            ->call('changePassword')
+            ->assertHasErrors(['currentPassword' => 'رمز فعلی اشتباه است.']);
+
+        $this->assertSame(1, RateLimiter::attempts($this->throttleKey($user)));
+    }
+
+    /**
+     * #1719: the budget is per account, not global.
+     */
+    public function test_budget_is_per_account(): void
+    {
+        ['user' => $userA] = $this->createUserWithUnit();
+        ['user' => $userB] = $this->createUserWithUnit();
+
+        $this->actingAs($userA);
+
+        for ($i = 0; $i < 5; $i++) {
+            Livewire::test('auth.changepassword')
+                ->set('currentPassword', 'wrong-current')
+                ->set('newPassword', 'new-password-123')
+                ->set('newPasswordConfirmation', 'new-password-123')
+                ->call('changePassword')
+                ->assertHasErrors(['currentPassword']);
+        }
+
+        $this->assertTrue(RateLimiter::tooManyAttempts($this->throttleKey($userA), 5));
+
+        $this->actingAs($userB);
+
+        Livewire::test('auth.changepassword')
+            ->set('currentPassword', 'password')
+            ->set('newPassword', 'new-password-123')
+            ->set('newPasswordConfirmation', 'new-password-123')
+            ->call('changePassword')
+            ->assertHasNoErrors();
+
+        $this->assertTrue(Hash::check('new-password-123', $userB->fresh()->password));
+        $this->assertSame(0, RateLimiter::attempts($this->throttleKey($userB)));
+        $this->assertTrue(RateLimiter::tooManyAttempts($this->throttleKey($userA), 5));
+    }
+
+    /**
+     * #1719: a locked attempt returns before logoutOtherDevices() and
+     * tokens()->delete(), so it must leave tokens and the password untouched.
+     */
+    public function test_locked_attempt_does_not_revoke_tokens(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        $token = $user->createToken('test-token');
+        $tokenId = $token->accessToken->id;
+
+        for ($i = 0; $i < 5; $i++) {
+            Livewire::test('auth.changepassword')
+                ->set('currentPassword', 'wrong-current')
+                ->set('newPassword', 'new-password-123')
+                ->set('newPasswordConfirmation', 'new-password-123')
+                ->call('changePassword')
+                ->assertHasErrors(['currentPassword']);
+        }
+
+        $component = Livewire::test('auth.changepassword')
+            ->set('currentPassword', 'password')
+            ->set('newPassword', 'new-password-123')
+            ->set('newPasswordConfirmation', 'new-password-123')
+            ->call('changePassword');
+
+        $component->assertHasErrors(['currentPassword']);
+
+        $this->assertDatabaseHas('personal_access_tokens', ['id' => $tokenId]);
+        $this->assertTrue(Hash::check('password', $user->fresh()->password));
     }
 }
