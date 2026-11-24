@@ -246,3 +246,53 @@ test('every approved base type is writable and no second list is used', function
         ]);
     }
 });
+
+/**
+ * #1707: a failed update on a base unit must not write a population row for
+ * an edit that never persisted.
+ *
+ * `saveUnit()` used to assign `$unit` with `findOrFail()` BEFORE `update()`, so
+ * the `$unit !== null` guard was still true after a throwing `update()` and
+ * `syncPopulation()` wrote a row against the unsaved payload.
+ *
+ * The failure is induced on `eloquent.updating` — where a real persistence
+ * error surfaces. A genuine PG error cannot be used: it aborts the
+ * RefreshDatabase transaction, the population INSERT then fails with 25P02,
+ * and the hole under test becomes invisible (same constraint as the comment
+ * on `test_delete_unit_with_tickets_is_refused`).
+ */
+test('a failed update of a base unit writes no population row', function () {
+    ['user' => $user, 'unit' => $parent] = populationActor();
+    $this->actingAs($user);
+
+    $base = baseUnitUnder($parent, 9);
+
+    // Only the listeners registered below are removed in the finally block
+    // (`eloquent.updating` has no app listeners today), so the
+    // AppServiceProvider cache-invalidation listeners stay wired for later
+    // tests in the same process.
+    Unit::updating(function (): void {
+        throw new RuntimeException('simulated persistence failure');
+    });
+
+    try {
+        $component = Livewire::test('units.index')
+            ->call('editUnit', $base->id)
+            ->set('name', 'نام تغییرنکرده')
+            ->set('population', 1234);
+
+        $component->call('saveUnit')
+            ->assertSet('modal', true)
+            ->assertSet('editingId', $base->id)
+            ->assertSet('name', 'نام تغییرنکرده')
+            ->assertSet('population', 1234);
+    } finally {
+        Unit::getEventDispatcher()->forget('eloquent.updating: '.Unit::class);
+    }
+
+    $this->assertDatabaseMissing('units', ['id' => $base->id, 'name' => 'نام تغییرنکرده']);
+    $this->assertDatabaseMissing('unit_populations', [
+        'unit_id' => $base->id,
+        'year' => now()->year,
+    ]);
+});

@@ -446,14 +446,25 @@ return new class extends Component
                 $this->success("واحد '{$this->name}' ایجاد شد");
             }
         } catch (\Exception $e) {
+            // #1707: a failed write must leave the modal open with the user's
+            // input, and must not reach the success tail (population write,
+            // cache invalidation, form reset, modal close). FQCN, not a `use`
+            // import: the PHPStan baseline for this file is line-keyed, so one
+            // added `use` above `return new class` shifts all its entries.
+            \Illuminate\Support\Facades\Log::warning('units.saveUnit failed', [
+                'editing_id' => $this->editingId,
+                'exception' => $e,
+            ]);
             $this->error('خطا ', position: 'toast-bottom');
+
+            return;
         }
 
-        // Only a stored unit may own a population row; a failed save must not
-        // write one against a half-built row.
-        if ($unit !== null) {
-            $this->syncPopulation($unit);
-        }
+        // Only a stored unit may own a population row. The catch above
+        // returns, so a failed save cannot reach this line: `$unit` is a
+        // persisted Unit here (this used to be an `$unit !== null` guard, but
+        // after the early return that check is statically always true).
+        $this->syncPopulation($unit);
 
         app(\App\Services\AccessService::class)->clearAllCaches();
 
