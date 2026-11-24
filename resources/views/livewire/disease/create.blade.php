@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Disease;
 use App\Models\DiseaseCase;
 use App\Models\Patient;
 use App\Models\Unit;
@@ -9,6 +8,7 @@ use App\Services\AccessService;
 use App\Services\Disease\DiseaseCaseService;
 use App\Services\PatientService;
 use App\Support\JalaliDateRange;
+use App\Support\OptionCatalog;
 use App\Traits\BuildsDiseaseCaseForm;
 use App\Traits\PersianNormalizer;
 use Illuminate\Validation\Rule;
@@ -189,16 +189,7 @@ return new class extends Component
      */
     public function diseaseOptions(): array
     {
-        return Disease::query()
-            ->where('is_active', true)
-            ->orderBy('sort')
-            ->orderBy('name_fa')
-            ->get(['id', 'name_fa'])
-            ->map(static fn (mixed $disease): array => [
-                'value' => (int) data_get($disease, 'id'),
-                'label' => (string) data_get($disease, 'name_fa'),
-            ])
-            ->all();
+        return OptionCatalog::diseases(true);
     }
 
     /**

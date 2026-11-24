@@ -301,17 +301,7 @@ return new class extends Component
      */
     public function unitOptions(): array
     {
-        $names = Unit::query()
-            ->whereIn('id', $this->accessibleUnitIds())
-            ->orderBy('name')
-            ->pluck('name', 'id');
-
-        $options = [];
-        foreach ($names as $id => $name) {
-            $options[] = ['value' => (int) $id, 'label' => (string) $name];
-        }
-
-        return $options;
+        return \App\Support\OptionCatalog::units($this->accessibleUnitIds(), false);
     }
 
     public function schedules(): LengthAwarePaginator

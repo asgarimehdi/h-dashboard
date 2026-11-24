@@ -257,6 +257,14 @@ class AppServiceProvider extends ServiceProvider
             $model::deleted(fn () => $invalidate($diseaseNamespaces));
         }
 
+        // #1761: the disease catalogue is view data for the filter and the new-case
+        // picker. Kept out of `$diseaseNamespaces`: case/patient writes must not
+        // invalidate it.
+        $diseaseCatalogNamespaces = ['disease_catalog'];
+        Disease::created(fn () => $invalidate($diseaseCatalogNamespaces));
+        Disease::updated(fn () => $invalidate($diseaseCatalogNamespaces));
+        Disease::deleted(fn () => $invalidate($diseaseCatalogNamespaces));
+
         // Issue #951: the vendored maryUI upload endpoint is not mounted. See
         // App\Support\VendorRouteGuard for why the route has to be stripped
         // from the router rather than left unregistered-and-guessed-at.
