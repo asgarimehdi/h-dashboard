@@ -950,4 +950,201 @@ class HardwareIndexLivewireTest extends TestCase
         $stored = Hardware::where('pc_name', 'PC-1658-CAP')->value('comments');
         $this->assertSame(20000, mb_strlen($stored));
     }
+
+    // ==================== #1730: web write validation ====================
+
+    /**
+     * #1730: the web path writes 19 columns and validated three. A `mac` of
+     * 18-255 characters fits `varchar(255)` and was stored silently; the API
+     * rejected it. `HardwareRules` closes that parity gap.
+     */
+    public function test_create_hardware_rejects_mac_above_max_length(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->call('startCreate')
+            ->set('n_code', $data['user']->n_code)
+            ->set('pc_name', 'PC-1730-MAC')
+            ->set('mac', str_repeat('a', 18))
+            ->call('createHardware')
+            ->assertHasErrors(['mac']);
+
+        $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-1730-MAC']);
+    }
+
+    /**
+     * #1730: `clean_at` had no rule, so an unparsable value reached the `date`
+     * cast and threw Carbon\InvalidFormatException as a 500.
+     */
+    public function test_create_hardware_rejects_unparsable_clean_at(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->call('startCreate')
+            ->set('n_code', $data['user']->n_code)
+            ->set('pc_name', 'PC-1730-DATE')
+            ->set('clean_at', 'not-a-date')
+            ->call('createHardware')
+            ->assertHasErrors(['clean_at']);
+
+        $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-1730-DATE']);
+    }
+
+    /**
+     * #1730: `<input type="date">` sends '' when cleared. `nullable|date` lets
+     * '' through, and the cast then parses '' as "now" (today). The web path
+     * normalises '' to null, matching what the API stores.
+     */
+    public function test_create_hardware_stores_empty_clean_at_as_null(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->call('startCreate')
+            ->set('n_code', $data['user']->n_code)
+            ->set('pc_name', 'PC-1730-EMPTY-DATE')
+            ->set('clean_at', '')
+            ->call('createHardware')
+            ->assertHasNoErrors();
+
+        $this->assertNull(Hardware::where('pc_name', 'PC-1730-EMPTY-DATE')->value('clean_at'));
+    }
+
+    public function test_create_hardware_accepts_values_at_the_api_caps(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        Livewire::test('hardware.index')
+            ->call('startCreate')
+            ->set('n_code', $data['user']->n_code)
+            ->set('pc_name', 'PC-1730-CAP')
+            ->set('type', str_repeat('t', 50))
+            ->set('mac', str_repeat('a', 17))
+            ->set('ip_valid', str_repeat('1', 45))
+            ->set('shutdown', false)
+            ->call('createHardware')
+            ->assertHasNoErrors();
+
+        $hw = Hardware::where('pc_name', 'PC-1730-CAP')->firstOrFail();
+        $this->assertSame(17, strlen($hw->mac));
+        $this->assertSame(45, strlen($hw->ip_valid));
+        $this->assertSame(50, strlen($hw->type));
+        $this->assertFalse($hw->shutdown);
+    }
+
+    public function test_update_hardware_rejects_ip_valid_above_max_length(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-1730-UPD-IP',
+            'ip_valid' => '10.0.0.1',
+        ]);
+
+        Livewire::test('hardware.index')
+            ->call('editHardware', $hw->id)
+            ->set('ip_valid', str_repeat('1', 46))
+            ->call('updateHardware')
+            ->assertHasErrors(['ip_valid']);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hw->id, 'ip_valid' => '10.0.0.1']);
+    }
+
+    public function test_update_hardware_stores_empty_clean_at_as_null(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-1730-UPD-DATE',
+            'clean_at' => '2020-05-05',
+        ]);
+
+        Livewire::test('hardware.index')
+            ->call('editHardware', $hw->id)
+            ->set('clean_at', '')
+            ->call('updateHardware')
+            ->assertHasNoErrors();
+
+        $this->assertNull(Hardware::whereKey($hw->id)->value('clean_at'));
+    }
+
+    /**
+     * #1730: create validates `n_code` first, so an out-of-scope destination
+     * yields a validation error — the `#842` toast branch is unreachable here.
+     */
+    public function test_create_hardware_out_of_scope_n_code_fails_validation(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $nCode = $this->createPersonInOtherUnit();
+
+        Livewire::test('hardware.index')
+            ->call('startCreate')
+            ->set('n_code', $nCode)
+            ->set('pc_name', 'PC-1730-OUT-OF-SCOPE')
+            ->call('createHardware')
+            ->assertHasErrors(['n_code']);
+
+        $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-1730-OUT-OF-SCOPE']);
+    }
+
+    /**
+     * #1730: update checks the destination scope BEFORE validating (#842), so
+     * an out-of-scope `n_code` toasts and returns instead of raising a
+     * validation error. The two behaviours genuinely differ; both are pinned.
+     */
+    public function test_update_hardware_out_of_scope_n_code_toasts_without_validation_error(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-1730-UPD-SCOPE',
+        ]);
+
+        $nCode = $this->createPersonInOtherUnit();
+
+        Livewire::test('hardware.index')
+            ->call('editHardware', $hw->id)
+            ->set('n_code', $nCode)
+            ->call('updateHardware')
+            ->assertHasNoErrors()
+            ->assertSet('editingId', $hw->id);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hw->id, 'pc_name' => 'PC-1730-UPD-SCOPE']);
+    }
+
+    private function createPersonInOtherUnit(): string
+    {
+        $otherUnit = Unit::create(['name' => 'واحد خارج از دسترس ۱۷۳۰']);
+        $nCode = (string) fake()->unique()->numerify('##########');
+
+        Person::create([
+            'n_code' => $nCode, 'f_name' => 'دیگر', 'l_name' => 'کاربر',
+            't_id' => DB::table('tahsils')->first()->id,
+            'e_id' => DB::table('estekhdams')->first()->id,
+            's_id' => DB::table('semats')->first()->id,
+            'r_id' => DB::table('radifs')->first()->id,
+            'u_id' => $otherUnit->id,
+        ]);
+
+        return $nCode;
+    }
 }

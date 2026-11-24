@@ -9,10 +9,10 @@ use App\Services\AccessService;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Services\HardwareBulkAuditWriter;
 use App\Support\HardwareAuditChange;
+use App\Support\HardwareRules;
 use App\Traits\HardwareIndexHelpers;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
@@ -322,14 +322,16 @@ return new class extends Component
         // check could undo.
         $this->authorize('manage_hardware');
 
-        $this->validate([
-            'n_code' => ['required', 'string', Rule::exists('persons', 'n_code')->where(fn ($q) => $q->whereIn('u_id', $this->accessibleUnitIds()))],
-            'pc_name' => 'required|string|max:255',
-            'comments' => 'nullable|string|max:20000',
-        ]);
+        $accessibleIds = $this->accessibleUnitIds();
+
+        // #1730: an empty <input type="date"> sends '', and `Carbon::parse('')`
+        // is "now" — it would store today. The API stores null (its HTTP
+        // middleware converts empty strings first); normalise for parity.
+        $this->clean_at = filled($this->clean_at) ? $this->clean_at : null;
+
+        $this->validate(HardwareRules::webRules($accessibleIds));
 
         $person = Person::where('n_code', $this->n_code)->firstOrFail();
-        $accessibleIds = $this->accessibleUnitIds();
 
         if (! in_array($person->u_id, $accessibleIds)) {
             $this->error('شما به این پرسنل دسترسی ندارید.', position: 'toast-bottom');
@@ -397,11 +399,10 @@ return new class extends Component
             }
         }
 
-        $this->validate([
-            'n_code' => ['required', 'string', Rule::exists('persons', 'n_code')->where(fn ($q) => $q->whereIn('u_id', $accessibleIds))],
-            'pc_name' => 'required|string|max:255',
-            'comments' => 'nullable|string|max:20000',
-        ]);
+        // #1730: same '' → null normalisation as createHardware() — see there.
+        $this->clean_at = filled($this->clean_at) ? $this->clean_at : null;
+
+        $this->validate(HardwareRules::webRules($accessibleIds));
 
         $hw = Hardware::with('person')->findOrFail($this->editingId);
 
