@@ -10,6 +10,8 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Rules\TicketTargetUnit;
 use App\Services\ActivityLogService;
+use App\Services\TicketTransitionFailure;
+use App\Services\TicketTransitionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -221,34 +223,19 @@ class TicketController extends Controller
             return $result;
         }
 
-        // Issue #529: only the assigned user can accept the ticket
-        if ($ticket->current_assignee_id !== $request->user()->id) {
-            return response()->json(['message' => 'Only the assigned user can accept this ticket.'], 403);
-        }
+        // #1699: the guards, the locked-row re-check and the TaskActivity
+        // fan-out live in TicketTransitionService. This adapter only decides
+        // which existing 403/422 the Flutter app receives.
+        $transition = app(TicketTransitionService::class)->accept($ticket, (int) $request->user()->id);
 
-        // Issue #1000: accepting only makes sense from an open status. Keep this
-        // guard in step with the web path (⚡inbox.blade.php, which allows the
-        // same two statuses).
-        if (! in_array($ticket->status, ['created', 'forwarded'], true)) {
-            return response()->json(['message' => 'Only created or forwarded tickets can be accepted.'], 422);
-        }
+        if (! $transition->ok) {
+            // Issue #529: only the assigned user can accept the ticket. The
+            // assignee verdict wins over the status one (#1608 ordering).
+            if ($transition->has(TicketTransitionFailure::AssigneeMismatch, TicketTransitionFailure::AssigneeRaced)) {
+                return response()->json(['message' => 'Only the assigned user can accept this ticket.'], 403);
+            }
 
-        // #1608: the checks above read the bound model. Re-check the same claim
-        // on the locked row, so a concurrent accept(), an assign()/forward()
-        // that moved the assignee (without changing status) or a DELETE between
-        // the read and the write is a loss instead of a silent overwrite. Same
-        // shape as TicketsInboxFlow::acceptTicket() (#1564).
-        $transition = $this->atomicTransition(
-            $ticket,
-            ['status' => $ticket->status, 'current_assignee_id' => $request->user()->id],
-            ['status' => 'accepted', 'accepted_at' => now()],
-        );
-
-        if ($transition === self::TRANSITION_ASSIGNEE_MISMATCH) {
-            return response()->json(['message' => 'Only the assigned user can accept this ticket.'], 403);
-        }
-
-        if ($transition !== self::TRANSITION_OK) {
+            // Issue #1000: accepting only makes sense from an open status.
             return response()->json(['message' => 'Only created or forwarded tickets can be accepted.'], 422);
         }
 
@@ -265,29 +252,14 @@ class TicketController extends Controller
             return $result;
         }
 
-        // Issue #530: only the assigned user can complete the ticket
-        if ($ticket->current_assignee_id !== $request->user()->id) {
-            return response()->json(['message' => 'Only the assigned user can complete this ticket.'], 403);
-        }
+        $transition = app(TicketTransitionService::class)->complete($ticket, (int) $request->user()->id);
 
-        if ($ticket->status !== 'accepted') {
-            return response()->json(['message' => 'Ticket must be accepted before completing.'], 422);
-        }
+        if (! $transition->ok) {
+            // Issue #530: only the assigned user can complete the ticket.
+            if ($transition->has(TicketTransitionFailure::AssigneeMismatch, TicketTransitionFailure::AssigneeRaced)) {
+                return response()->json(['message' => 'Only the assigned user can complete this ticket.'], 403);
+            }
 
-        // #1608: same locked re-check as accept() — completion after a
-        // concurrent reassignment is a loss (403), and a status that moved on
-        // is a 422, never a silent double-complete.
-        $transition = $this->atomicTransition(
-            $ticket,
-            ['status' => 'accepted', 'current_assignee_id' => $request->user()->id],
-            ['status' => 'completed', 'completed_at' => now()],
-        );
-
-        if ($transition === self::TRANSITION_ASSIGNEE_MISMATCH) {
-            return response()->json(['message' => 'Only the assigned user can complete this ticket.'], 403);
-        }
-
-        if ($transition !== self::TRANSITION_OK) {
             return response()->json(['message' => 'Ticket must be accepted before completing.'], 422);
         }
 
@@ -305,8 +277,10 @@ class TicketController extends Controller
      * `SELECT ... FOR UPDATE` inside a transaction and re-checks it against the
      * values the caller already validated. Anything that moved between the two
      * reads — a concurrent transition, an assignee change, a closed ticket, a
-     * DELETEd row — is a loss, never a silent overwrite. The query shape
-     * mirrors the web `TicketsInboxFlow::acceptTicket()` (#1564, PR #1568).
+     * DELETEd row — is a loss, never a silent overwrite.
+     *
+     * Accept/complete no longer use this helper: they delegate to
+     * TicketTransitionService (#1699). It stays for `update()`/`assign()`.
      *
      * @param  array{status?: string, current_assignee_id?: int}  $expected
      * @param  array<string, mixed>  $attributes
@@ -398,9 +372,12 @@ class TicketController extends Controller
      * #1683: the single closed-ticket definition shared by every ticket write
      * (#1608, #1633). #929: archiving is one-way — an `archived_at` timestamp
      * counts as closed even while the status still reads an open value.
+     *
+     * #1699: the definition now lives in TicketTransitionService, next to the
+     * transitions that enforce it.
      */
     private function isClosedRow(object $row): bool
     {
-        return in_array($row->status, ['completed', 'rejected'], true) || $row->archived_at !== null;
+        return TicketTransitionService::isClosed($row);
     }
 }
