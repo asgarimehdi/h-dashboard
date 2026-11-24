@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\DailyReport;
+use App\Models\Ticket;
 use App\Models\Unit;
 use App\Services\AccessService;
 use Illuminate\Console\Command;
@@ -49,14 +50,16 @@ class GenerateDailyReports extends Command
         // neither Ticket nor Todo uses SoftDeletes or registers a global scope —
         // HasOrganizationalScope only offers the opt-in `accessible()` local
         // scope — so `DB::table` sees exactly the rows the old relation counts
-        // did. The predicates are kept verbatim: `status != 'completed'` and
-        // `is_completed = false` both exclude NULL in either form.
+        // did. The ticket side is no longer verbatim: #1728 makes "open" mean
+        // `Ticket::openSql()` (created/forwarded/accepted, not archived), so a
+        // `rejected` ticket no longer inflates the count. `is_completed = false`
+        // still excludes NULL in either form.
         $units = Unit::query()->whereIn('id', $unitIds)->get()->keyBy('id');
 
         $ticketCounts = DB::table('tickets')
             ->select('unit_id', DB::raw('count(*) as aggregate'))
             ->whereIn('unit_id', $unitIds)
-            ->where('status', '!=', 'completed')
+            ->whereRaw(Ticket::openSql())
             ->groupBy('unit_id')
             ->pluck('aggregate', 'unit_id');
 

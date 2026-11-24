@@ -347,9 +347,10 @@ class GisController extends Controller
                 ->count();
 
             // Open tickets count (in bbox via unit) — direct JOIN instead of whereHas (#402)
+            // #1728: "open" is Ticket::openSql()'s predicate — rejected is closed.
             $ticketsCount = Ticket::join('units', 'tickets.unit_id', '=', 'units.id')
                 ->whereIn('tickets.unit_id', $accessibleIds)
-                ->where('tickets.status', '!=', 'completed')
+                ->open()
                 ->whereNotNull('units.lat')->whereNotNull('units.lng')
                 ->when($bboxConditions, fn ($q) => $q->where($bboxConditions))
                 ->count();

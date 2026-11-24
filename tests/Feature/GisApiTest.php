@@ -298,6 +298,16 @@ class GisApiTest extends TestCase
             'priority' => 'normal',
             'status' => 'completed',
         ]);
+        // #1728: a rejected ticket is closed, so it must not inflate the count.
+        Ticket::create([
+            'ticket_code' => 'TKT-003',
+            'user_id' => $user->id,
+            'unit_id' => $unit->id,
+            'subject' => 'Test 3',
+            'content' => 'Test',
+            'priority' => 'normal',
+            'status' => 'rejected',
+        ]);
 
         $token = $this->createApiToken($user, ['gis:read']);
         $response = $this->apiGet('/api/gis/stats?bbox=48,36,49,37', $token);
@@ -307,7 +317,7 @@ class GisApiTest extends TestCase
 
         $this->assertEquals(2, $response->json('units'));
         $this->assertEquals(1, $response->json('hardware'));
-        $this->assertEquals(1, $response->json('open_tickets')); // only non-completed
+        $this->assertEquals(1, $response->json('open_tickets')); // #1728: only open (not completed/rejected)
     }
 
     /** @test */

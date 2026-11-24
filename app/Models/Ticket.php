@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Traits\HasOrganizationalScope;
 use Carbon\Carbon;
 use Database\Factories\TicketFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -59,6 +60,22 @@ class Ticket extends Model
      */
     public const PRIORITIES = ['low', 'normal', 'urgent'];
 
+    /**
+     * Canonical ticket status vocabulary (#1728).
+     *
+     * A ticket is CLOSED when its status is terminal or it is archived (#929:
+     * archiving is a one-way timestamp). Everything else is OPEN, so these two
+     * lists are the single definition of both — no caller re-spells the
+     * predicate by hand. `scopeOpen()` serves Eloquent queries,
+     * `openSql()` serves raw `DB::select` / `DB::table` aggregates.
+     *
+     * @var array<int, string>
+     */
+    public const CLOSED_STATUSES = ['completed', 'rejected'];
+
+    /** @var array<int, string> */
+    public const OPEN_STATUSES = ['created', 'forwarded', 'accepted'];
+
     protected $fillable = [
         'ticket_code',
         'user_id',
@@ -87,6 +104,39 @@ class Ticket extends Model
     public function canBeCompleted()
     {
         return $this->status === 'accepted';
+    }
+
+    /**
+     * #1728: the one OPEN predicate for Eloquent queries — an open ticket has
+     * a non-terminal status and is not archived. `archived_at IS NULL` is
+     * load-bearing, not defensive: `TicketsInboxFlow::isClosedTicketRow()`
+     * treats an archived row as closed regardless of its status.
+     *
+     * @param  Builder<Ticket>  $query
+     * @return Builder<Ticket>
+     */
+    public function scopeOpen(Builder $query): Builder
+    {
+        return $query
+            ->whereIn($query->qualifyColumn('status'), self::OPEN_STATUSES)
+            ->whereNull($query->qualifyColumn('archived_at'));
+    }
+
+    /**
+     * #1728: the same OPEN predicate as a raw SQL fragment, for the aggregates
+     * that cannot call a scope (`DB::selectOne`, `DB::table`). `$table` is a
+     * code-level table name such as `'tickets'`; the status literals come from
+     * `OPEN_STATUSES`, never from user input.
+     */
+    public static function openSql(?string $table = null): string
+    {
+        $prefix = ($table === null || $table === '') ? '' : $table.'.';
+        $statuses = implode(', ', array_map(
+            static fn (string $status): string => "'".$status."'",
+            self::OPEN_STATUSES,
+        ));
+
+        return $prefix.'status IN ('.$statuses.') AND '.$prefix.'archived_at IS NULL';
     }
 
     public function getWaitingDurationAttribute()
