@@ -87,7 +87,7 @@ class ChangePasswordTest extends TestCase
         $this->withCredentials()
             ->withCookie(config('session.cookie'), $sessionId)
             ->withHeaders(['X-Livewire' => 'true'])
-            ->postJson(route('default-livewire.update'), [
+            ->postJson(route('livewire.update'), [
                 '_token' => 'token-'.$sessionId,
                 'components' => [[
                     'snapshot' => $snapshot,
