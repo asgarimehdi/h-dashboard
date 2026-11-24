@@ -74,6 +74,18 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
+        // #1712: the web download routes (three exports + the two backup zips)
+        // each build a whole table — or the whole database — before the
+        // response starts. One shared budget per user across all five, so
+        // hammering any of them is capped. `?->` is deliberate: on every route
+        // carrying this limiter `auth` runs first, but a null user must not
+        // turn into an ErrorException here.
+        RateLimiter::for('web-downloads', function ($request) {
+            return Limit::perMinute(10)->by(
+                optional($request->user())->id ?? $request->ip()
+            );
+        });
+
         // #1666: login budget for /api/login. Two independent limits:
         //  - per-account: keyed by the SUBMITTED n_code only, so rotating
         //    source IPs cannot reset it (the actual fix);

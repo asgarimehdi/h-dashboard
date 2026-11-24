@@ -35,7 +35,9 @@ Route::post('/csp-report', function (Request $request) {
 Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
     Route::livewire('/hardware', 'hardware.index');
     Route::livewire('/hardware/import', 'hardware.import-hardware.import-hardware')->name('hardware.import');
-    Route::get('/hardware/export', [HardwareExportController::class, 'export'])->name('hardware.export');
+    Route::get('/hardware/export', [HardwareExportController::class, 'export'])
+        ->middleware('throttle:web-downloads')
+        ->name('hardware.export');
     Route::livewire('/maintenance', 'maintenance.index')->name('maintenance.index');
 });
 
@@ -76,7 +78,9 @@ Route::middleware('auth')->group(function () {
 
         Route::middleware('role_or_permission:organization')->group(function () {
             Route::livewire('/units', 'units.index');
-            Route::get('/units/export', [UnitsExportController::class, 'export'])->name('units.export');
+            Route::get('/units/export', [UnitsExportController::class, 'export'])
+                ->middleware('throttle:web-downloads')
+                ->name('units.export');
             Route::livewire('/units/chart', 'units.chart');
             Route::livewire('/units/{id}/map', 'units.map');
         });
@@ -97,7 +101,9 @@ Route::middleware('auth')->group(function () {
         // lookup بالا فقط `kargozini` می‌مانند.
         Route::middleware('role_or_permission:kargozini|manage_personnel')->group(function () {
             Route::livewire('/kargozini/persons', 'kargozini.person');
-            Route::get('/kargozini/persons/export', [PersonsExportController::class, 'export'])->name('kargozini.persons.export');
+            Route::get('/kargozini/persons/export', [PersonsExportController::class, 'export'])
+                ->middleware('throttle:web-downloads')
+                ->name('kargozini.persons.export');
         });
 
         Route::middleware('role_or_permission:manage_personnel')->group(function () {
@@ -243,7 +249,7 @@ Route::middleware('auth')->group(function () {
 //
 // دانلود یک GET ساده است: Livewire نمی‌تواند فایل برگرداند، پس دکمه‌ها
 // `<a href>` هستند (نه `wire:click`) و پاسخ یک `BinaryFileResponse` است.
-Route::middleware(['auth', 'role:admin'])->group(function () {
+Route::middleware(['auth', 'role:admin', 'throttle:web-downloads'])->group(function () {
     Route::get('/tools/backup/full', [BackupController::class, 'full'])
         ->name('backup.full');
     Route::get('/tools/backup/table/{table}', [BackupController::class, 'table'])
