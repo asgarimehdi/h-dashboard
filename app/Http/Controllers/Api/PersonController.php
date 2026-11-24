@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
 use App\Models\Person;
+use App\Models\User;
 use App\Rules\PerPage;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
@@ -171,7 +172,27 @@ class PersonController extends Controller
             ], 422);
         }
 
-        $person->delete();
+        // Issue #1720: users.n_code is a RESTRICT FK. Deactivated accounts keep
+        // their row (User uses SoftDeletes), so they still block the delete —
+        // hence withTrashed.
+        if (User::withTrashed()->where('n_code', $person->n_code)->exists()) {
+            return response()->json([
+                'message' => 'Cannot delete person: a user account is linked to this n_code (deactivated accounts included).',
+            ], 422);
+        }
+
+        try {
+            $person->delete();
+        } catch (\Throwable $e) {
+            // Issue #1720: an account can be created between the check above
+            // and this DELETE. Mirror UnitController: 422 with the same reason,
+            // never a 500.
+            report($e);
+
+            return response()->json([
+                'message' => 'Cannot delete person: a user account is linked to this n_code (deactivated accounts included).',
+            ], 422);
+        }
 
         return response()->json(['success' => true]);
     }
