@@ -6,12 +6,15 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 
 return new class extends Component
 {
+    use PersianNormalizer;
+
     public string $query = '';
 
     public array $results = ['tickets' => [], 'todos' => [], 'users' => [], 'units' => []];
@@ -83,18 +86,25 @@ return new class extends Component
         $cacheKey = app(CacheInvalidationServiceInterface::class)->cacheKey('global_search', $scopeHash, $extraHash);
 
         $this->results = Cache::remember($cacheKey, 30, function () use ($q, $accessibleIds, $user, $userIds, $canViewTickets, $canViewUsers) {
-            // Split query into words for multi-word search (e.g. "مهدی عسگری")
-            $words = preg_split('/\s+/', trim($q), -1, PREG_SPLIT_NO_EMPTY);
+            // Split query into words for multi-word search (e.g. "مهدی عسگری").
+            // Issue #1722: "%" and "_" in a word are LIKE metacharacters, not
+            // literal text. Escape ONLY — these columns have no folded copy
+            // (tickets/todos), so normalizing the term here would stop a name
+            // stored with an Arabic variant matching the same typed query.
+            $terms = array_map(
+                fn (string $term): string => self::escapeLikeWildcards($term),
+                preg_split('/\s+/', trim($q), -1, PREG_SPLIT_NO_EMPTY) ?: []
+            );
 
             return [
                 // Issue #897: projections, not models — Blade reads only
                 // id/subject/ticket_code/status + unit name.
                 'tickets' => $canViewTickets ? Ticket::accessible()
-                    ->where(function ($query) use ($words) {
-                        foreach ($words as $word) {
-                            $query->where(function ($inner) use ($word) {
-                                $inner->where('subject', 'like', "%{$word}%")
-                                    ->orWhere('ticket_code', 'like', "%{$word}%");
+                    ->where(function ($query) use ($terms) {
+                        foreach ($terms as $term) {
+                            $query->where(function ($inner) use ($term) {
+                                $inner->where('subject', 'like', "%{$term}%")
+                                    ->orWhere('ticket_code', 'like', "%{$term}%");
                             });
                         }
                     })
@@ -124,9 +134,9 @@ return new class extends Component
                         $scopeQuery->whereIn('unit_id', $accessibleIds)
                             ->orWhere(fn ($ownerQuery) => $ownerQuery->whereNull('unit_id')->where('user_id', $user->id));
                     })
-                    ->where(function ($query) use ($words) {
-                        foreach ($words as $word) {
-                            $query->where('title', 'like', "%{$word}%");
+                    ->where(function ($query) use ($terms) {
+                        foreach ($terms as $term) {
+                            $query->where('title', 'like', "%{$term}%");
                         }
                     })
                     ->latest()
@@ -144,11 +154,11 @@ return new class extends Component
                 // person f_name/l_name + semat name Blade renders.
                 'users' => $canViewUsers ? User::with(['person:id,n_code,f_name,l_name,s_id', 'person.semat:id,name'])
                     ->whereIn('id', $userIds)
-                    ->whereHas('person', function ($query) use ($words) {
-                        foreach ($words as $word) {
-                            $query->where(function ($inner) use ($word) {
-                                $inner->where('f_name', 'like', "%{$word}%")
-                                    ->orWhere('l_name', 'like', "%{$word}%");
+                    ->whereHas('person', function ($query) use ($terms) {
+                        foreach ($terms as $term) {
+                            $query->where(function ($inner) use ($term) {
+                                $inner->where('f_name', 'like', "%{$term}%")
+                                    ->orWhere('l_name', 'like', "%{$term}%");
                             });
                         }
                     })
@@ -166,9 +176,9 @@ return new class extends Component
 
                 // Issue #897: projections, not models — Blade reads only name.
                 'units' => Unit::whereIn('id', $accessibleIds)
-                    ->where(function ($query) use ($words) {
-                        foreach ($words as $word) {
-                            $query->where('name', 'like', "%{$word}%");
+                    ->where(function ($query) use ($terms) {
+                        foreach ($terms as $term) {
+                            $query->where('name', 'like', "%{$term}%");
                         }
                     })
                     ->take(10)
