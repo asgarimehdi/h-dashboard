@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CacheInvalidationServiceInterface;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -19,6 +20,24 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Radif extends Model
 {
     protected $fillable = ['name'];
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        // #1715: the personnel page caches its four lookup lists under
+        // `report_persons`. A rename/delete of an organizational row must
+        // invalidate it immediately, like Tahsil/Estekhdam/Semat do (#1351).
+        static::saved(function () {
+            $cache = app(CacheInvalidationServiceInterface::class);
+            $cache->increment('report_persons');
+        });
+
+        static::deleted(function () {
+            $cache = app(CacheInvalidationServiceInterface::class);
+            $cache->increment('report_persons');
+        });
+    }
 
     public function person(): HasMany
     {
