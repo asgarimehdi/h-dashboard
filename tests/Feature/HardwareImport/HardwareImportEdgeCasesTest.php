@@ -6,11 +6,13 @@ use App\Exports\HardwareExport;
 use App\Imports\HardwareImport;
 use App\Models\Estekhdam;
 use App\Models\Hardware;
+use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
+use App\Support\HardwareAuditChange;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Facades\Excel;
@@ -109,6 +111,187 @@ class HardwareImportEdgeCasesTest extends TestCase
         $import->setAccessibleUnitIds([$this->unit->id]);
 
         return $import;
+    }
+
+    /**
+     * #1758: seed exactly what `row()` writes, so the only reported diff is the
+     * field a test deliberately overrides.
+     */
+    private function seedHardware(array $overrides = []): Hardware
+    {
+        return Hardware::create(array_merge([
+            'n_code' => '1234567890',
+            'pc_name' => 'PC-NEW',
+            'type' => 'pc',
+            'os' => 'Windows 11',
+            'ip_valid' => '10.1.1.5',
+            'ip_local' => '192.168.1.5',
+            'mac' => 'AA:BB:CC:DD:EE:01',
+            'net_type' => 'LAN',
+            'switch' => 'SW-1',
+            'port' => '5',
+            'shutdown' => false,
+            'vlan' => '10',
+            'motherboard' => 'H610',
+            'cpu' => 'i7',
+            'ram' => '16GB',
+            'hdd' => 'SSD 512',
+            'comments' => null,
+            'mark' => false,
+            'clean_at' => null,
+        ], $overrides));
+    }
+
+    // -----------------------------------------------------------
+    //  ایشو #1758: rename روی match با MAC باید در پیش‌نمایش دیده شود
+    // -----------------------------------------------------------
+
+    public function test_preview_shows_the_pc_name_rename_of_a_mac_matched_device(): void
+    {
+        $this->createPerson();
+        $this->seedHardware(['pc_name' => 'PC-OLD', 'cpu' => 'i5']);
+
+        $file = $this->writeCsv([$this->row(['pc_name' => 'PC-NEW', 'cpu' => 'i9'])]);
+
+        $import = $this->scopedImport();
+        $import->setCompareKey('mac');
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+        $row = $results['preview'][0];
+
+        $this->assertSame('update', $row['status']);
+        $this->assertSame('mac', $row['match_key']);
+        $this->assertSame(1, $results['updated']);
+        $this->assertSame(['pc_name', 'cpu'], array_keys($row['changes']));
+        $this->assertSame(['old' => 'PC-OLD', 'new' => 'PC-NEW'], $row['changes']['pc_name']);
+
+        @unlink($file);
+    }
+
+    public function test_confirmed_mac_match_rename_is_shown_in_the_preview_and_written_to_the_audit(): void
+    {
+        $this->createPerson();
+        $hardware = $this->seedHardware(['pc_name' => 'PC-OLD', 'cpu' => 'i5']);
+
+        $file = $this->writeCsv([$this->row(['pc_name' => 'PC-NEW', 'cpu' => 'i9'])]);
+
+        $import = $this->scopedImport();
+        $import->setCompareKey('mac');
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(1, $results['updated']);
+        $this->assertSame('mac', $results['changes'][0]['match_key']);
+        $this->assertSame('PC-OLD', $results['changes'][0]['changes']['pc_name']['old']);
+        $this->assertSame('PC-NEW', $results['changes'][0]['changes']['pc_name']['new']);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'pc_name' => 'PC-NEW', 'cpu' => 'i9']);
+
+        $audit = HardwareAudit::where('source', 'import')->where('action', 'updated')->first();
+        $this->assertNotNull($audit);
+
+        $changes = is_array($audit->changes) ? $audit->changes : json_decode((string) $audit->changes, true);
+        $pcNameChange = collect($changes)->firstWhere('field', 'pc_name');
+        $this->assertSame('pc_name', $pcNameChange['field']);
+        $this->assertSame('PC-OLD', $pcNameChange['old']);
+        $this->assertSame('PC-NEW', $pcNameChange['new']);
+
+        @unlink($file);
+    }
+
+    public function test_a_row_that_only_renames_a_mac_matched_device_is_an_update_not_a_silent_no_op(): void
+    {
+        $this->createPerson();
+        $hardware = $this->seedHardware(['pc_name' => 'PC-OLD']);
+
+        $file = $this->writeCsv([$this->row(['pc_name' => 'PC-NEW'])]);
+
+        $preview = $this->scopedImport();
+        $preview->setCompareKey('mac');
+        Excel::import($preview, $file);
+
+        $results = $preview->getImportResults();
+        $this->assertSame('update', $results['preview'][0]['status']);
+        $this->assertSame(['pc_name'], array_keys($results['preview'][0]['changes']));
+        $this->assertSame(1, $results['updated']);
+        $this->assertSame(0, $results['skipped']);
+
+        $confirm = $this->scopedImport();
+        $confirm->setCompareKey('mac');
+        $confirm->setSelectedActions(['row_2' => 'update']);
+        Excel::import($confirm, $file);
+
+        $this->assertSame('PC-NEW', $hardware->fresh()->pc_name);
+        $this->assertSame(1, HardwareAudit::where('action', 'updated')->count());
+
+        @unlink($file);
+    }
+
+    public function test_a_pc_name_that_differs_only_in_persian_variants_is_not_a_change(): void
+    {
+        $this->createPerson();
+        $hardware = $this->seedHardware(['pc_name' => "PC\u{06CC}"]); // ی فارسی
+
+        $file = $this->writeCsv([$this->row(['pc_name' => "PC\u{064A}"])]); // ي عربی
+
+        $import = $this->scopedImport();
+        $import->setCompareKey('both'); // pc_name خام match نمی‌شود؛ mac match می‌کند
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame('unchanged', $results['preview'][0]['status']);
+        $this->assertSame(0, $results['updated']);
+        $this->assertSame(1, $results['skipped']);
+        $this->assertSame("PC\u{06CC}", $hardware->fresh()->pc_name);
+        $this->assertSame(0, HardwareAudit::where('source', 'import')->count());
+
+        @unlink($file);
+    }
+
+    public function test_detect_changes_compares_exactly_the_columns_the_upsert_writes(): void
+    {
+        $import = new HardwareImport;
+        $reflection = new \ReflectionClass($import);
+
+        $updateColumns = $reflection->getMethod('updateColumns');
+        $updateColumns->setAccessible(true);
+        $writeColumns = $updateColumns->invoke($import);
+
+        // 1) لیست نوشتنی را freeze می‌کند: حذف/اضافهٔ هر ستون (از جمله pc_name) باید آگاهانه باشد.
+        $this->assertSame([
+            'n_code', 'pc_name', 'type', 'os', 'ip_valid', 'ip_local', 'mac',
+            'net_type', 'switch', 'port', 'shutdown', 'vlan', 'motherboard',
+            'cpu', 'ram', 'hdd', 'comments', 'mark', 'clean_at',
+        ], $writeColumns);
+
+        // 2) هر ستون نوشتنی باید audit شود.
+        $this->assertEqualsCanonicalizing($writeColumns, HardwareAuditChange::AUDITED_FIELDS);
+
+        // 3) detectChanges باید دقیقاً همین ستون‌ها را مقایسه کند (دریفت #1758).
+        // `clean_at` جدا ست می‌شود چون cast تاریخ هنگام set مقدار غیرتاریخ را
+        // رد می‌کند؛ در غیر این صورت خودِ ساخت مدل throw می‌کند.
+        $existing = new Hardware(array_fill_keys(array_diff($writeColumns, ['clean_at']), 'OLD'));
+        $existing->clean_at = null;
+        $existing->shutdown = false;
+        $existing->mark = false;
+
+        $newData = [];
+        foreach ($writeColumns as $field) {
+            $newData[$field] = 'NEW-'.$field;
+        }
+        $newData['clean_at'] = '2030-01-01';
+        $newData['shutdown'] = true;
+        $newData['mark'] = true;
+
+        $detectChanges = $reflection->getMethod('detectChanges');
+        $detectChanges->setAccessible(true);
+        $changes = $detectChanges->invoke($import, $existing, $newData);
+
+        $this->assertEqualsCanonicalizing($writeColumns, array_keys($changes));
     }
 
     // -----------------------------------------------------------
