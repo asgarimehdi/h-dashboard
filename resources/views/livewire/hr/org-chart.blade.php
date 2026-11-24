@@ -89,18 +89,18 @@ return new class extends Component
             return;
         }
 
-        // Query 1: Unit with relations
-        $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person'])->find($unitId);
+        // Query 1: Unit with relations. Assigned users are counted in a
+        // subquery — loading them (and their persons) only to call count()
+        // hydrated every user of the unit and threw them away.
+        $this->selectedUnit = Unit::with(['parent', 'unitType'])->withCount('assignedUsers')->find($unitId);
 
-        // Query 2: Personnel + total count (clone query, no separate count query).
-        // The 20-row cap is applied AFTER get(): a builder-level ->limit() hops to
-        // Query\Builder through @mixin (Eloquent\Builder declares no limit()),
-        // which types the result as Collection<int, stdClass> for PHPStan while
-        // runtime still yields Person models. get()->take(20) keeps the declared
-        // type honest — see AGENTS.md gotchas if this ever needs revisiting.
+        // Query 2: Personnel + total count. The 20-row cap is applied in SQL,
+        // so only those 20 rows and their relations are hydrated. orderBy('id')
+        // pins the row order: before this the query had no ORDER BY at all, so
+        // the displayed order was whatever the DB returned.
         $personQuery = Person::where('u_id', $unitId)->with(['semat', 'tahsil', 'estekhdam', 'radif', 'user']);
         $this->selectedPersonnelTotal = (clone $personQuery)->count();
-        $this->selectedPersonnel = $personQuery->get()->take(20);
+        $this->selectedPersonnel = $personQuery->orderBy('id')->limit(20)->get();
 
         // Query 3: Descendant personnel + user counts (descendantIds is cached)
         $descendantIds = Unit::descendantIds($unitId);
@@ -116,7 +116,10 @@ return new class extends Component
                 ->count('user_id')
             : 0;
 
-        $this->directUserCount = $this->selectedUnit->assignedUsers->count();
+        // assigned_users_count exists only on this request's model — it is not
+        // part of the Livewire snapshot, so Blade must keep reading this int
+        // property rather than the attribute.
+        $this->directUserCount = (int) $this->selectedUnit->assigned_users_count;
     }
 };
 

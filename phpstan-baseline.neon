@@ -1915,12 +1915,6 @@ parameters:
 			path: resources/views/livewire/hr/dashboard.blade.php
 
 		-
-			message: '#^Called ''take'' on Laravel collection, but could have been retrieved as a query\.$#'
-			identifier: larastan.noUnnecessaryCollectionCall
-			count: 1
-			path: resources/views/livewire/hr/org-chart.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/it/network\-traffic\-chart\.blade\.php\:5\:\:mount\(\) has parameter \$inItemId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
