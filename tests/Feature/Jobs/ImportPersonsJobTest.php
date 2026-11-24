@@ -345,6 +345,36 @@ class ImportPersonsJobTest extends TestCase
     }
 
     /**
+     * #1759: a failed run keeps the sheet — it is the only record of which rows
+     * were in it. `imports:prune-sheets` sweeps it after the retention window,
+     * so keeping it is not a leak.
+     */
+    public function test_failed_keeps_the_stored_upload_for_diagnosis(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = 'kept-persons-token';
+        $this->assertTrue(ImportStatus::claim($user->id, $token));
+
+        Storage::disk('local')->put('imports/kept-persons.csv', $this->personsCsv('9000000130', $unit->id));
+
+        (new ImportPersonsJob(
+            path: 'imports/kept-persons.csv',
+            compareKey: 'n_code',
+            selectedActions: ['row_2' => 'create'],
+            accessibleUnitIds: [],
+            userId: $user->id,
+            statusToken: $token,
+        ))->failed(new \RuntimeException('boom'));
+
+        Storage::disk('local')->assertExists('imports/kept-persons.csv');
+
+        $result = ImportStatus::read($user->id, $token);
+        $this->assertSame('failed', $result['state']);
+        $this->assertSame('boom', $result['error']);
+        $this->assertTrue(ImportStatus::claim($user->id, 'next-token'));
+    }
+
+    /**
      * #1697: a non-numeric lookup id used to parse to `0`, pass the preview,
      * and then abort the whole queued import with a foreign-key violation
      * (`tries = 1`, so nothing else was ever written).

@@ -94,6 +94,9 @@ trait RevalidatesImportActor
 
     private function abortUnauthorizedImport(string $reason, ?int $userId, ?string $statusToken, string $path): void
     {
+        // #1759: this refusal happens before the sheet is read — no row was
+        // written and the UI asks for a re-upload — so it is deleted at once,
+        // unlike a failed run, which keeps the sheet for diagnosis.
         Storage::delete($path);
 
         if ($userId !== null) {

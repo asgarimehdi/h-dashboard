@@ -429,19 +429,33 @@ class ImportHardwareJobTest extends TestCase
     }
 
     /**
-     * #1194: the job never retries (`$tries = 1`), so a failed run leaves the
-     * stored upload behind forever unless `failed()` deletes it. The UI has
-     * already told the user the import is running, so nothing else would ever
-     * clean it up.
+     * #1759: a failed run keeps the sheet — it is the only record of which rows
+     * were in it. `imports:prune-sheets` sweeps it after the retention window,
+     * so keeping it is not a leak.
      */
-    public function test_failed_deletes_the_stored_upload(): void
+    public function test_failed_keeps_the_stored_upload_for_diagnosis(): void
     {
-        Storage::disk('local')->put('imports/leftover.csv', $this->hardwareCsv('1234567890'));
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
+        $token = 'kept-token';
+        $this->assertTrue(ImportStatus::claim($user->id, $token));
 
-        $job = new ImportHardwareJob('imports/leftover.csv', 'pc_name', [], []);
-        $job->failed(new \RuntimeException('boom'));
+        Storage::disk('local')->put('imports/kept.csv', $this->hardwareCsv($user->n_code, 'PC-KEPT'));
 
-        Storage::disk('local')->assertMissing('imports/leftover.csv');
+        (new ImportHardwareJob(
+            path: 'imports/kept.csv',
+            compareKey: 'pc_name',
+            selectedActions: ['row_2' => 'create'],
+            accessibleUnitIds: [],
+            userId: $user->id,
+            statusToken: $token,
+        ))->failed(new \RuntimeException('boom'));
+
+        Storage::disk('local')->assertExists('imports/kept.csv');
+
+        $result = ImportStatus::read($user->id, $token);
+        $this->assertSame('failed', $result['state']);
+        $this->assertSame('boom', $result['error']);
+        $this->assertTrue(ImportStatus::claim($user->id, 'next-token'));
     }
 
     public function test_job_imports_update_rows_as_well_as_creates(): void
