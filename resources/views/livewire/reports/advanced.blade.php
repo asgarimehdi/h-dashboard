@@ -337,13 +337,16 @@ return new class extends Component
             // Only the FILTER syntax comes from the dashboard: urgent/normal/low
             // count every status here, and overdue binds PHP `now()`, not SQL
             // `NOW()`.
+            // #1728 — overdue means "open ticket past its deadline", where open
+            // is Ticket::openSql(): accepted counts too, rejected does not.
+            $openExpr = Ticket::openSql('tickets');
             $stats = (clone $query)->selectRaw(
                 'COUNT(*) AS total, '.
                 'COUNT(*) FILTER (WHERE tickets.priority = ?) AS urgent, '.
                 'COUNT(*) FILTER (WHERE tickets.priority = ?) AS normal, '.
                 'COUNT(*) FILTER (WHERE tickets.priority = ?) AS low, '.
-                'COUNT(*) FILTER (WHERE tickets.status IN (?, ?) AND tickets.deadline < ?) AS overdue',
-                ['urgent', 'normal', 'low', 'created', 'forwarded', now()],
+                "COUNT(*) FILTER (WHERE {$openExpr} AND tickets.deadline < ?) AS overdue",
+                ['urgent', 'normal', 'low', now()],
             )->toBase()->first();
 
             $total = (int) ($stats->total ?? 0);

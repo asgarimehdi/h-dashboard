@@ -2184,6 +2184,41 @@ class TicketsInboxLivewireTest extends TestCase
         $this->assertTrue($todo->fresh()->is_completed);
     }
 
+    public function test_bulk_complete_auto_completes_parent_task_when_the_only_sibling_is_rejected(): void
+    {
+        // #1728: `rejected` is terminal, so it is closed. A rejected sibling
+        // must not keep the parent task open forever.
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $todo = Todo::create([
+            'title' => 'وظیفه تست',
+            'start_at' => now(),
+            'is_completed' => false,
+            'unit_id' => $user->units()->first()->id,
+        ]);
+
+        $t1 = $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+            'task_id' => $todo->id,
+        ]);
+        $rejected = $this->createTicket([
+            'status' => 'rejected',
+            'task_id' => $todo->id,
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$t1->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal');
+
+        $this->assertSame('completed', $t1->fresh()->status);
+        $this->assertSame('rejected', $rejected->fresh()->status);
+        $this->assertTrue($todo->fresh()->is_completed);
+    }
+
     public function test_select_all_then_complete_on_pending_tab_processes_nothing(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
@@ -2326,6 +2361,33 @@ class TicketsInboxLivewireTest extends TestCase
 
         $todo->refresh();
         $this->assertTrue($todo->is_completed);
+    }
+
+    public function test_submit_action_completes_todo_when_the_only_sibling_is_rejected(): void
+    {
+        // #1728: same contract on the single path — a rejected sibling is
+        // closed, so completing the last open ticket completes the task.
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $todo = Todo::create([
+            'title' => 'وظیفه تست',
+            'start_at' => now(),
+            'is_completed' => false,
+            'unit_id' => $user->units()->first()->id,
+        ]);
+
+        $t1 = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id, 'task_id' => $todo->id]);
+        $rejected = $this->createTicket(['status' => 'rejected', 'task_id' => $todo->id]);
+
+        Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $t1->id)
+            ->set('completionNote', 'پایان کار')
+            ->call('submitAction');
+
+        $this->assertSame('completed', $t1->fresh()->status);
+        $this->assertSame('rejected', $rejected->fresh()->status);
+        $this->assertTrue($todo->fresh()->is_completed);
     }
 
     // =====================================================================

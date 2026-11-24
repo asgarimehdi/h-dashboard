@@ -524,9 +524,11 @@ new class extends Component
                 $completedTaskIds = $taskIdMap->filter()->unique();
 
                 // Plan 005: Auto-complete parent tasks where all child tickets are completed
+                // #1728: the sibling check uses the shared OPEN predicate, so a
+                // rejected (terminal) sibling no longer blocks completion.
                 foreach ($completedTaskIds as $taskId) {
                     $incompleteCount = Ticket::where('task_id', $taskId)
-                        ->where('status', '!=', 'completed')
+                        ->open()
                         ->count();
                     if ($incompleteCount === 0) {
                         \App\Models\Todo::where('id', $taskId)->update(['is_completed' => true]);

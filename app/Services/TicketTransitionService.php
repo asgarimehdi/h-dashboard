@@ -110,9 +110,11 @@ final class TicketTransitionService
             // last open tickets both marking the task complete is the same
             // benign outcome.
             if ($ticket->task_id) {
+                // #1728: the shared OPEN predicate, so a rejected (terminal)
+                // sibling no longer keeps the parent task open forever.
                 $openSiblings = Ticket::query()
                     ->where('task_id', $ticket->task_id)
-                    ->where('status', '!=', 'completed')
+                    ->open()
                     ->where('id', '!=', $ticket->id)
                     ->count();
 

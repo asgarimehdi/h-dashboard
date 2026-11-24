@@ -129,7 +129,7 @@ return new class extends Component
             $ticketQuery = Ticket::accessible()
                 ->whereHas('task')
                 ->with(['task' => $taskScope])
-                ->whereIn('status', ['created', 'forwarded', 'accepted']);
+                ->open();
 
             // Apply date range filter when available
             if ($this->calendarStart) {

@@ -217,7 +217,7 @@ class ReportsAdvancedAggregateParityTest extends TestCase
         $this->assertSame(2, $data['details']['urgent'], 'T1 and T4');
         $this->assertSame(1, $data['details']['normal'], 'T2');
         $this->assertSame(0, $data['details']['low'], 'T3 is 40 days old and outside the range');
-        $this->assertSame(1, $data['details']['overdue'], 'only T1: T4 is accepted, T6 has no deadline');
+        $this->assertSame(2, $data['details']['overdue'], 'T1 and T4: an accepted ticket past its deadline is still overdue (#1728); T6 has no deadline');
 
         $this->assertSame(['child-unit' => 1, 'root-unit' => 3], $data['byUnit']);
 
@@ -234,7 +234,7 @@ class ReportsAdvancedAggregateParityTest extends TestCase
         $root = $this->reportDataWith('tickets', ['unitId' => $this->root->id]);
         $this->assertSame(4, $root['total'], 'T1, T2, T4 and T6 belong to the root subtree');
         $this->assertSame(2, $root['details']['urgent']);
-        $this->assertSame(1, $root['details']['overdue']);
+        $this->assertSame(2, $root['details']['overdue'], 'T1 and T4');
         $this->assertSame(['child-unit' => 1, 'root-unit' => 3], $root['byUnit']);
 
         $child = $this->reportDataWith('tickets', ['unitId' => $this->child->id]);
@@ -254,7 +254,7 @@ class ReportsAdvancedAggregateParityTest extends TestCase
 
         $this->assertSame(1, $accepted['total'], 'T4 only');
         $this->assertSame(1, $accepted['details']['urgent']);
-        $this->assertSame(0, $accepted['details']['overdue'], 'T4 is accepted, not overdue');
+        $this->assertSame(1, $accepted['details']['overdue'], 'T4 is accepted and past its deadline, so it is overdue (#1728)');
     }
 
     public function test_a_wider_range_includes_the_older_ticket(): void
@@ -266,7 +266,7 @@ class ReportsAdvancedAggregateParityTest extends TestCase
 
         $this->assertSame(5, $data['total'], 'T1..T4 and T6');
         $this->assertSame(1, $data['details']['low'], 'T3 at 40 days');
-        $this->assertSame(1, $data['details']['overdue']);
+        $this->assertSame(2, $data['details']['overdue'], 'T1 and T4');
         $this->assertSame(5, array_sum(array_column($data['byDay'], 'count')));
     }
 
@@ -277,7 +277,7 @@ class ReportsAdvancedAggregateParityTest extends TestCase
 
         $this->assertSame(3, $data['total'], 'T1, T4 and T6 were created today');
         $this->assertSame(2, $data['details']['urgent']);
-        $this->assertSame(1, $data['details']['overdue']);
+        $this->assertSame(2, $data['details']['overdue'], 'T1 and T4');
         $this->assertSame(3, array_sum(array_column($data['byDay'], 'count')));
     }
 

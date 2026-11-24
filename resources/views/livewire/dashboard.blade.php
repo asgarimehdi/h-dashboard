@@ -116,10 +116,12 @@ return new class extends Component
             ", array_merge($accessibleIds, $accessibleIds));
 
             // Tickets: total, open, completed
+            // #1728: OPEN comes from Ticket::openSql() — the single definition.
+            $openExpr = Ticket::openSql();
             $ticketRow = DB::selectOne("
                 SELECT
                     COUNT(*) AS total_tickets,
-                    COUNT(*) FILTER (WHERE status IN ('created','forwarded')) AS open_tickets,
+                    COUNT(*) FILTER (WHERE {$openExpr}) AS open_tickets,
                     COUNT(*) FILTER (WHERE status = 'completed') AS completed_tickets
                 FROM tickets WHERE unit_id IN ({$idList})
             ", $accessibleIds);
@@ -206,12 +208,14 @@ return new class extends Component
                 default => 'DATEDIFF(completed_at, created_at)',
             };
 
+            // #1728: OPEN comes from Ticket::openSql() — the single definition.
+            $openExpr = Ticket::openSql();
             $row = DB::selectOne("
                 SELECT
-                    COUNT(*) FILTER (WHERE priority = 'urgent' AND status IN ('created','forwarded')) AS urgent,
-                    COUNT(*) FILTER (WHERE priority = 'normal' AND status IN ('created','forwarded')) AS normal,
-                    COUNT(*) FILTER (WHERE priority = 'low' AND status IN ('created','forwarded')) AS low,
-                    COUNT(*) FILTER (WHERE status IN ('created','forwarded') AND deadline < NOW()) AS overdue,
+                    COUNT(*) FILTER (WHERE priority = 'urgent' AND {$openExpr}) AS urgent,
+                    COUNT(*) FILTER (WHERE priority = 'normal' AND {$openExpr}) AS normal,
+                    COUNT(*) FILTER (WHERE priority = 'low' AND {$openExpr}) AS low,
+                    COUNT(*) FILTER (WHERE {$openExpr} AND deadline < NOW()) AS overdue,
                     AVG(CASE WHEN status = 'completed' AND completed_at IS NOT NULL THEN {$diffExpr} END) AS avg_days
                 FROM tickets WHERE unit_id IN ({$idList})
             ", $accessibleIds);

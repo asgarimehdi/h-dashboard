@@ -235,8 +235,9 @@ class GenerateDailyReportsCommandTest extends TestCase
 
     /**
      * The two aggregate predicates are the load-bearing part of the change: a
-     * dropped `status != 'completed'` / `is_completed = false` would silently
-     * rewrite every stored daily report from here on.
+     * dropped `Ticket::openSql()` / `is_completed = false` would silently
+     * rewrite every stored daily report from here on. #1728: `rejected` is a
+     * terminal status too — it is closed, so it must not be counted as open.
      */
     public function test_completed_rows_are_excluded_from_both_counts(): void
     {
@@ -246,6 +247,11 @@ class GenerateDailyReportsCommandTest extends TestCase
         Ticket::create([
             'ticket_code' => 'T-'.strtoupper(Str::random(8)),
             'subject' => 'done', 'content' => 'c', 'status' => 'completed',
+            'unit_id' => $unit->id,
+        ]);
+        Ticket::create([
+            'ticket_code' => 'T-'.strtoupper(Str::random(8)),
+            'subject' => 'rejected', 'content' => 'c', 'status' => 'rejected',
             'unit_id' => $unit->id,
         ]);
         $this->openTodo($unit, 'open');
@@ -259,7 +265,7 @@ class GenerateDailyReportsCommandTest extends TestCase
         $this->assertSame(
             ['open_tickets' => 1, 'open_todos' => 1],
             DailyReport::first()->payload,
-            'completed tickets/todos must not be counted',
+            'completed and rejected tickets/todos must not be counted',
         );
     }
 
