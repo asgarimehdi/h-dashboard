@@ -124,6 +124,34 @@ class UnitsChartLivewireTest extends TestCase
         $this->assertContains((string) $user->person->u_id, $expanded);
     }
 
+    public function test_two_persian_letters_do_not_expand(): void
+    {
+        $result = $this->createUserWithUnit(['organization']);
+        $this->actingAs($result['user']);
+
+        $child = Unit::create(['name' => 'شبکه', 'parent_id' => $result['user']->person->u_id]);
+        Unit::create(['name' => 'مرکز', 'parent_id' => $child->id]);
+
+        $component = Livewire::test('units.chart');
+        $component->set('search', 'مر');   // 2 characters / 4 bytes
+
+        $this->assertSame([], $component->get('expanded'));
+    }
+
+    public function test_wildcard_search_does_not_expand(): void
+    {
+        $result = $this->createUserWithUnit(['organization']);
+        $this->actingAs($result['user']);
+
+        $child = Unit::create(['name' => 'شبکه', 'parent_id' => $result['user']->person->u_id]);
+        Unit::create(['name' => 'مرکز', 'parent_id' => $child->id]);
+
+        $component = Livewire::test('units.chart');
+        $component->set('search', '%%%');  // 3 characters, passes the guard, must match nothing
+
+        $this->assertSame([], $component->get('expanded'));
+    }
+
     public function test_select_unit(): void
     {
         $result = $this->createUserWithUnit(['organization']);
