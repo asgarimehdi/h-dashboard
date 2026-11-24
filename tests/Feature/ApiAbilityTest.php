@@ -715,6 +715,62 @@ class ApiAbilityTest extends TestCase
         $this->apiGet('/api/gis/stats', $token)->assertOk();
     }
 
+    /**
+     * #1743: a `bw`-only account keeps the geographic aggregates, loses the data.
+     *
+     * The GIS group used to be one uniform gate, so `map|bw` alone exposed the
+     * hardware inventory and the ticket subjects. The two data routes now
+     * require the same permission the app enforces for that data elsewhere
+     * (`/api/hardware`, `/api/tickets`), while the aggregates and the disease
+     * layer stay untouched.
+     */
+    public function test_bw_only_holder_is_forbidden_from_gis_data_endpoints(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(permissions: ['bw']);
+        $abilities = $user->getApiTokenAbilities();
+        $this->assertContains('gis:read', $abilities); // grant unchanged (#895)
+        $token = $user->createToken('flutter-app', $abilities)->plainTextToken;
+
+        $this->apiGet('/api/gis/hardware', $token)->assertForbidden();
+        $this->apiGet('/api/gis/tickets', $token)->assertForbidden();
+
+        foreach (['units', 'stats', 'clusters'] as $endpoint) {
+            $this->apiGet("/api/gis/{$endpoint}", $token)->assertOk();
+        }
+
+        $this->apiGet('/api/gis/diseases', $token)->assertOk(); // disease routes untouched
+    }
+
+    /** #1743: a `map`-only account loses the data layers too. */
+    public function test_map_only_holder_is_forbidden_from_gis_data_endpoints(): void
+    {
+        $token = $this->createTokenWithAbilities(['gis:read'], ['map']);
+
+        $this->apiGet('/api/gis/hardware', $token)->assertForbidden();
+        $this->apiGet('/api/gis/tickets', $token)->assertForbidden();
+        $this->apiGet('/api/gis/units', $token)->assertOk();
+    }
+
+    /** #1743: nested middleware is AND — a data permission without `map|bw` is not enough. */
+    public function test_manage_hardware_alone_is_not_enough_without_the_gis_gate(): void
+    {
+        $token = $this->createTokenWithAbilities(['gis:read'], ['manage_hardware']);
+
+        $this->apiGet('/api/gis/hardware', $token)->assertForbidden();
+    }
+
+    /**
+     * #1743 verdict pin: `/gis/tickets` mirrors `/api/tickets` exactly — the
+     * `view_assigned_tickets|view_all_tickets` union, with no extra
+     * assignment filter invented for GIS.
+     */
+    public function test_view_assigned_tickets_holder_may_read_gis_tickets(): void
+    {
+        $token = $this->createTokenWithAbilities(['gis:read'], ['map', 'view_assigned_tickets']);
+
+        $this->apiGet('/api/gis/tickets', $token)->assertOk();
+    }
+
     // ──────────────────────────────────────────────
     // Traffic
     // ──────────────────────────────────────────────

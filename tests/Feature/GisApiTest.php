@@ -47,13 +47,20 @@ class GisApiTest extends TestCase
      * UnitFactory assigns random lat/lng that may fall outside the test bbox
      * (48-49E, 36-37N), hiding units/hardware/tickets from GIS responses.
      * Pin the user's unit inside the bbox after creation.
+     *
+     * @param  array<int, string>  $permissions
      */
-    private function createBBoxUser(): array
+    private function createBBoxUserWith(array $permissions = ['map']): array
     {
-        $result = $this->createUserWithUnit(['map']);
+        $result = $this->createUserWithUnit($permissions);
         $result['unit']->update(['lat' => 36.669343, 'lng' => 48.47163]);
 
         return $result;
+    }
+
+    private function createBBoxUser(): array
+    {
+        return $this->createBBoxUserWith(['map']);
     }
 
     /** @test */
@@ -108,7 +115,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_hardware_returns_geojson_feature_collection(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'manage_hardware']);
         $person = Person::where('u_id', $unit->id)->first();
 
         Hardware::create([
@@ -136,7 +143,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_hardware_filters_by_type(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'manage_hardware']);
         $person = Person::where('u_id', $unit->id)->first();
 
         Hardware::create([
@@ -160,7 +167,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_tickets_returns_geojson_feature_collection(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'view_all_tickets']);
         Ticket::create([
             'ticket_code' => 'TKT-001',
             'user_id' => $user->id,
@@ -188,7 +195,7 @@ class GisApiTest extends TestCase
     /** @test */
     public function test_gis_tickets_filters_by_priority_and_status(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'view_all_tickets']);
 
         Ticket::create([
             'ticket_code' => 'TKT-001',
@@ -239,7 +246,7 @@ class GisApiTest extends TestCase
      */
     public function test_gis_tickets_response_omits_the_content_column(): void
     {
-        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'view_all_tickets']);
         $marker = 'SECRET-TICKET-BODY-MARKER';
         Ticket::create([
             'ticket_code' => 'TKT-LONG',
@@ -266,6 +273,77 @@ class GisApiTest extends TestCase
 
         $response->assertJsonMissingPath('features.0.properties.content');
         $this->assertStringNotContainsString($marker, $response->getContent());
+    }
+
+    /**
+     * #1743: authorized callers keep the exact payload they had — the fix only
+     * narrows WHO may read it, never what it contains.
+     *
+     * @test
+     */
+    public function test_gis_data_payloads_are_unchanged_for_authorized_callers(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'manage_hardware', 'view_all_tickets']);
+        $person = Person::where('u_id', $unit->id)->first();
+
+        Hardware::create([
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-001',
+            'type' => 'laptop',
+        ]);
+        Ticket::create([
+            'ticket_code' => 'TKT-001',
+            'user_id' => $user->id,
+            'unit_id' => $unit->id,
+            'subject' => 'Test Ticket',
+            'content' => 'x',
+            'priority' => 'normal',
+            'status' => 'created',
+        ]);
+
+        $token = $this->createApiToken($user, $user->getApiTokenAbilities());
+
+        $this->apiGet('/api/gis/hardware?bbox=48,36,49,37', $token)
+            ->assertOk()
+            ->assertJsonPath('features.0.properties.pc_name', 'PC-001')
+            ->assertJsonPath('features.0.properties.person.n_code', $person->n_code);
+
+        $this->apiGet('/api/gis/tickets?bbox=48,36,49,37', $token)
+            ->assertOk()
+            ->assertJsonPath('features.0.properties.title', 'Test Ticket');
+    }
+
+    /**
+     * #1743 Step-3 verdict pin: `/gis/tickets` and `/api/tickets` must return the
+     * same rows for the same caller — `Api\TicketController::index()` has no
+     * permission-based assignment scoping, so GIS must not invent one.
+     *
+     * @test
+     */
+    public function test_gis_tickets_matches_the_tickets_api_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'view_assigned_tickets']);
+        $token = $this->createApiToken($user, $user->getApiTokenAbilities());
+
+        foreach (['TKT-A', 'TKT-B'] as $code) {
+            Ticket::create([
+                'ticket_code' => $code,
+                'user_id' => $user->id,
+                'unit_id' => $unit->id,
+                'subject' => $code,
+                'content' => 'x',
+                'priority' => 'normal',
+                'status' => 'created',
+            ]);
+        }
+
+        $gisIds = collect($this->apiGet('/api/gis/tickets?bbox=48,36,49,37', $token)->json('features'))
+            ->pluck('id')->sort()->values()->all();
+        $apiIds = collect($this->apiGet('/api/tickets', $token)->json('data'))
+            ->pluck('id')->sort()->values()->all();
+
+        $this->assertCount(2, $gisIds);
+        $this->assertSame($apiIds, $gisIds);
     }
 
     /** @test */
@@ -414,7 +492,7 @@ class GisApiTest extends TestCase
     #[DataProvider('malformedBboxSamples')]
     public function test_every_gis_endpoint_rejects_a_malformed_bbox(string $bbox): void
     {
-        ['user' => $user] = $this->createBBoxUser();
+        ['user' => $user] = $this->createBBoxUserWith(['map', 'manage_hardware', 'view_all_tickets']);
         $token = $this->createApiToken($user, ['gis:read']);
 
         foreach (['units', 'hardware', 'tickets', 'stats', 'clusters'] as $endpoint) {

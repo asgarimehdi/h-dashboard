@@ -171,7 +171,8 @@ it('gis cache is busted when unit is mutated', function () {
 });
 
 it('gis cache is busted when hardware is added', function () {
-    ['user' => $user, 'unit' => $userUnit] = $this->createUserWithUnit(['map']);
+    // #1743: `/api/gis/hardware` now also requires `manage_hardware`.
+    ['user' => $user, 'unit' => $userUnit] = $this->createUserWithUnit(['map', 'manage_hardware']);
 
     // Ensure the unit's lat/lng falls within the test bbox
     $userUnit->update([
