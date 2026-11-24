@@ -123,6 +123,20 @@ class HardwareAuditController extends Controller
             return response()->json(['message' => 'Field not found in audit record.'], 422);
         }
 
+        // #1736: a `created` audit has no previous value — the observer stores
+        // the '—' sentinel as `old` for every field. Parsing it back yields
+        // null, which wipes a nullable column, 500s on a NOT NULL one, and
+        // leaves a `rollback` row certifying the wipe. The #1669 currency guard
+        // passes exactly when nothing has changed since creation. Guard on the
+        // action, not the sentinel: an `updated` row legitimately stores '—'
+        // for a null → value transition. Restoring a deleted record is
+        // restoreRecord()'s job.
+        if ($audit->action === 'created') {
+            return response()->json([
+                'message' => 'Cannot roll back a "created" audit: there is no previous value to restore.',
+            ], 422);
+        }
+
         $oldValue = $fieldChange['old'] ?? '—';
         $newValue = $fieldChange['new'] ?? '—';
 

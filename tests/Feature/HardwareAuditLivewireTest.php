@@ -132,6 +132,40 @@ it('rollbackHistoryField refuses a stale audit row', function () {
     ]);
 });
 
+it('rollbackHistoryField refuses a created audit for a not null field', function () {
+    [$user, $hardware] = makeAuditLivewireUser();
+    $audit = HardwareAudit::where('hardware_id', $hardware->id)
+        ->where('action', 'created')
+        ->first();
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->call('loadHistory', $hardware->id)
+        ->call('rollbackHistoryField', $audit->id, 'pc_name');
+
+    $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'pc_name' => 'LW-PC-001']);
+    $this->assertDatabaseMissing('hardware_audits', [
+        'hardware_id' => $hardware->id,
+        'action' => 'rollback',
+    ]);
+});
+
+it('rollbackHistoryField refuses a created audit for a nullable field', function () {
+    [$user, $hardware] = makeAuditLivewireUser();
+    $audit = HardwareAudit::where('hardware_id', $hardware->id)
+        ->where('action', 'created')
+        ->first();
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->call('loadHistory', $hardware->id)
+        ->call('rollbackHistoryField', $audit->id, 'cpu');
+
+    $this->assertDatabaseHas('hardwares', ['id' => $hardware->id, 'cpu' => 'Intel i5']);
+    $this->assertDatabaseMissing('hardware_audits', [
+        'hardware_id' => $hardware->id,
+        'action' => 'rollback',
+    ]);
+});
+
 it('rollbackHistoryField errors on invalid audit id', function () {
     [$user, $hardware] = makeAuditLivewireUser();
 

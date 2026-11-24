@@ -170,6 +170,54 @@ class HardwareAuditControllerTest extends TestCase
             ->assertJsonPath('message', 'Field not found in audit record.');
     }
 
+    public function test_rollback_rejects_created_audit_for_not_null_field(): void
+    {
+        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'created')
+            ->first();
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [
+            'field' => 'pc_name',
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot roll back a "created" audit: there is no previous value to restore.');
+
+        $this->assertDatabaseHas('hardwares', [
+            'id' => $this->hardware->id,
+            'pc_name' => 'TEST-PC-001',
+        ]);
+        $this->assertDatabaseMissing('hardware_audits', [
+            'hardware_id' => $this->hardware->id,
+            'action' => 'rollback',
+        ]);
+    }
+
+    public function test_rollback_rejects_created_audit_for_nullable_field(): void
+    {
+        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'created')
+            ->first();
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback", [
+            'field' => 'os',
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot roll back a "created" audit: there is no previous value to restore.');
+
+        $this->assertDatabaseHas('hardwares', [
+            'id' => $this->hardware->id,
+            'os' => 'Windows 11',
+        ]);
+        $this->assertDatabaseMissing('hardware_audits', [
+            'hardware_id' => $this->hardware->id,
+            'action' => 'rollback',
+        ]);
+    }
+
     public function test_rollback_restores_boolean_field(): void
     {
         $this->hardware->update(['mark' => true]);
