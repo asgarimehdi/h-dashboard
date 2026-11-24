@@ -77,12 +77,19 @@ return new class extends Component
         // single-unit case) — without it both payloads would share one key.
         return app(CacheInvalidationServiceInterface::class)->remember('activity_log', \App\Support\ScopeCacheKey::hash($accessibleUnitIds), function () use ($accessibleUnitIds) {
             // #1057: an access list, not a display list — a soft-deleted user
-            // in scope keeps their audit rows visible. Only the deletion state
-            // is widened; the unit predicate stays exactly as it was, so an
-            // out-of-scope account remains invisible (and 404s in showDetail).
+            // in scope keeps their audit rows visible. #1738 widens the UNIT
+            // predicate (not the deletion state) to the users/index:566-572
+            // disjunction: whereHas('person', …) alone hides an account whose
+            // person has a NULL u_id or sits in another unit but which holds an
+            // in-scope user_units row — users.index lists it, this page did
+            // not. Both branches unconditional: an empty scope compiles to
+            // 0 = 1 on each side, so [] still shows nobody (AGENTS.md).
             return \App\Models\User::query()
                 ->withoutGlobalScope(\Illuminate\Database\Eloquent\SoftDeletingScope::class)
-                ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleUnitIds))
+                ->where(function ($q) use ($accessibleUnitIds) {
+                    $q->whereHas('person', fn ($personQuery) => $personQuery->whereIn('u_id', $accessibleUnitIds))
+                        ->orWhereHas('units', fn ($unitQuery) => $unitQuery->whereIn('units.id', $accessibleUnitIds));
+                })
                 ->pluck('id')
                 ->toArray();
         }, 5, ['site' => 'accessible_users']);
