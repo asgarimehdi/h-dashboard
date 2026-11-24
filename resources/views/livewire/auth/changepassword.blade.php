@@ -29,8 +29,14 @@ return new class extends Component {
 
         $user = auth()->user();
 
+        // #1719: قفل per-account پیش از هر وریفای رمز فعلی.
+        $this->ensureIsNotRateLimited();
+
         // چک کردن رمز فعلی
         if (!Hash::check($this->currentPassword, $user->password)) {
+            // #1719: فقط حدسِ ناموفقِ «رمز فعلی» بودجه را می‌سوزاند.
+            \Illuminate\Support\Facades\RateLimiter::hit($this->throttleKey(), self::THROTTLE_DECAY);
+
             throw ValidationException::withMessages([
                 'currentPassword' => 'رمز فعلی اشتباه است.',
             ]);
@@ -49,9 +55,41 @@ return new class extends Component {
         // باطل کردن تمام توکن‌ها پس از تغییر رمز
         $user->tokens()->delete();
 
+        // #1719: تغییر موفق، بودجهٔ همین اکشن را آزاد می‌کند.
+        \Illuminate\Support\Facades\RateLimiter::clear($this->throttleKey());
+
         // ریست کردن فرم
         $this->reset(['currentPassword', 'newPassword', 'newPasswordConfirmation']);
         $this->success("رمز با موفقیت تغییر یافت.", position: 'toast-bottom');
+    }
+
+    // #1719: ۵ حدس ناموفق رمز فعلی در هر ۱۵ دقیقه، به‌ازای هر حساب.
+    protected const THROTTLE_MAX_ATTEMPTS = 5;
+    protected const THROTTLE_DECAY = 900;
+
+    protected function ensureIsNotRateLimited(): void
+    {
+        if (! \Illuminate\Support\Facades\RateLimiter::tooManyAttempts($this->throttleKey(), self::THROTTLE_MAX_ATTEMPTS)) {
+            return;
+        }
+
+        $seconds = \Illuminate\Support\Facades\RateLimiter::availableIn($this->throttleKey());
+
+        throw ValidationException::withMessages([
+            'currentPassword' => __('auth.change_password_throttle', [
+                'minutes' => max(1, (int) ceil($seconds / 60)),
+            ]),
+        ]);
+    }
+
+    /**
+     * #1719: بودجهٔ مستقل از IP و از بودجهٔ لاگین (`login-account:`)، از شناسهٔ
+     * پایدار کاربر احرازشده — نه ورودی فرم — و هش‌شده، چون RateLimiter::hit()
+     * خودش کلید را هش نمی‌کند.
+     */
+    protected function throttleKey(): string
+    {
+        return 'change-password-account:'.hash('sha256', 'user:'.(string) auth()->id());
     }
 }; ?>
 
