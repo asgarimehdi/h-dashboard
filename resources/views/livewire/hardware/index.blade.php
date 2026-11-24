@@ -499,23 +499,32 @@ return new class extends Component
         // silently double-audit.
         request()->attributes->set('suppress_audit', true);
         try {
-            Hardware::whereIn('id', $scopedIds)->update(['mark' => $value]);
+            // #1744: the mass update and its audit rows are one atomic unit — a
+            // failed audit insert rolls the update back. Order stays write →
+            // audit (#1675/#1362).
+            \Illuminate\Support\Facades\DB::transaction(function () use ($scopedIds, $value, $auditTargets): void {
+                Hardware::whereIn('id', $scopedIds)->update(['mark' => $value]);
+
+                // #1675/#1362: written only AFTER the update succeeds, and only for rows
+                // whose value actually changed — same writer and shape as the API.
+                if ($auditTargets->isNotEmpty()) {
+                    app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+                        $auditTargets,
+                        'bulk_mark',
+                        null,
+                        fn (Hardware $hw): array => [
+                            ['field' => 'mark', 'old' => $hw->mark, 'new' => $value],
+                        ],
+                    );
+                }
+            });
         } finally {
             request()->attributes->remove('suppress_audit');
         }
 
-        // #1675/#1362: written only AFTER the update succeeds, and only for rows
-        // whose value actually changed — same writer and shape as the API.
-        if ($auditTargets->isNotEmpty()) {
-            app(HardwareBulkAuditWriter::class)->batchInsertAudits(
-                $auditTargets,
-                'bulk_mark',
-                null,
-                fn (Hardware $hw): array => [
-                    ['field' => 'mark', 'old' => $hw->mark, 'new' => $value],
-                ],
-            );
-        }
+        // After the commit, synchronously — not inside the transaction and not
+        // via `afterCommit()`: no listener reads uncommitted rows, and
+        // `flushStatsCache()` touches no database.
 
         // #1026/#1675: parity with the API path — listeners on HardwareUpdated
         // and the stats cache must see a web bulk mark too.
@@ -604,22 +613,31 @@ return new class extends Component
         // mirrors HardwareController::bulkDelete().
         request()->attributes->set('suppress_audit', true);
         try {
-            $count = Hardware::whereIn('id', $scopedIds)->delete();
+            // #1744: the mass delete and its audit rows are one atomic unit — a
+            // failed audit insert rolls the delete back. Order stays delete →
+            // audit (#1362).
+            \Illuminate\Support\Facades\DB::transaction(function () use ($scopedIds, $hardwares): void {
+                $count = Hardware::whereIn('id', $scopedIds)->delete();
+
+                // #1026: a mass delete fires no model `deleting` event, so the audit must
+                // be written manually — but only AFTER the delete succeeds to avoid
+                // phantom rows on failure (Issue #1362). Same writer and shape as the API.
+                if ($count > 0) {
+                    app(HardwareBulkAuditWriter::class)->batchInsertAudits(
+                        $hardwares,
+                        'bulk_delete',
+                        null,
+                        fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw),
+                    );
+                }
+            });
         } finally {
             request()->attributes->remove('suppress_audit');
         }
 
-        if ($count > 0) {
-            app(HardwareBulkAuditWriter::class)->batchInsertAudits(
-                $hardwares,
-                'bulk_delete',
-                null,
-                fn (Hardware $hw) => HardwareAuditChange::deletionSnapshot($hw),
-            );
-        }
-
         // #1026: parity with the API path — listeners on HardwareUpdated and the
-        // stats cache must see a web bulk delete too.
+        // stats cache must see a web bulk delete too. After the commit,
+        // synchronously — see bulkMark().
         app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {
             event(new HardwareUpdated($hardwares->first(), 'bulk_deleted'));
             Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
