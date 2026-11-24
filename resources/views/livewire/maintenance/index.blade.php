@@ -143,13 +143,21 @@ return new class extends Component
         }
 
         try {
-            $schedule->update([
+            $payload = [
                 'title' => $this->title,
                 'frequency' => $this->frequency,
                 'recurrence_interval' => $this->recurrenceInterval,
                 'unit_id' => $this->unitId,
-                'next_due_at' => $this->calculateNextDue($schedule->created_at?->day),
-            ]);
+            ];
+
+            // ویرایش عنوان/واحد نباید ساعت زمان‌بندی را بازنشانی کند؛ فقط تغییر
+            // واقعی دوره یا فاصله، محاسبهٔ مجدد را تحریک می‌کند (#1706).
+            if ($this->frequency !== $schedule->frequency
+                || $this->recurrenceInterval !== $schedule->recurrence_interval) {
+                $payload['next_due_at'] = $this->calculateNextDue($schedule->created_at?->day);
+            }
+
+            $schedule->update($payload);
 
             $this->success("«{$this->title}» بروزرسانی شد", 'با موفقیت', position: 'toast-bottom');
             $this->cancelEdit();
