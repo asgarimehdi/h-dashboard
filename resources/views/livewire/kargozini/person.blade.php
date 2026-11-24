@@ -386,18 +386,71 @@ return new class extends Component
 
     public function with(): array
     {
-        $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
+        // Issue #1290: the versioned key is built by the service, never by hand.
+        $cache = app(\App\Services\CacheInvalidationServiceInterface::class);
 
-        $units = Unit::with('unitType')
-            ->whereIn('id', $accessibleUnitIds)
-            ->get()
-            ->map(fn ($u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'parent_id' => $u->parent_id,
-                'unit_type_name' => $u->unitType?->name,
-            ])
-            ->all();
+        // #1715: the unit tree and the four lookup lists are VIEW DATA —
+        // `persons()` never reads them. The tree feeds only the two pickers and
+        // the two selected-unit labels; the lookups only the filter panel and
+        // the create/edit form. A search keystroke (`wire:model.live.debounce`)
+        // leaves all four closed, so the hottest render in the app must not
+        // re-read ~834 units + 4 tables on every round trip. Both reads are
+        // versioned caches (like `hr/dashboard:47`), not `#[Computed]`: the
+        // latter only memoizes inside one request.
+        $needsUnits = $this->unitModal || $this->filterUnitModal || $this->u_id || $this->filter_u_id;
+        $needsLookups = $this->showFilters || $this->formOpen;
+
+        /** @var list<array{id: int, name: string, parent_id: int|null, unit_type_name: string|null}> $units */
+        $units = [];
+
+        if ($needsUnits) {
+            $accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
+
+            // `unit_type_id` MUST stay in the SELECT list: `unitType()` is a
+            // plain belongsTo matched on that FK, so dropping it resolves the
+            // relation to null for every row and silently empties
+            // `unit_type_name` in the pickers.
+            /** @var list<array{id: int, name: string, parent_id: int|null, unit_type_name: string|null}> $cachedUnits */
+            $cachedUnits = $cache->remember(
+                'unit_hierarchy',
+                \App\Support\ScopeCacheKey::hash($accessibleUnitIds),
+                fn (): array => Unit::query()
+                    ->select(['id', 'name', 'parent_id', 'unit_type_id'])
+                    ->with('unitType:id,name')
+                    ->whereIn('id', $accessibleUnitIds)
+                    ->get()
+                    ->map(fn (Unit $unit): array => [
+                        'id' => $unit->id,
+                        'name' => $unit->name,
+                        'parent_id' => $unit->parent_id,
+                        'unit_type_name' => $unit->unitType?->name,
+                    ])
+                    ->all(),
+                60,
+                // `unit_hierarchy` is shared with the org chart / API payloads;
+                // the explicit extra keeps this view's payload in its own key.
+                ['view' => 'kargozini.person.units'],
+            );
+
+            $units = $cachedUnits;
+        }
+
+        // The lookups carry no scope, so one global entry serves every user and
+        // `report_persons` is the namespace their own models already bump
+        // (Tahsil/Estekhdam/Semat in `boot()`, Radif since #1715).
+        /** @var array{tahsils: list<array{id: int, name: string|null}>, estekhdams: list<array{id: int, name: string|null}>, semats: list<array{id: int, name: string|null}>, radifs: list<array{id: int, name: string|null}>} $lookups */
+        $lookups = $needsLookups
+            ? $cache->remember(
+                'report_persons',
+                'global',
+                fn (): array => [
+                    'tahsils' => Tahsil::query()->get(['id', 'name'])->toArray(),
+                    'estekhdams' => Estekhdam::query()->get(['id', 'name'])->toArray(),
+                    'semats' => Semat::query()->get(['id', 'name'])->toArray(),
+                    'radifs' => Radif::query()->get(['id', 'name'])->toArray(),
+                ],
+            )
+            : ['tahsils' => [], 'estekhdams' => [], 'semats' => [], 'radifs' => []];
 
         // #919: `$units` is already scoped by the unconditional `whereIn`
         // above, so `firstWhere()` only ever resolves an in-scope unit. The
@@ -415,10 +468,10 @@ return new class extends Component
         return [
             'persons' => $this->persons(),
             'headers' => $this->headers(),
-            'tahsils' => Tahsil::all(),
-            'estekhdams' => Estekhdam::all(),
-            'semats' => Semat::all(),
-            'radifs' => Radif::all(),
+            'tahsils' => $lookups['tahsils'],
+            'estekhdams' => $lookups['estekhdams'],
+            'semats' => $lookups['semats'],
+            'radifs' => $lookups['radifs'],
             'units' => $units,
             'selectedUnitName' => $selectedUnitName,
             'filterUnitName' => $filterUnitName,

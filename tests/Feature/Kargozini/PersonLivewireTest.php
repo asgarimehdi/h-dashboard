@@ -5,13 +5,17 @@ namespace Tests\Feature\Kargozini;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Person as PersonModel;
+use App\Models\Radif;
 use App\Models\Unit;
+use App\Models\UnitType;
 use App\Models\User;
+use Closure;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -182,17 +186,134 @@ class PersonLivewireTest extends TestCase
         ], $overrides);
     }
 
+    /**
+     * Run `$callback` while recording every SQL statement, and return
+     * [total queries, standalone reads of the given tables].
+     *
+     * #1715: the unit tree and the four lookup lists are view data that only
+     * changes when someone writes a unit or a lookup row, so a render that
+     * already has them cached must not read those tables again. The count
+     * alone cannot say WHICH query appeared, hence the recorded SQL. The
+     * `^select * from` anchor is load-bearing: `persons()` uses
+     * `withAggregate`, which embeds `units`/`semats` as subqueries inside the
+     * persons query — those are part of the paginated list, not a re-read of
+     * the tree, and must not match.
+     *
+     * @param  list<string>  $tables
+     * @return array{0: int, 1: list<string>}
+     */
+    protected function captureQueries(Closure $callback, array $tables): array
+    {
+        $count = 0;
+        $standalone = [];
+        $pattern = '/^select \* from "('.implode('|', $tables).')"/';
+
+        DB::listen(function ($query) use (&$count, &$standalone, $pattern) {
+            if (Str::startsWith($query->sql, ['BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT'])) {
+                return;
+            }
+
+            $count++;
+
+            if (preg_match($pattern, strtolower($query->sql))) {
+                $standalone[] = $query->sql;
+            }
+        });
+
+        $callback();
+
+        return [$count, $standalone];
+    }
+
     public function test_component_renders_with_dropdowns(): void
     {
+        // #1715: the unit label in the picker comes from the eager-loaded
+        // `unitType` relation, which matches on `unit_type_id`. A `select`
+        // that forgets that FK silently returns `null` for every row.
+        $type = UnitType::create(['name' => 'بیمارستان']);
+        $this->unit->update(['unit_type_id' => $type->id]);
+
         Livewire::test('kargozini.person')
+            ->set('showFilters', true)
+            ->set('u_id', $this->unit->id)
             ->assertOk()
             ->assertViewHas('persons')
             ->assertViewHas('headers')
-            ->assertViewHas('units')
+            ->assertViewHas('units', function ($units) use ($type) {
+                $row = collect($units)->firstWhere('id', $this->unit->id);
+
+                return $row !== null && $row['unit_type_name'] === $type->name;
+            })
             ->assertViewHas('tahsils')
             ->assertViewHas('estekhdams')
             ->assertViewHas('semats')
             ->assertViewHas('radifs');
+    }
+
+    /**
+     * #1715 — the hot path. Every keystroke in the search box is a full
+     * Livewire round trip, and `with()` used to re-read the whole unit tree
+     * (units + eager-loaded `unit_types`) and the four lookup tables on every
+     * one of them. Once warmed, a search render must cost only the paginated
+     * list.
+     */
+    public function test_a_search_render_does_not_re_read_units_or_lookups(): void
+    {
+        $component = Livewire::test('kargozini.person')
+            ->set('showFilters', true)
+            ->set('u_id', $this->unit->id);
+
+        [$count, $standalone] = $this->captureQueries(
+            fn () => $component->set('search', 'عسگری'),
+            ['units', 'unit_types', 'tahsils', 'estekhdams', 'semats', 'radifs'],
+        );
+
+        $this->assertLessThanOrEqual(4, $count, "A warm search render ran {$count} queries.");
+        $this->assertSame([], $standalone, 'A warm search render re-read: '.implode(' | ', $standalone));
+    }
+
+    /**
+     * #1715 — the other hot path: no panel open, so nothing in the page can
+     * see the tree or the lookups and neither should be read at all.
+     */
+    public function test_a_render_with_closed_panels_reads_no_unit_or_lookup_table(): void
+    {
+        $component = Livewire::test('kargozini.person');
+
+        [$count, $standalone] = $this->captureQueries(
+            fn () => $component->set('search', 'عسگری'),
+            ['units', 'unit_types', 'tahsils', 'estekhdams', 'semats', 'radifs'],
+        );
+
+        $this->assertSame([], $standalone, 'A closed-panel render read: '.implode(' | ', $standalone));
+        $this->assertLessThanOrEqual(4, $count, "A closed-panel render ran {$count} queries.");
+    }
+
+    /**
+     * #1715 — the cache must be invalidated by the write that changes its
+     * payload, not left to expire. `Unit::created` bumps `unit_hierarchy`.
+     */
+    public function test_creating_a_unit_appears_in_the_next_render(): void
+    {
+        $component = Livewire::test('kargozini.person')
+            ->set('u_id', $this->unit->id);
+
+        $new = Unit::create(['name' => 'واحد تازه', 'parent_id' => $this->unit->id]);
+
+        $component->call('$refresh')
+            ->assertViewHas('units', fn ($units) => collect($units)->contains('id', $new->id));
+    }
+
+    /**
+     * #1715 — the personnel page caches its four lookup lists under
+     * `report_persons`. Tahsil/Estekhdam/Semat already bump it on save and
+     * delete; `Radif` must too or a rename stays stale until the TTL.
+     */
+    public function test_renaming_a_radif_invalidates_the_lookup_cache(): void
+    {
+        $this->assertCacheInvalidated('report_persons', function () {
+            Radif::findOrFail($this->rId)->update(['name' => 'ردیف-جدید']);
+        });
     }
 
     public function test_search_finds_by_name_in_either_order(): void
