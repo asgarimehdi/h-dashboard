@@ -277,6 +277,31 @@ class Unit extends Model
     }
 
     /**
+     * تمام id های زیرمجموعه ساختاری (شامل خود واحدهای ورودی) — بدون فیلتر is_active.
+     *
+     * فقط برای گارد چرخهٔ parent_id (#1737). برای scope/گزارش از descendantIds()
+     * استفاده کنید: یک scope باید فقط-فعال بماند و این متد واحدهای بازنشسته را
+     * هم برمی‌گرداند.
+     *
+     * عمداً بی‌کش: کلید descendantIds() فیلتر را در خود ندارد، پس اشتراک کش
+     * دو مجموعهٔ متفاوت را زیر یک کلید قاطی می‌کند. هزینه یک کوئری در هر
+     * نوشتنِ واحد است.
+     *
+     * @param  int|array<int>  $unitIds
+     * @return Collection<int, int>
+     */
+    public static function structuralDescendantIds(int|array $unitIds): Collection
+    {
+        $ids = is_array($unitIds) ? $unitIds : [$unitIds];
+
+        if (empty($ids)) {
+            return collect();
+        }
+
+        return self::recursiveDescendantQuery($ids, onlyActive: false);
+    }
+
+    /**
      * Run the recursive CTE query for descendant IDs.
      *
      * UNION (not UNION ALL) is load-bearing: the set operator dedupes, so a
@@ -285,9 +310,14 @@ class Unit extends Model
      * the units_parent_fk foreign key blocks dangling references, not cycles,
      * so the web form's type guard is not the only possible writer.
      */
-    protected static function recursiveDescendantQuery(array $ids): Collection
+    protected static function recursiveDescendantQuery(array $ids, bool $onlyActive = true): Collection
     {
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        // UNION matters more when $onlyActive is false: the traversal then
+        // walks THROUGH inactive nodes, so a pre-existing cycle that passes
+        // through one is reachable and only the set operator terminates it.
+        $activeFilter = $onlyActive ? 'WHERE u.is_active = true' : '';
 
         $results = DB::select("
             WITH RECURSIVE unit_tree AS (
@@ -295,12 +325,12 @@ class Unit extends Model
                 UNION
                 SELECT u.id FROM units u
                 INNER JOIN unit_tree ut ON u.parent_id = ut.id
-                WHERE u.is_active = true
+                {$activeFilter}
             )
             SELECT id FROM unit_tree
         ", $ids);
 
-        return collect($results)->pluck('id');
+        return collect($results)->pluck('id')->map(fn ($id): int => (int) $id);
     }
 
     /**

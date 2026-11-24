@@ -715,6 +715,59 @@ class UnitsIndexLivewireTest extends TestCase
         $this->assertEquals($originalParentId, $child->fresh()->parent_id);
     }
 
+    // ==================== #1737: inactive descendant still blocks a cycle ====================
+
+    public function test_save_unit_denied_with_inactive_descendant_parent(): void
+    {
+        // #1737: deactivating a descendant must not hide it from the cycle
+        // guard. Type 22 (self-edge) is used so the type rule can never be the
+        // refusal, and both units are attached + the session scope cleared so
+        // the scope gate can never be the refusal either — the cycle toast is
+        // the only remaining reason the write can be rejected.
+        ['user' => $user, 'unit' => $a] = $this->createUserWithUnit(['organization']);
+        $a->update(['unit_type_id' => 22]);
+
+        $b = Unit::create([
+            'name' => 'فرزند غیرفعال', 'unit_type_id' => 22,
+            'parent_id' => $a->id, 'is_active' => false,
+        ]);
+        $user->units()->attach($b->id, ['role' => 'staff', 'is_primary' => false]);
+        session()->forget('current_unit_id');
+        $this->actingAs($user);
+
+        $originalParentId = $a->parent_id;
+
+        $component = Livewire::test('units.index')
+            ->call('editUnit', $a->id)
+            ->set('parent_id', $b->id)
+            ->call('saveUnit');
+
+        $this->assertEquals($originalParentId, $a->fresh()->parent_id);
+        $this->toastContaining($component, 'نمی‌توان واحد را زیرمجموعه');
+    }
+
+    public function test_save_unit_allows_reparent_under_an_unrelated_active_unit(): void
+    {
+        // Positive control for the structural variant: an unrelated active unit
+        // is a legal parent and the write must land.
+        ['user' => $user, 'unit' => $a] = $this->createUserWithUnit(['organization']);
+        $a->update(['unit_type_id' => 22]);
+
+        $unrelated = Unit::create([
+            'name' => 'واحد نامرتبط', 'unit_type_id' => 22, 'is_active' => true,
+        ]);
+        $user->units()->attach($unrelated->id, ['role' => 'staff', 'is_primary' => false]);
+        session()->forget('current_unit_id');
+        $this->actingAs($user);
+
+        Livewire::test('units.index')
+            ->call('editUnit', $a->id)
+            ->set('parent_id', $unrelated->id)
+            ->call('saveUnit');
+
+        $this->assertSame($unrelated->id, $a->fresh()->parent_id);
+    }
+
     // ==================== #817: toggle refused out of scope ====================
 
     public function test_toggle_ticket_capability_denied_out_of_scope(): void
