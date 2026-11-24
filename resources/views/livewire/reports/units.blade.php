@@ -4,11 +4,13 @@ use App\Models\Unit;
 use App\Models\UnitType;
 use App\Services\AccessService;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Traits\ClampsPageSize;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use WithPagination;
 
     /** Issue #1024 — the inventory is paginated instead of hydrated whole. */
@@ -120,7 +122,7 @@ return new class extends Component
             ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
             ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
             ->orderBy('name')
-            ->paginate($this->perPage);
+            ->paginate($this->pageSize());
 
         $units = $unitsPage->getCollection()
             ->map(fn($u) => [

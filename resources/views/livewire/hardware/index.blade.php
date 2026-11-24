@@ -10,6 +10,7 @@ use App\Services\CacheInvalidationServiceInterface;
 use App\Services\HardwareBulkAuditWriter;
 use App\Support\HardwareAuditChange;
 use App\Support\HardwareRules;
+use App\Traits\ClampsPageSize;
 use App\Traits\HardwareIndexHelpers;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -19,6 +20,7 @@ use Mary\Traits\Toast;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use HardwareIndexHelpers;
     use PersianNormalizer;
     use Toast;
@@ -692,7 +694,7 @@ return new class extends Component
         $direction = ($this->sortBy['direction'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
         $query->orderBy($column, $direction);
 
-        return $this->hardwaresCache = $query->paginate($this->perPage);
+        return $this->hardwaresCache = $query->paginate($this->pageSize());
     }
 
     public function with(): array

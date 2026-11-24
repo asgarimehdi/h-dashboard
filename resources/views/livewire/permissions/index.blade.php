@@ -1,5 +1,6 @@
 <?php
 
+use App\Traits\ClampsPageSize;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -7,6 +8,7 @@ use Mary\Traits\Toast;
 use Spatie\Permission\Models\Permission;
 return new class extends Component
 {
+    use ClampsPageSize;
     use WithPagination;
     use Toast;
 
@@ -142,7 +144,7 @@ return new class extends Component
             ? $this->sortBy['column'] : 'id';
         $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($column, $direction);
-        return $query->paginate($this->perPage);
+        return $query->paginate($this->pageSize());
     }
 
     public function with(): array

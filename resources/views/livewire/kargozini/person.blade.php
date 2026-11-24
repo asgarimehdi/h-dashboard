@@ -7,6 +7,7 @@ use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Traits\ClampsPageSize;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
@@ -22,6 +23,7 @@ use Mary\Traits\Toast;
  */
 return new class extends Component
 {
+    use ClampsPageSize;
     use Toast;
     use WithPagination;
 
@@ -381,7 +383,7 @@ return new class extends Component
         $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($column, $direction);
 
-        return $query->paginate($this->perPage);
+        return $query->paginate($this->pageSize());
     }
 
     public function with(): array

@@ -1753,79 +1753,79 @@ parameters:
 			path: resources/views/livewire/hardware/import-hardware/import-hardware.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:applyOrgScope\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:applyOrgScope\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:applyOrgScope\(\) has parameter \$query with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:applyOrgScope\(\) has parameter \$query with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:editHardware\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:editHardware\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:hardwares\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:hardwares\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:updatedNCode\(\) has parameter \$value with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:updatedNCode\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:\$hardwaresCache with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:\$hardwaresCache with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:\$history type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:\$history type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:\$personResults type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:\$personResults type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:\$selected type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:\$selected type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:20\:\:\$visibleCols type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/hardware/index\.blade\.php\:21\:\:\$visibleCols type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/hardware/index.blade.php
@@ -1945,37 +1945,37 @@ parameters:
 			path: resources/views/livewire/it/network-traffic-chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:9\:\:editEstekhdam\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:10\:\:editEstekhdam\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/kargozini/estekhdam.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:9\:\:estekhdams\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:10\:\:estekhdams\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/kargozini/estekhdam.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:9\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:10\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/estekhdam.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:9\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:10\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/estekhdam.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:9\:\:\$name has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:10\:\:\$name has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/estekhdam.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:9\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/estekhdam\.blade\.php\:10\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/estekhdam.blade.php
@@ -2041,241 +2041,241 @@ parameters:
 			path: resources/views/livewire/kargozini/import-persons/import-persons.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:editPerson\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:editPerson\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:persons\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:persons\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$e_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$e_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$f_name has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$f_name has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$filter_e_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$filter_e_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$filter_r_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$filter_r_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$filter_s_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$filter_s_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$filter_t_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$filter_t_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$filter_u_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$filter_u_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$l_name has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$l_name has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$n_code has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$n_code has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$r_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$r_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$s_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$s_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$t_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$t_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:23\:\:\$u_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/person\.blade\.php\:24\:\:\$u_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/person.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:9\:\:editRadif\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:10\:\:editRadif\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/kargozini/radif.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:9\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:10\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/radif.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:9\:\:radifs\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:10\:\:radifs\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/kargozini/radif.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:9\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:10\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/radif.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:9\:\:\$name has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:10\:\:\$name has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/radif.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:9\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/radif\.blade\.php\:10\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/radif.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:9\:\:editSemat\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:10\:\:editSemat\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/kargozini/semat.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:9\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:10\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/semat.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:9\:\:semats\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:10\:\:semats\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/kargozini/semat.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:9\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:10\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/semat.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:9\:\:\$name has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:10\:\:\$name has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/semat.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:9\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/semat\.blade\.php\:10\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/semat.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:9\:\:editTahsil\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:10\:\:editTahsil\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/kargozini/tahsil.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:9\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:10\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/tahsil.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:9\:\:tahsils\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:10\:\:tahsils\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/kargozini/tahsil.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:9\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:10\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/tahsil.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:9\:\:\$name has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:10\:\:\$name has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/kargozini/tahsil.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:9\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/kargozini/tahsil\.blade\.php\:10\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/kargozini/tahsil.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:13\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:14\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/maintenance/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:13\:\:schedules\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:14\:\:schedules\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/maintenance/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:13\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:14\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/maintenance/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:13\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/maintenance/index\.blade\.php\:14\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/maintenance/index.blade.php
@@ -2509,31 +2509,31 @@ parameters:
 			path: resources/views/livewire/permissions/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:8\:\:editPermission\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:9\:\:editPermission\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/permissions/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:8\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:9\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/permissions/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:8\:\:permissions\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:9\:\:permissions\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/permissions/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:8\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:9\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/permissions/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:8\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/permissions/index\.blade\.php\:9\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/permissions/index.blade.php
@@ -2683,31 +2683,31 @@ parameters:
 			path: resources/views/livewire/reports/persons.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:10\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:11\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/reports/persons.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:10\:\:getAccessibleUnitsProperty\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:11\:\:getAccessibleUnitsProperty\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/reports/persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:10\:\:\$estekhdams has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:11\:\:\$estekhdams has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/reports/persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:10\:\:\$semats has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:11\:\:\$semats has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/reports/persons.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:10\:\:\$tahsils has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/persons\.blade\.php\:11\:\:\$tahsils has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/reports/persons.blade.php
@@ -2725,25 +2725,25 @@ parameters:
 			path: resources/views/livewire/reports/todos.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:12\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:13\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/reports/todos.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:12\:\:getAccessibleUnitsProperty\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/todos\.blade\.php\:13\:\:getAccessibleUnitsProperty\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/reports/todos.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/units\.blade\.php\:10\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/units\.blade\.php\:11\:\:chartPayload\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/reports/units.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/units\.blade\.php\:10\:\:getUnitTypesProperty\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/reports/units\.blade\.php\:11\:\:getUnitTypesProperty\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/reports/units.blade.php
@@ -2761,43 +2761,43 @@ parameters:
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:editRole\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:12\:\:editRole\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:roles\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:12\:\:roles\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:12\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:\$allPermissions type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:12\:\:\$allPermissions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:\$headers type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:12\:\:\$headers type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:\$permissions type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:12\:\:\$permissions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:11\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/roles/index\.blade\.php\:12\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/roles/index.blade.php
@@ -3157,151 +3157,151 @@ parameters:
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:determineRegionId\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:determineRegionId\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:editUnit\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:editUnit\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:getAllowedUnitTypes\(\) has no return type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:getAllowedUnitTypes\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:toggleTicketCapability\(\) has parameter \$unitId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:toggleTicketCapability\(\) has parameter \$unitId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:units\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:units\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:updatedProvinceId\(\) has parameter \$value with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:updatedProvinceId\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:updatedRegionId\(\) has parameter \$value with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:updatedRegionId\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:updatedUnitTypeId\(\) has parameter \$value with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:updatedUnitTypeId\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$counties has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$counties has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$description has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$description has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$fixedRegionId has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$fixedRegionId has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$name has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$name has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$parent_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$parent_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$province_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$province_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$provinces has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$provinces has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$region_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$region_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$unitTypes has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$unitTypes has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$unit_type_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$unit_type_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$userRegionId has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$userRegionId has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$userUnitId has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$userUnitId has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$userUnitLevel has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$userUnitLevel has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:16\:\:\$userUnitTypeId has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/index\.blade\.php\:17\:\:\$userUnitTypeId has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/index.blade.php
@@ -3319,103 +3319,103 @@ parameters:
 			path: resources/views/livewire/units/map.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:edit\(\) has parameter \$userId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:edit\(\) has parameter \$userId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:headers\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:restore\(\) has parameter \$userId with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:restore\(\) has parameter \$userId with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:selectPerson\(\) has parameter \$n_code with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:selectPerson\(\) has parameter \$n_code with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:users\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:users\(\) return type with generic class Illuminate\\Pagination\\LengthAwarePaginator does not specify its types\: TKey, TValue$#'
 			identifier: missingType.generics
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:with\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$allPermissions type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$allPermissions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$allRoles type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$allRoles type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$editing_user_id has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$editing_user_id has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$expanded type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$expanded type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$n_code has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$n_code has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$password has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$password has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$person_search has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$person_search has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$role_ids type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$role_ids type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$sortBy type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$sortBy type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$unit_ids type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$unit_ids type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:17\:\:\$user_permissions type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/users/index\.blade\.php\:18\:\:\$user_permissions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/users/index.blade.php

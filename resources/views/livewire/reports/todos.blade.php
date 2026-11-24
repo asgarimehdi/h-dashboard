@@ -4,6 +4,7 @@ use App\Models\Todo;
 use App\Services\AccessService;
 use App\Services\DailySeries;
 use App\Support\JalaliDateRange;
+use App\Traits\ClampsPageSize;
 use Carbon\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -11,6 +12,7 @@ use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use WithPagination;
 
     /** Issue #1024 — the list is paginated instead of hydrated whole. */
@@ -131,7 +133,7 @@ return new class extends Component
             ->when($this->statusFilter === 'overdue', fn ($q) => $q->where('is_completed', false)->whereNotNull('end_at')->where('end_at', '<', $now))
             ->with('unit:id,name')
             ->orderBy('start_at', 'desc')
-            ->paginate($this->perPage);
+            ->paginate($this->pageSize());
 
         $items = $itemsPage->getCollection()
             ->map(fn ($t) => [

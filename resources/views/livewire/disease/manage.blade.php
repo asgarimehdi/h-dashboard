@@ -3,6 +3,7 @@
 use App\Models\Disease;
 use App\Models\DiseaseCase;
 use App\Models\DiseaseFieldDef;
+use App\Traits\ClampsPageSize;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -13,6 +14,7 @@ use Mary\Traits\Toast;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use Toast;
     use WithPagination;
 
@@ -436,7 +438,7 @@ return new class extends Component
             $query->whereRaw(PersianNormalizer::foldSeparatorsSql('name_fa').' LIKE ?', ["%{$term}%"]);
         }
 
-        return $query->orderBy('sort')->orderBy('id')->paginate($this->perPage);
+        return $query->orderBy('sort')->orderBy('id')->paginate($this->pageSize());
     }
 
     /** @return array<string, mixed> */
