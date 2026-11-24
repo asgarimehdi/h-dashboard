@@ -8,6 +8,7 @@ use App\Services\AccessService;
 use App\Services\Disease\DiseaseCaseService;
 use App\Support\JalaliDateRange;
 use App\Traits\BuildsDiseaseCaseForm;
+use App\Traits\ClampsPageSize;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -21,6 +22,7 @@ use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use BuildsDiseaseCaseForm;
     use Toast;
     use WithPagination;
@@ -84,7 +86,7 @@ return new class extends Component
         // POST /livewire/update does not re-run route middleware (#897).
         $this->authorize('manage_diseases');
 
-        if (in_array($property, ['search', 'diseaseFilter', 'dateFrom', 'dateTo', 'subjectUnitFilter', 'perPage'], true)) {
+        if (in_array($property, ['search', 'diseaseFilter', 'dateFrom', 'dateTo', 'subjectUnitFilter'], true)) {
             $this->resetPage();
         }
     }
@@ -445,12 +447,6 @@ return new class extends Component
             'defs' => $this->fieldDefsFor($this->editingDiseaseId),
             'selectOptions' => $this->selectOptionsMap($this->editingDiseaseId),
         ];
-    }
-
-    private function pageSize(): int
-    {
-        // Defensive clamp: `paginate(0)` divides by zero.
-        return max(1, min(100, $this->perPage));
     }
 
     private function duplicateWarning(): void

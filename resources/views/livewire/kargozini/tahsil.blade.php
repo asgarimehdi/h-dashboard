@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Tahsil;
+use App\Traits\ClampsPageSize;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -8,6 +9,7 @@ use Mary\Traits\Toast;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use Toast;
     use WithPagination;
 
@@ -139,7 +141,7 @@ return new class extends Component
         $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($column, $direction);
 
-        return $query->paginate($this->perPage);
+        return $query->paginate($this->pageSize());
     }
 
     public function with(): array

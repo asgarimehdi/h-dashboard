@@ -663,7 +663,8 @@ test('the index paginates by perPage, clamps it, and a filter change resets the 
     $component->set('diseaseFilter', $disease->id)
         ->assertSet('paginators.page', 1);
 
-    // The defensive clamp: 0 would make paginate() divide by zero.
+    // The defensive clamp (App\Traits\ClampsPageSize): 0 is normalised to 1,
+    // never handed to paginate() — paginate(0) silently falls back to 15.
     $component->set('perPage', 0);
     expect($component->instance()->cases()->count())->toBe(1);
 });

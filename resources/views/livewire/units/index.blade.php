@@ -7,6 +7,7 @@ use App\Models\UnitTypeRelationship;
 use App\Services\AccessService;
 use App\Services\UnitDeletionImpact;
 use App\Services\UnitDeletionService;
+use App\Traits\ClampsPageSize;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -15,6 +16,7 @@ use Mary\Traits\Toast;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use Toast;
     use WithPagination;
 
@@ -144,7 +146,7 @@ return new class extends Component
         $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($column, $direction);
 
-        return $query->paginate($this->perPage);
+        return $query->paginate($this->pageSize());
     }
 
     /**

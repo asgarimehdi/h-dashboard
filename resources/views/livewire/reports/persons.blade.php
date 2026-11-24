@@ -1,5 +1,6 @@
 <?php
 
+use App\Traits\ClampsPageSize;
 use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\Person;
@@ -9,6 +10,7 @@ use Morilog\Jalali\Jalalian;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use WithPagination;
 
     public bool $showHelpModal = false;
@@ -129,7 +131,7 @@ return new class extends Component
         $personsPage = (clone $baseQuery)
             ->with(['unit:id,name', 'tahsil:id,name', 'semat:id,name', 'estekhdam:id,name'])
             ->orderBy('n_code')
-            ->paginate($this->perPage);
+            ->paginate($this->pageSize());
 
         $persons = $personsPage->getCollection()
             ->map(fn($p) => [

@@ -5,6 +5,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
 use App\Support\RoleGuard;
+use App\Traits\ClampsPageSize;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +17,7 @@ use Spatie\Permission\Models\Role;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use Toast;
     use WithPagination;
 
@@ -596,7 +598,7 @@ return new class extends Component
         $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
 
         return $query->orderBy('n_code', $direction)
-            ->paginate($this->perPage);
+            ->paginate($this->pageSize());
     }
 
     /**

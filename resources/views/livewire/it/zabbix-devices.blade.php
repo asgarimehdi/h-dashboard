@@ -2,6 +2,7 @@
 
 use App\Models\ZabbixDevice;
 use App\Services\Zabbix\ZabbixClient;
+use App\Traits\ClampsPageSize;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
@@ -10,6 +11,7 @@ use Mary\Traits\Toast;
 
 return new class extends Component
 {
+    use ClampsPageSize;
     use Toast;
     use WithPagination;
 
@@ -403,7 +405,7 @@ return new class extends Component
             $query->orderBy('id');
         }
 
-        return $query->paginate($this->perPage);
+        return $query->paginate($this->pageSize());
     }
 
     /** @return array<string, mixed> */
