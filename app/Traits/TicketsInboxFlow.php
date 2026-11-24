@@ -7,8 +7,9 @@ use App\Models\Todo;
 use App\Models\Unit;
 use App\Rules\TicketTargetUnit;
 use App\Services\AccessService;
-use App\Services\ActivityLogService;
 use App\Services\NotificationService;
+use App\Services\TicketTransitionFailure;
+use App\Services\TicketTransitionService;
 use App\Support\ActorLabel;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Auth;
@@ -395,86 +396,28 @@ trait TicketsInboxFlow
             return;
         }
 
-        // Issue #1029 / #529: only the ticket's current assignee may accept it,
-        // exactly like Api\TicketController::accept(). Without this any member
-        // of the unit could accept — and thereby seize — a ticket referred to a
-        // teammate.
-        if ($ticket->current_assignee_id !== Auth::id()) {
-            $this->dispatch('swal', [
-                'title' => 'فقط کارشناس ارجاع‌شده می‌تواند این تیکت را بپذیرد.',
-                'icon' => 'error',
-            ]);
+        // #1699: the guards, the locked-row re-check, the TaskActivity and the
+        // audit row all live in TicketTransitionService. The adapter only keeps
+        // this path's message order (#1029 / #529): an assignee failure is an
+        // error, every other loss (status moved, row gone, archived) is the
+        // "already accepted" warning.
+        $transition = app(TicketTransitionService::class)->accept($ticket, (int) Auth::id(), audit: true);
 
-            return;
-        }
+        if (! $transition->ok) {
+            if ($transition->has(TicketTransitionFailure::AssigneeMismatch)) {
+                $this->dispatch('swal', [
+                    'title' => 'فقط کارشناس ارجاع‌شده می‌تواند این تیکت را بپذیرد.',
+                    'icon' => 'error',
+                ]);
 
-        // Capture old status BEFORE any changes (Plan 003: dynamic, not hardcoded)
-        $oldStatus = $ticket->status;
+                return;
+            }
 
-        // Plan 002: Only allow accepting from 'created' or 'forwarded' status
-        if ($oldStatus !== 'created' && $oldStatus !== 'forwarded') {
             $this->dispatch('swal', [
                 'title' => 'تیکت قبلاً پذیرفته شده است',
                 'icon' => 'warning',
             ]);
 
-            return;
-        }
-
-        $accepted = DB::transaction(function () use ($ticket, $oldStatus) {
-            // Plan 002: Pessimistic lock to prevent concurrent accept.
-            //
-            // #1564: the lock must compare the whole claim, not just status.
-            // `assign()` (Api\TicketController:128-158) and `forward()` write
-            // `current_assignee_id` while keeping status at `forwarded`, so a
-            // ticket can be re-assigned to a teammate between the read at :350
-            // and this probe — accepting then would seize it (#529). The row
-            // can also have been DELETEd (:350 → here), so an empty result is
-            // a loss, not an undefined-offset 500.
-            $locked = DB::select(
-                'SELECT id, status, current_assignee_id FROM tickets WHERE id = ? FOR UPDATE',
-                [$ticket->id]
-            );
-
-            if ($locked === []
-                || $locked[0]->status !== $oldStatus
-                || (int) $locked[0]->current_assignee_id !== (int) $ticket->current_assignee_id) {
-                $this->dispatch('swal', [
-                    'title' => 'تیکت قبلاً پذیرفته شده است',
-                    'icon' => 'warning',
-                ]);
-
-                return false;
-            }
-
-            $ticket->update([
-                'status' => 'accepted',
-                'current_assignee_id' => auth()->id(),
-                'accepted_at' => now(),
-            ]);
-
-            $ticket->activities()->create([
-                'user_id' => auth()->id(),
-                'action' => 'accepted',
-                'description' => 'تیکت توسط کارشناس تایید شد و مسئولیت آن پذیرفته شد.',
-            ]);
-
-            // Plan 003: Use dynamic old status, not hardcoded 'created'
-            ActivityLogService::updated(
-                $ticket,
-                ['status' => $oldStatus],
-                ['status' => 'accepted'],
-                "پذیرش تیکت {$ticket->ticket_code}"
-            );
-
-            return true;
-        });
-
-        // #1564: the losing branch already dispatched its warning. Running these
-        // unconditionally would replace that toast before it renders (the swal
-        // listener calls Swal.fire synchronously) and reset modal state for a
-        // write that never happened.
-        if (! $accepted) {
             return;
         }
 
@@ -616,6 +559,14 @@ trait TicketsInboxFlow
 
         $committed = false;
 
+        // #1699: `submitAction()` only owns a transaction on the forward
+        // branch; the completed branch hands that to TicketTransitionService,
+        // which opens and rolls back its own. The catch must not roll back a
+        // transaction this method never started (in a test that is
+        // RefreshDatabase's outer transaction, and rolling it back would erase
+        // the fixtures).
+        $startedTransaction = false;
+
         try {
             foreach ($this->completionFiles ?: [] as $file) {
                 $storedFiles[] = [
@@ -625,7 +576,58 @@ trait TicketsInboxFlow
                 ];
             }
 
+            // #1699: completion is the shared TicketTransitionService path. This
+            // adapter still owns file storage and the user-facing messages; the
+            // service owns the lock, the guards, the activity and the
+            // sibling-ticket scan that may complete the linked todo.
+            if ($actionType === 'completed') {
+                $transition = app(TicketTransitionService::class)->complete(
+                    $ticket,
+                    (int) Auth::id(),
+                    $this->completionNote,
+                    $storedFiles,
+                );
+
+                if (! $transition->ok) {
+                    if ($transition->has(TicketTransitionFailure::Closed, TicketTransitionFailure::Missing)) {
+                        $this->addError('completionNote', 'تیکت بسته را نمی‌توان مجدداً ارجاع داد یا مختومه کرد.');
+                    } elseif ($transition->has(TicketTransitionFailure::StatusMismatch)) {
+                        $this->addError('completionNote', 'تیکت تایید نشده را نمی‌توان مختومه کرد. ابتدا ارجاع دهید یا تایید کنید.');
+                    } else {
+                        $this->addError('completionNote', 'فقط کارشناس ارجاع‌شده می‌تواند این تیکت را مختومه کند.');
+                    }
+
+                    return;
+                }
+
+                // Only a committed service transition makes the files permanent;
+                // every failing path above falls through to the `finally`, which
+                // deletes them.
+                $committed = true;
+
+                // #1176: `showingTicket` became a computed — resetting it meant
+                // writing to a computed and blowing up. The id reset covers the
+                // state; the unset drops the stale per-request model cache so any
+                // read in the same request re-derives (and finds nothing).
+                $this->reset(['isCompletionModalOpen', 'showingTicketId', 'completionNote', 'completionFiles', 'targetUnitId', 'targetUnitName', 'unitSearch']);
+                unset($this->showingTicket);
+
+                $message = 'تیکت با موفقیت مختومه و بسته شد.';
+                if ($transition->todoCompleted) {
+                    $message .= ' وظیفه مرتبط نیز تکمیل شد.';
+                }
+
+                $this->dispatch('swal', [
+                    'title' => 'عملیات موفق',
+                    'text' => $message,
+                    'icon' => 'success',
+                ]);
+
+                return;
+            }
+
             DB::beginTransaction();
+            $startedTransaction = true;
 
             // #1609: the pre-check above reads a row that can move before this
             // write — `assign()`/`forward()`/`acceptTicket()` all mutate it,
@@ -634,7 +636,9 @@ trait TicketsInboxFlow
             // be moved and reopened as `forwarded`). Mirror acceptTicket()'s
             // locked re-read (#1564): the transition decision is made on the
             // row this transaction will write. `archived_at` rides along
-            // because an archived row is terminal for both branches (#929).
+            // because an archived row is terminal (#929). The completed branch
+            // no longer reaches this code — it is TicketTransitionService now
+            // (#1699) — so both probes below serve forwarding only.
             $locked = DB::select(
                 'SELECT id, status, current_assignee_id, archived_at FROM tickets WHERE id = ? FOR UPDATE',
                 [$ticket->id]
@@ -652,95 +656,48 @@ trait TicketsInboxFlow
                 return;
             }
 
-            if ($actionType === 'completed') {
-                // The pre-check is only a fast fail; the locked row decides.
-                if ($lockedRow->status !== 'accepted') {
-                    DB::rollBack();
-                    $this->addError('completionNote', 'تیکت تایید نشده را نمی‌توان مختومه کرد. ابتدا ارجاع دهید یا تایید کنید.');
+            // #1608: same locked terminal-state guard as forward(). The
+            // status check above runs on the bound model, so a closed ticket
+            // forwarded through this modal used to be resurrected as
+            // `forwarded`.
+            $locked = DB::select(
+                'SELECT id, status, archived_at FROM tickets WHERE id = ? FOR UPDATE',
+                [$ticket->id]
+            );
 
-                    return;
-                }
+            if ($locked === []) {
+                DB::rollBack();
+                $this->addError('completionNote', 'تیکت یافت نشد.');
 
-                // #1609: parity with Api\TicketController::complete() (#530) —
-                // only the ticket's current assignee may close it, even when the
-                // caller holds manage_unit_tickets.
-                if ((int) $lockedRow->current_assignee_id !== (int) Auth::id()) {
-                    DB::rollBack();
-                    $this->addError('completionNote', 'فقط کارشناس ارجاع‌شده می‌تواند این تیکت را مختومه کند.');
-
-                    return;
-                }
+                return;
             }
 
-            if ($actionType === 'forwarded') {
-                // #1608: same locked terminal-state guard as forward(). The
-                // status check above runs on the bound model and only covers
-                // the completion branch, so a closed ticket forwarded through
-                // this modal used to be resurrected as `forwarded`.
-                $locked = DB::select(
-                    'SELECT id, status, archived_at FROM tickets WHERE id = ? FOR UPDATE',
-                    [$ticket->id]
-                );
+            if ($this->isClosedTicketRow($locked[0])) {
+                DB::rollBack();
+                $this->addError('completionNote', 'تیکت بسته قابل ارجاع مجدد نیست.');
 
-                if ($locked === []) {
-                    DB::rollBack();
-                    $this->addError('completionNote', 'تیکت یافت نشد.');
-
-                    return;
-                }
-
-                if ($this->isClosedTicketRow($locked[0])) {
-                    DB::rollBack();
-                    $this->addError('completionNote', 'تیکت بسته قابل ارجاع مجدد نیست.');
-
-                    return;
-                }
-
-                $ticket->update([
-                    'unit_id' => $this->targetUnitId,
-                    'status' => 'forwarded',
-                    'current_assignee_id' => null,
-                ]);
-                $description = "ارجاع تیکت به واحد: {$targetUnitName}";
-                if ($this->completionNote) {
-                    $description .= " | توضیحات: {$this->completionNote}";
-                }
-                $message = "تیکت با موفقیت به واحد {$targetUnitName} ارجاع شد.";
-
-                // ارسال اعلان به واحد مقصد
-                NotificationService::notifyUnit(
-                    $this->targetUnitId,
-                    'ticket_forwarded',
-                    'تیکت ارجاع شد',
-                    "تیکت #{$ticket->ticket_code} به واحد شما ارجاع شد - موضوع: {$ticket->subject}",
-                    '/tickets/inbox'
-                );
-            } else {
-                $ticket->update([
-                    'status' => 'completed',
-                    'completed_at' => now(),
-                ]);
-                $description = "تیکت مختومه شد. گزارش نهایی: {$this->completionNote}";
-                $message = 'تیکت با موفقیت مختومه و بسته شد.';
-
-                // اگر وظیفه مرتبطی دارد و تمام تیکت‌های آن وظیفه بسته شده‌اند، وظیفه را تکمیل کن
-                //
-                // #1609: this runs AFTER the locked re-check and reads sibling
-                // tickets, which the row lock does not cover. Locking the
-                // siblings is deliberately not attempted: two concurrent
-                // completions of the last open tickets both marking the task
-                // complete is the same benign outcome.
-                if ($ticket->task_id) {
-                    $relatedTicket = Ticket::where('task_id', $ticket->task_id)
-                        ->where('status', '!=', 'completed')
-                        ->where('id', '!=', $ticket->id)
-                        ->count();
-                    if ($relatedTicket === 0) {
-                        $ticket->task->update(['is_completed' => true]);
-                        $message .= ' وظیفه مرتبط نیز تکمیل شد.';
-                    }
-                }
+                return;
             }
+
+            $ticket->update([
+                'unit_id' => $this->targetUnitId,
+                'status' => 'forwarded',
+                'current_assignee_id' => null,
+            ]);
+            $description = "ارجاع تیکت به واحد: {$targetUnitName}";
+            if ($this->completionNote) {
+                $description .= " | توضیحات: {$this->completionNote}";
+            }
+            $message = "تیکت با موفقیت به واحد {$targetUnitName} ارجاع شد.";
+
+            // ارسال اعلان به واحد مقصد
+            NotificationService::notifyUnit(
+                $this->targetUnitId,
+                'ticket_forwarded',
+                'تیکت ارجاع شد',
+                "تیکت #{$ticket->ticket_code} به واحد شما ارجاع شد - موضوع: {$ticket->subject}",
+                '/tickets/inbox'
+            );
 
             $newActivity = $ticket->activities()->create([
                 'user_id' => auth()->id(),
@@ -763,6 +720,7 @@ trait TicketsInboxFlow
             }
 
             DB::commit();
+            $startedTransaction = false;
 
             // Only a commit makes the files permanent. Set it immediately —
             // before the UI resets below, which live inside this `try` — so a
@@ -784,12 +742,14 @@ trait TicketsInboxFlow
         } catch (\Throwable $e) {
             // #1615: \Throwable, not \Exception — a PHP `Error` (TypeError,
             // ErrorException) is not an \Exception, so it escaped the old catch
-            // and left the transaction and its writes open. The level guard
-            // covers a failure that happened before `beginTransaction()` (a
-            // disk error above), where `rollBack()` would throw "There is no
-            // active transaction." and hide the original message.
-            if (DB::transactionLevel() > 0) {
+            // and left the transaction and its writes open. #1699: only roll
+            // back a transaction this method opened; the completed branch's
+            // service already rolled its own back, and the level guard covers a
+            // failure that happened before `beginTransaction()` (a disk error
+            // above) where `rollBack()` would throw.
+            if ($startedTransaction && DB::transactionLevel() > 0) {
                 DB::rollBack();
+                $startedTransaction = false;
             }
 
             $this->addError('completionNote', 'خطایی در ثبت عملیات رخ داد: '.$e->getMessage());
