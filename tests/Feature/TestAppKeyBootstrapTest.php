@@ -218,7 +218,8 @@ class TestAppKeyBootstrapTest extends TestCase
         // removed that source and `failOnDeprecation` is armed — tolerating the
         // word here would let the deprecation return and still read as a pass.
         $this->assertMatchesRegularExpression(
-            '/Tests:\s+12 passed/',
+            // #1767 grew the SecurityHeadersMiddlewareTest fixture (25 tests).
+            '/Tests:\s+25 passed/',
             (string) $plain,
             $output
         );

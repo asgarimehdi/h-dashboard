@@ -93,14 +93,15 @@ nonce: `'unsafe-inline'` is gone from `script-src`/`style-src`; `'unsafe-eval'` 
 
 ### CSP violation reporting (issue #742)
 
-`POST /csp-report` (name `csp.report`) — **public, no auth**, `throttle:60,1`, named in `routes/web.php`.
+`POST /csp-report` (name `csp.report`) — **public, no auth**, `throttle:60,1`, handled by `App\Http\Controllers\CspReportController` (extracted from the old `routes/web.php` closure in #1767).
 
 - The CSP header carries `report-to csp-endpoint` and the **deprecated `report-uri` directive is gone** — modern Chrome never acted on it, so it was a lie.
 - Route is **CSRF-exempt** via `$middleware->validateCsrfTokens(except: ['csp-report'])` in `bootstrap/app.php` — a browser report carries no token.
-- Body is read with `$request->json()->all()` (Chrome sends `application/csp-report`, others `application/json`); a garbage body decodes to `[]` instead of throwing. Logs `Log::warning('csp-report', …)` and returns **204**.
+- The Reporting API POSTs `application/reports+json`: a **JSON array** of `{"type":"csp-violation","url":…,"body":{…}}` envelopes (plus `age`/`user_agent`). The legacy `application/csp-report` `{"csp-report":{…}}` shape is also accepted for compatibility; no `report-uri` is emitted today. Shape decides — Content-Type is not a gate — and a single Reporting API object (no array) is rejected.
+- `CspReportController` validates shape (allowlisted fields per shape, `type === 'csp-violation'`), caps size (16 KiB body, 20 reports/fields, 4 KiB per string), sanitises control characters (Laravel's `LineFormatter` unescapes `\n` back to real newlines — #1767), logs one `Log::warning('csp-report', …)`, and always returns **204** (junk is dropped without a log).
 - **The same-app destination is temporary.** The decision on #742: the final target must be a **separate-domain** endpoint once that infrastructure exists — follow-up issue material.
 
-> Gotcha: it logs at `warning` with a **user-controlled body**. A large/garbage body is rate-limited but not size-capped, so do not treat `zabbix_sync_logs`-style assumptions about log volume as safe here.
+> Gotcha: the endpoint is unauthenticated by design, so a well-formed forged report is still possible at the throttle rate. The fix bounds shape, size, field count and log injection; it does not authenticate the reporter.
 
 ### Web download throttling (issue #1712)
 
