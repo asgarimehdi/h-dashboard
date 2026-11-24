@@ -57,6 +57,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // them daily, between archival and report generation.
         $schedule->command('backup:prune-archives')->dailyAt('05:00')->withoutOverlapping(60);
 
+        // #1759: a failed import now keeps its sheet for diagnosis; this bounds
+        // how long it lives. 05:15 sits between archival cleanup and report
+        // generation.
+        $schedule->command('imports:prune-sheets')->dailyAt('05:15')->withoutOverlapping(60);
+
         // Report generation — daily at 06:00 Tehran time
         // Issue #1021: withoutOverlapping() so a slow run cannot stack on the
         // next one, matching the Zabbix entry below. This stays a command rather

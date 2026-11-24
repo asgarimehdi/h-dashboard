@@ -129,10 +129,12 @@ class ImportHardwareJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        // #1194: drop the stored upload on failure so a failed run does not
-        // leave an orphaned file behind; the job never retries ($tries = 1).
-        Storage::delete($this->path);
-
+        // #1759: keep the stored sheet. It is the only artifact that shows
+        // which rows were in this run; the success path has always promised to
+        // keep it for diagnosis, and `imports:prune-sheets` bounds how long it
+        // lives. The pre-#1759 delete was a review-note add-on, not a decision:
+        // nothing ever retried a sheet.
+        //
         // The browser was told the import is running, so it has to learn that
         // it failed — otherwise the table silently keeps the old rows.
         if ($this->userId !== null) {
