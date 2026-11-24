@@ -263,4 +263,198 @@ class ExcelFormulaEscapeTest extends TestCase
         $this->assertStringContainsString("'=HYPERLINK", $body);
         $this->assertStringNotContainsString(',=HYPERLINK', $body);
     }
+
+    // ==================== CSV-only triggers (#1766) ====================
+
+    public function test_escape_for_csv_prefixes_every_trigger_and_leaves_the_rest(): void
+    {
+        $this->assertSame("'+1", ExcelCell::escapeForCsv('+1'));
+        $this->assertSame("'-1", ExcelCell::escapeForCsv('-1'));
+        $this->assertSame("'@SUM(1+1)", ExcelCell::escapeForCsv('@SUM(1+1)'));
+        $this->assertSame("'\t=1+1", ExcelCell::escapeForCsv("\t=1+1"));
+        $this->assertSame("'\r=1+1", ExcelCell::escapeForCsv("\r=1+1"));
+
+        // '|' and '%' are not leading-formula triggers, so legitimate values
+        // must survive untouched (gate correction: do not escape them).
+        $this->assertSame('|summary', ExcelCell::escapeForCsv('|summary'));
+        $this->assertSame('%CPU', ExcelCell::escapeForCsv('%CPU'));
+        $this->assertSame('Mozilla/5.0', ExcelCell::escapeForCsv('Mozilla/5.0'));
+        $this->assertSame(2, ExcelCell::escapeForCsv(2));
+        $this->assertSame('', ExcelCell::escapeForCsv(''));
+        $this->assertNull(ExcelCell::escapeForCsv(null));
+    }
+
+    public function test_escape_for_csv_is_not_double_applied_after_escape(): void
+    {
+        $this->assertSame("'=1+1", ExcelCell::escapeForCsv(ExcelCell::escape('=1+1')));
+    }
+
+    public function test_escape_still_does_not_touch_plus_minus_at(): void
+    {
+        // xlsx binds these as strings, so the shared guard must keep leaving
+        // them alone — otherwise '-1+2' / '@mention' would be corrupted.
+        $this->assertSame('+2+2', ExcelCell::escape('+2+2'));
+        $this->assertSame('-1+2', ExcelCell::escape('-1+2'));
+        $this->assertSame('@mention', ExcelCell::escape('@mention'));
+    }
+
+    public function test_csv_export_escapes_every_trigger_leading_value(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
+
+        $hardware = Hardware::factory()->create(['n_code' => $user->n_code]);
+
+        $values = ['+2+2', '-1+2', '@SUM(1+1)', "\t=1+1", "\r=1+1"];
+
+        foreach ($values as $value) {
+            HardwareAudit::create([
+                'hardware_id' => $hardware->id,
+                'user_id' => $user->id,
+                'action' => 'updated',
+                'changes' => [['field' => 'cpu', 'old' => 'a', 'new' => $value]],
+                'source' => 'web',
+                'ip_address' => '127.0.0.1',
+                'user_agent' => $value,
+            ]);
+        }
+
+        $token = $user->createToken('test-token', ['hardware:read'])->plainTextToken;
+        $headers = ['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'];
+
+        $csv = $this->withHeaders($headers)
+            ->getJson("/api/hardware/{$hardware->id}/audits/export?format=csv");
+        $csv->assertStatus(200);
+
+        // CSV quotes every field (CSV enclosure required), so the escaped
+        // value appears as the whole quoted field.
+        $body = $csv->streamedContent();
+        foreach ($values as $value) {
+            // PhpSpreadsheet normalises a leading CR to LF when it assigns the
+            // cell, so the "\r=1+1" field lands as "'" + LF + "=1+1".
+            $rendered = str_replace("\r", "\n", $value);
+
+            $this->assertStringContainsString(
+                '"\''.$rendered.'"',
+                $body,
+                'Missing CSV-escaped value: '.json_encode($value)
+            );
+            $this->assertStringNotContainsString(
+                '"'.$rendered.'"',
+                $body,
+                'Unescaped value leaked into CSV: '.json_encode($value)
+            );
+        }
+    }
+
+    public function test_xlsx_export_of_the_same_values_is_unchanged(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
+
+        $hardware = Hardware::factory()->create(['n_code' => $user->n_code]);
+
+        $values = ['+2+2', '-1+2', '@SUM(1+1)'];
+
+        foreach ($values as $value) {
+            HardwareAudit::create([
+                'hardware_id' => $hardware->id,
+                'user_id' => $user->id,
+                'action' => 'updated',
+                'changes' => [['field' => 'cpu', 'old' => 'a', 'new' => $value]],
+                'source' => 'web',
+                'ip_address' => '127.0.0.1',
+                'user_agent' => $value,
+            ]);
+        }
+
+        $token = $user->createToken('test-token', ['hardware:read'])->plainTextToken;
+        $headers = ['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'];
+
+        $xlsx = $this->withHeaders($headers)
+            ->getJson("/api/hardware/{$hardware->id}/audits/export?format=xlsx");
+        $xlsx->assertStatus(200);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'audit-xlsx').'.xlsx';
+        file_put_contents($tmp, $xlsx->streamedContent());
+        $spreadsheet = IOFactory::load($tmp);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $userAgentColumn = array_search('کاربر آژنت', (new HardwareAuditsExport(HardwareAudit::query()))->headings(), true);
+        $this->assertNotFalse($userAgentColumn, 'headings() lost the user_agent column');
+        $letter = Coordinate::stringFromColumnIndex($userAgentColumn + 1);
+
+        $cells = [];
+        for ($r = 2; $r <= $sheet->getHighestDataRow(); $r++) {
+            $cell = $sheet->getCell($letter.$r);
+            $cells[] = [$cell->getValue(), $cell->getDataType()];
+        }
+
+        foreach ($values as $value) {
+            $this->assertContains(
+                [$value, DataType::TYPE_STRING],
+                $cells,
+                'xlsx must carry the value unchanged as a string: '.json_encode($value)
+            );
+            $this->assertNotContains("'".$value, array_column($cells, 0));
+        }
+
+        $spreadsheet->disconnectWorksheets();
+        unlink($tmp);
+    }
+
+    public function test_csv_export_never_persists_the_escaped_form(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
+
+        $hardware = Hardware::factory()->create(['n_code' => $user->n_code]);
+
+        $audit = HardwareAudit::create([
+            'hardware_id' => $hardware->id,
+            'user_id' => $user->id,
+            'action' => 'bulk_delete',
+            'changes' => ['+2+2'],
+            'source' => 'web',
+            'ip_address' => '127.0.0.1',
+            'user_agent' => '+2+2',
+        ]);
+
+        $token = $user->createToken('test-token', ['hardware:read'])->plainTextToken;
+        $headers = ['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'];
+
+        $this->withHeaders($headers)
+            ->getJson("/api/hardware/{$hardware->id}/audits/export?format=csv")
+            ->assertStatus(200);
+
+        $fresh = $audit->fresh();
+        $this->assertSame('+2+2', $fresh->user_agent);
+        $this->assertSame(['+2+2'], $fresh->changes);
+    }
+
+    public function test_unknown_export_format_is_rejected(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
+
+        $hardware = Hardware::factory()->create(['n_code' => $user->n_code]);
+
+        $token = $user->createToken('test-token', ['hardware:read'])->plainTextToken;
+        $headers = ['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'];
+
+        foreach (['pdf', 'html', 'xls', 'ods', 'tsv', 'abc'] as $format) {
+            $this->withHeaders($headers)
+                ->getJson("/api/hardware/{$hardware->id}/audits/export?format={$format}")
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('format');
+        }
+
+        $this->withHeaders($headers)
+            ->getJson("/api/hardware/{$hardware->id}/audits/export?format[]=csv")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('format');
+
+        // The writer detector lowercases the extension, so ?format=CSV was a
+        // working download before the guard and must stay one.
+        $upper = $this->withHeaders($headers)
+            ->getJson("/api/hardware/{$hardware->id}/audits/export?format=CSV");
+        $upper->assertStatus(200);
+        $this->assertStringStartsWith('text/csv', (string) $upper->headers->get('content-type'));
+    }
 }

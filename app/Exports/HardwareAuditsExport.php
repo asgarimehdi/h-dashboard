@@ -19,7 +19,7 @@ class HardwareAuditsExport implements FromQuery, WithCustomChunkSize, WithHeadin
 
     protected int $chunkSize = 500;
 
-    public function __construct(Builder $query)
+    public function __construct(Builder $query, private readonly bool $csv = false)
     {
         $this->query = $query;
     }
@@ -79,24 +79,42 @@ class HardwareAuditsExport implements FromQuery, WithCustomChunkSize, WithHeadin
         // TypeError out of the mapper and took the whole export down with it,
         // so render whatever shape arrived and degrade instead.
         $lines = HardwareAuditChange::lines($audit->changes);
-        $changesSummary = $lines === [] ? '' : ExcelCell::escape(implode(' | ', $lines));
+        $changesSummary = $lines === [] ? '' : $this->cell(implode(' | ', $lines));
 
-        // #886 (CWE-1236): user_agent / changes / user.name are
-        // attacker-controlled; escape at map() time (also fixes ?format=csv).
+        // #886 (CWE-1236) / #1766: user_agent / changes / user.name are
+        // attacker-controlled. '=' is escaped at map() time for every format;
+        // the other CSV triggers ('+', '-', '@', tab, CR) are escaped only on
+        // the CSV path, because xlsx binds them as strings and escaping them
+        // there would corrupt values like '-1+2'.
         return [
             $audit->id,
             $this->getActionLabel($audit->action),
             $this->getSourceLabel($audit->source),
             $changesSummary,
-            ExcelCell::escape($audit->ip_address ?? ''),
-            ExcelCell::escape($audit->user_agent ?? ''),
+            $this->cell($audit->ip_address ?? ''),
+            $this->cell($audit->user_agent ?? ''),
             $audit->created_at?->toIso8601String() ?? '',
             $audit->created_at
                 ? Jalalian::fromCarbon($audit->created_at)->format('Y/m/d H:i:s')
                 : '',
-            ExcelCell::escape($audit->user?->n_code ?? ''),
-            ExcelCell::escape($audit->user?->name ?? ''),
+            $this->cell($audit->user?->n_code ?? ''),
+            $this->cell($audit->user?->name ?? ''),
         ];
+    }
+
+    /**
+     * Apply the export-time formula guard to one cell.
+     *
+     * `escape()` runs first for every format; the remaining CSV triggers are
+     * neutralised only when rendering CSV, where a file carries no cell-type
+     * metadata (#1766). escape() is idempotent over its own output, so an
+     * '='-leading value is never double-prefixed.
+     */
+    private function cell(mixed $value): mixed
+    {
+        $value = ExcelCell::escape($value);
+
+        return $this->csv ? ExcelCell::escapeForCsv($value) : $value;
     }
 
     public function title(): string
