@@ -300,4 +300,77 @@ class PersonApiTest extends TestCase
         $response->assertStatus(403)
             ->assertJson(['message' => 'Unit not accessible.']);
     }
+
+    /**
+     * Issue #1745: the API validated eight fields and never validated `phone`,
+     * so a submitted phone was silently dropped behind a 201 that claimed
+     * success. The shared `PersonRules` closes the gap.
+     */
+    public function test_create_person_stores_the_phone(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $existingPerson = Person::first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+
+        $response = $this->apiPost('/api/persons', [
+            'n_code' => '1111111111',
+            'f_name' => 'John',
+            'l_name' => 'Doe',
+            't_id' => $existingPerson->t_id,
+            'e_id' => $existingPerson->e_id,
+            's_id' => $existingPerson->s_id,
+            'r_id' => $existingPerson->r_id,
+            'u_id' => $unit->id,
+            'phone' => '09123456789',
+        ], $token);
+
+        $response->assertStatus(201)->assertJsonPath('data.phone', '09123456789');
+        $this->assertDatabaseHas('persons', ['n_code' => '1111111111', 'phone' => '09123456789']);
+    }
+
+    public function test_update_person_stores_the_phone(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $person = Person::where('u_id', $unit->id)->first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+
+        $response = $this->apiPut("/api/persons/{$person->n_code}", ['phone' => '09123456789'], $token);
+
+        $response->assertStatus(200)->assertJsonPath('data.phone', '09123456789');
+        $this->assertDatabaseHas('persons', ['id' => $person->id, 'phone' => '09123456789']);
+    }
+
+    public function test_create_person_rejects_an_over_long_phone(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $existingPerson = Person::first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+
+        $response = $this->apiPost('/api/persons', [
+            'n_code' => '1111111111',
+            'f_name' => 'John',
+            'l_name' => 'Doe',
+            't_id' => $existingPerson->t_id,
+            'e_id' => $existingPerson->e_id,
+            's_id' => $existingPerson->s_id,
+            'r_id' => $existingPerson->r_id,
+            'u_id' => $unit->id,
+            'phone' => str_repeat('9', 21),
+        ], $token);
+
+        $response->assertStatus(422)->assertJsonValidationErrors(['phone']);
+        $this->assertDatabaseMissing('persons', ['n_code' => '1111111111']);
+    }
+
+    public function test_update_person_rejects_an_over_long_phone(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $person = Person::where('u_id', $unit->id)->first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+
+        $this->apiPut("/api/persons/{$person->n_code}", ['phone' => str_repeat('9', 21)], $token)
+            ->assertStatus(422)->assertJsonValidationErrors(['phone']);
+
+        $this->assertNull($person->fresh()->phone);
+    }
 }

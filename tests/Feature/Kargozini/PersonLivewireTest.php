@@ -780,6 +780,29 @@ class PersonLivewireTest extends TestCase
         $this->assertDatabaseMissing('persons', ['n_code' => $data['n_code']]);
     }
 
+    public function test_save_person_updates_the_phone(): void
+    {
+        // #1745: parity pin after the rules moved to PersonRules. The web path
+        // already wrote the phone on update, so this test is green before the
+        // refactor too — it proves the shared rules kept the behaviour.
+        $person = PersonModel::where('u_id', $this->unit->id)->firstOrFail();
+
+        $component = Livewire::test('kargozini.person')->call('editPerson', $person->id);
+        $this->fillForm($component, [
+            'n_code' => $person->n_code,
+            'f_name' => $person->f_name,
+            'l_name' => $person->l_name,
+            't_id' => $this->tId,
+            'e_id' => $this->eId,
+            's_id' => $this->sId,
+            'r_id' => $this->rId,
+            'u_id' => $this->unit->id,
+        ])->set('phone', '02133445566');
+        $component->call('savePerson');
+
+        $this->assertDatabaseHas('persons', ['id' => $person->id, 'phone' => '02133445566']);
+    }
+
     public function test_search_folds_zwj_in_stored_name(): void
     {
         // Stored name contains ZWNJ (U+200C): "حرفه\u{200C}ای"
