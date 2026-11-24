@@ -102,6 +102,10 @@ nonce: `'unsafe-inline'` is gone from `script-src`/`style-src`; `'unsafe-eval'` 
 
 > Gotcha: it logs at `warning` with a **user-controlled body**. A large/garbage body is rate-limited but not size-capped, so do not treat `zabbix_sync_logs`-style assumptions about log volume as safe here.
 
+### Web download throttling (issue #1712)
+
+- Web downloads (`/hardware/export`, `/units/export`, `/kargozini/persons/export`, `/tools/backup/full|table/{table}`) — `throttle:web-downloads`, 10/min per user (#1712). One shared budget across all five; keyed by user id (IP for a user-less request).
+
 ### CORS Hardening
 
 `config/cors.php` changes:
