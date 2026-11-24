@@ -271,7 +271,7 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 `CacheInvalidationService` uses driver-agnostic version-counter invalidation: cache keys are `{namespace}:v{version}:{scopeHash}:{extra}`, and a write bumps the counter. Hot paths use `Cache::remember(...)` with the versioned key.
 
-**Key namespaces:** all **19** in `PruneStaleCache::NAMESPACES` (`grep -n 'NAMESPACES' -A2 app/Console/Commands/PruneStaleCache.php`) — `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `report_todos`, `report_tickets`, `report_persons`, `report_units`, `unit_hierarchy`, `calendar`, `zabbix_devices` (added with issue #698), `global_search`, `disease_maps`, `activity_log`, `report_no_boundary`, `unit_types`, `tools_stats`, `notifications`.
+**Key namespaces:** all **20** in `PruneStaleCache::NAMESPACES` (`grep -n 'NAMESPACES' -A2 app/Console/Commands/PruneStaleCache.php`) — `hardware_stats`, `gis`, `maps`, `dashboard`, `hr_stats`, `report_todos`, `report_tickets`, `report_persons`, `report_units`, `unit_hierarchy`, `calendar`, `zabbix_devices` (added with issue #698), `global_search`, `disease_maps`, `disease_catalog`, `activity_log`, `report_no_boundary`, `unit_types`, `tools_stats`, `notifications`.
 
 **The version key comes from the service and nowhere else.** A cache key is built with `remember()`/`cacheKey()` and a version read with `getVersion()`; a hand-written `Cache::get('…_version')` (or a literal `…:v{$v}`) bypasses invalidation and reads a counter nobody bumps (#1290). `tests/Feature/CacheVersionKeyGuardTest.php` enforces this over `app/` and `resources/views/`, and also pins that every namespace literal at a call site — plus the `*Namespaces` lists in `AppServiceProvider` — is registered here.
 
