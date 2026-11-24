@@ -7,6 +7,7 @@ use App\Rules\AccessibleUnit;
 use App\Services\AccessService;
 use App\Services\Disease\DiseaseCaseService;
 use App\Support\JalaliDateRange;
+use App\Support\OptionCatalog;
 use App\Traits\BuildsDiseaseCaseForm;
 use App\Traits\ClampsPageSize;
 use App\Traits\PersianNormalizer;
@@ -369,18 +370,7 @@ return new class extends Component
      */
     public function unitOptions(): array
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-
-        return Unit::query()
-            ->whereIn('id', $accessibleIds)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(static fn (mixed $unit): array => [
-                'value' => (int) data_get($unit, 'id'),
-                'label' => (string) data_get($unit, 'name'),
-            ])
-            ->all();
+        return OptionCatalog::units(app(AccessService::class)->accessibleUnitIds(), true);
     }
 
     /**
