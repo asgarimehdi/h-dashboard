@@ -8,6 +8,7 @@ use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\User;
 use App\Rules\PerPage;
+use App\Support\PersonRules;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
 
@@ -87,16 +88,7 @@ class PersonController extends Controller
 
     public function store(UnitScopedRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'n_code' => 'required|string|size:10|unique:persons,n_code',
-            'f_name' => 'required|string|max:255',
-            'l_name' => 'required|string|max:255',
-            't_id' => 'required|exists:tahsils,id',
-            'e_id' => 'required|exists:estekhdams,id',
-            's_id' => 'required|exists:semats,id',
-            'r_id' => 'required|exists:radifs,id',
-            'u_id' => 'required|exists:units,id',
-        ]);
+        $validated = $request->validate(PersonRules::apiRules());
 
         $accessibleIds = $request->accessibleIds();
 
@@ -133,15 +125,7 @@ class PersonController extends Controller
 
         // Issue #532: validate FIRST, then check scope — prevents information
         // disclosure through differential error responses (403 vs 422).
-        $validated = $request->validate([
-            'f_name' => 'sometimes|required|string|max:255',
-            'l_name' => 'sometimes|required|string|max:255',
-            't_id' => 'sometimes|required|exists:tahsils,id',
-            'e_id' => 'sometimes|required|exists:estekhdams,id',
-            's_id' => 'sometimes|required|exists:semats,id',
-            'r_id' => 'sometimes|required|exists:radifs,id',
-            'u_id' => 'sometimes|required|exists:units,id',
-        ]);
+        $validated = $request->validate(PersonRules::apiRules(required: false));
 
         if (isset($validated['u_id']) && ! in_array($validated['u_id'], $accessibleIds)) {
             return response()->json(['message' => 'Unit not accessible.'], 403);

@@ -7,6 +7,7 @@ use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Support\PersonRules;
 use App\Traits\ClampsPageSize;
 use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -190,19 +191,7 @@ return new class extends Component
         // below rewrites authorization reach, not just data.
         $this->authorize('manage_personnel');
 
-        $this->validate([
-            'n_code' => 'required|string|size:10|unique:persons,n_code,'.($this->editingId ?: 'NULL'),
-            'f_name' => 'required|string|max:255',
-            'l_name' => 'required|string|max:255',
-            't_id' => 'required|exists:tahsils,id',
-            'e_id' => 'required|exists:estekhdams,id',
-            's_id' => 'required|exists:semats,id',
-            'r_id' => 'required|exists:radifs,id',
-            'u_id' => 'required|exists:units,id',
-            // #738: free-text phone, optional, simple max length — no format
-            // constraint (see the migration's docblock).
-            'phone' => 'nullable|string|max:20',
-        ]);
+        $this->validate(PersonRules::webRules($this->editingId));
 
         if ($this->editingId) {
             $person = PersonModel::findOrFail($this->editingId);
