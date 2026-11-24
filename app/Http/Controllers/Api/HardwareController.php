@@ -11,6 +11,7 @@ use App\Rules\PerPage;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Services\HardwareBulkAuditWriter;
 use App\Support\HardwareAuditChange;
+use App\Support\HardwareRules;
 use App\Support\ScopeCacheKey;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
@@ -21,42 +22,15 @@ class HardwareController extends Controller
     use PersianNormalizer;
 
     /**
-     * Shared hardware validation rules.
+     * Shared hardware validation rules — see `App\Support\HardwareRules`.
      *
      * @param  bool  $required  true = store (n_code/pc_name required), false = update (sometimes|required)
      * @param  bool  $includeShutdown  true = include shutdown boolean (update only)
+     * @return array<string, string>
      */
     private function hardwareValidationRules(bool $required = true, bool $includeShutdown = false): array
     {
-        $nCodeRule = $required ? 'required|string|exists:persons,n_code' : 'sometimes|required|string|exists:persons,n_code';
-        $pcNameRule = $required ? 'required|string|max:255' : 'sometimes|required|string|max:255';
-
-        $rules = [
-            'n_code' => $nCodeRule,
-            'pc_name' => $pcNameRule,
-            'type' => 'nullable|string|max:50',
-            'os' => 'nullable|string|max:100',
-            'ip_valid' => 'nullable|string|max:45',
-            'ip_local' => 'nullable|string|max:45',
-            'mac' => 'nullable|string|max:17',
-            'net_type' => 'nullable|string|max:50',
-            'switch' => 'nullable|string|max:100',
-            'port' => 'nullable|string|max:50',
-            'vlan' => 'nullable|string|max:50',
-            'motherboard' => 'nullable|string|max:100',
-            'cpu' => 'nullable|string|max:100',
-            'ram' => 'nullable|string|max:50',
-            'hdd' => 'nullable|string|max:100',
-            'comments' => 'nullable|string|max:20000',
-            'mark' => 'boolean',
-            'clean_at' => 'nullable|date',
-        ];
-
-        if ($includeShutdown) {
-            $rules['shutdown'] = 'boolean';
-        }
-
-        return $rules;
+        return HardwareRules::apiRules($required, $includeShutdown);
     }
 
     /**
