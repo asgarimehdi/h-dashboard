@@ -210,6 +210,17 @@ trait HardwareIndexHelpers
             return;
         }
 
+        // #1736: a `created` audit has no previous value — the observer stores
+        // the '—' sentinel as `old` for every field, so restoring it nulls the
+        // column (500 on NOT NULL) and logs a `rollback` row for a wipe. Guard
+        // on the action, not the sentinel: an `updated` row legitimately stores
+        // '—' for a null → value transition.
+        if ($audit->action === 'created') {
+            $this->error('این ردیف تاریخچه مقدار قبلی ندارد؛ بازگردانی از ردیف «ایجاد» ممکن نیست.', position: 'toast-bottom');
+
+            return;
+        }
+
         // Parse old value and update
         $restoredValue = $this->restoreAuditValue($fieldChange['old'] ?? '—', $field);
 
