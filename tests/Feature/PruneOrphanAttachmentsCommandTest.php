@@ -308,4 +308,52 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
             $this->assertDatabaseHas('attachments', ['file_path' => "attachments/{$name}"]);
         }
     }
+
+    /**
+     * Issue #1735 — a row whose `file_path` still carries a legacy prefix is
+     * a live reference; the prune must see it instead of deleting the only
+     * copy of the file.
+     *
+     * The `public/storage/...` shape has no evidence in the repository (no
+     * writer ever produced it) — it is covered defensively, and it is the
+     * case that proves the normaliser has to strip until a fixed point: a
+     * single pass over the prefixes leaves `storage/attachments/...` behind.
+     */
+    public function test_legacy_prefixed_file_paths_are_never_pruned(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket']);
+        $ticket = $this->ticketFor($user, $unit, 'legacy');
+
+        // stored `file_path` => the file the upload actually wrote on disk
+        $legacy = [
+            '/storage/attachments/legacy-storage.pdf' => 'attachments/legacy-storage.pdf',
+            'public/attachments/legacy-public.pdf' => 'attachments/legacy-public.pdf',
+            'public/storage/attachments/legacy-public-storage.pdf' => 'attachments/legacy-public-storage.pdf',
+        ];
+
+        foreach ($legacy as $stored => $real) {
+            Storage::disk('local')->put($real, 'bytes');
+            $this->attachmentRow($stored, $ticket, $user);
+        }
+
+        // A genuine orphan must still go — the fix must not over-correct.
+        $orphan = $this->orphanFile('legacy-real-orphan.pdf');
+
+        $this->artisan('attachments:prune-orphans', ['--dry-run' => true])
+            ->expectsOutputToContain('Found 3 referenced file(s).')
+            ->expectsOutputToContain('Found 1 unreferenced file(s).')
+            ->expectsOutputToContain('attachments/legacy-real-orphan.pdf')
+            ->assertExitCode(0);
+
+        $this->artisan('attachments:prune-orphans')->assertExitCode(0);
+
+        foreach ($legacy as $real) {
+            Storage::disk('local')->assertExists($real);
+        }
+
+        Storage::disk('local')->assertMissing($orphan);
+    }
 }

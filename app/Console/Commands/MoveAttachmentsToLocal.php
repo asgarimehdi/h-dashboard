@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Attachment;
+use App\Support\AttachmentPath;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
@@ -67,7 +68,7 @@ class MoveAttachmentsToLocal extends Command
                 &$failed,
             ): void {
                 foreach ($attachments as $attachment) {
-                    $path = self::normalize((string) $attachment->file_path);
+                    $path = AttachmentPath::normalize((string) $attachment->file_path);
 
                     if ($path === '') {
                         $missing++;
@@ -180,22 +181,5 @@ class MoveAttachmentsToLocal extends Command
         $this->info('Attachment migration complete.');
 
         return 0;
-    }
-
-    /**
-     * Strip the legacy prefixes that make a stored path unusable on either
-     * disk (`/storage/attachments/x.pdf`, `public/attachments/x.pdf`, ...).
-     */
-    private static function normalize(string $path): string
-    {
-        $path = ltrim(str_replace('\\', '/', trim($path)), '/');
-
-        foreach (['storage/', 'public/'] as $prefix) {
-            if (str_starts_with($path, $prefix)) {
-                $path = substr($path, strlen($prefix));
-            }
-        }
-
-        return ltrim($path, '/');
     }
 }

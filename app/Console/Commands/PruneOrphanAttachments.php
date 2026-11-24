@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Attachment;
+use App\Support\AttachmentPath;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
@@ -54,12 +55,17 @@ class PruneOrphanAttachments extends Command
         //
         // `flip()` keys the set by path, so duplicate rows for one path
         // collapse into a single entry — the same answer the old query gave.
+        // Both sides go through the shared normaliser (issue #1735): rows
+        // written with a legacy `/storage/...` or `public/...` prefix must
+        // still match their file, or the prune would delete it.
         $referencedPaths = Attachment::query()
             ->pluck('file_path')
+            ->filter(fn (?string $path): bool => filled($path))
+            ->map(fn (?string $path): string => AttachmentPath::normalize((string) $path))
             ->flip();
 
         foreach ($disk->allFiles(self::DIRECTORY) as $file) {
-            $path = self::path($file);
+            $path = AttachmentPath::normalize($file);
 
             if (isset($referencedPaths[$path])) {
                 $referenced++;
@@ -112,13 +118,4 @@ class PruneOrphanAttachments extends Command
      * The directory the upload paths store into, on the `local` disk.
      */
     private const DIRECTORY = 'attachments';
-
-    /**
-     * Normalise a disk entry to the slash-separated relative path that
-     * `attachments.file_path` stores (e.g. `attachments/2026/01/report.pdf`).
-     */
-    private static function path(string $path): string
-    {
-        return ltrim(str_replace('\\', '/', $path), '/');
-    }
 }
