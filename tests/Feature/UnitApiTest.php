@@ -151,6 +151,80 @@ class UnitApiTest extends TestCase
         $response->assertStatus(403);
     }
 
+    // ==================== #1737: structural descendant-cycle guard ====================
+
+    public function test_update_rejects_reparent_under_an_inactive_descendant(): void
+    {
+        // #1737: deactivating a descendant must not remove it from the cycle
+        // guard's forbidden set. The API is the genuinely exploitable surface:
+        // the parent-scope gate reads the same active-only CTE, so it only lets
+        // the request through when the user holds BOTH the ancestor and the
+        // inactive descendant in `user_units` (both enter scope as seed rows).
+        ['user' => $user, 'unit' => $a] = $this->createUserWithUnit(['organization']);
+        $b = Unit::factory()->create(['parent_id' => $a->id, 'is_active' => false]);
+        $user->units()->attach($b->id, ['role' => 'staff', 'is_primary' => false]);
+
+        // Vital: `createUserWithUnit()` sets `current_unit_id`, which makes the
+        // scope single-branch and refuses this with 403 before the guard runs —
+        // a green test for the wrong reason. The unchanged-parent assertion
+        // alone cannot tell 403 from 422.
+        Session::flush();
+
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+        $originalParentId = $a->parent_id;
+
+        $response = $this->apiPut("/api/units/{$a->id}", [
+            'parent_id' => $b->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Cannot set a descendant or self as parent (would create a cycle).']);
+
+        $this->assertSame($originalParentId, $a->fresh()->parent_id);
+    }
+
+    public function test_update_rejects_reparent_under_an_active_descendant(): void
+    {
+        // Positive control: the active-descendant refusal is the pre-existing
+        // #324 behaviour and must survive the structural variant.
+        ['user' => $user, 'unit' => $a] = $this->createUserWithUnit(['organization']);
+        $b = Unit::factory()->create(['parent_id' => $a->id, 'is_active' => true]);
+        $user->units()->attach($b->id, ['role' => 'staff', 'is_primary' => false]);
+        Session::flush();
+
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+        $originalParentId = $a->parent_id;
+
+        $response = $this->apiPut("/api/units/{$a->id}", [
+            'parent_id' => $b->id,
+        ], $token);
+
+        $response->assertStatus(422)
+            ->assertJson(['message' => 'Cannot set a descendant or self as parent (would create a cycle).']);
+
+        $this->assertSame($originalParentId, $a->fresh()->parent_id);
+    }
+
+    public function test_update_accepts_reparent_under_an_unrelated_active_unit(): void
+    {
+        // The structural variant must not over-reject: a unit outside the
+        // subtree is a legal parent.
+        ['user' => $user, 'unit' => $a] = $this->createUserWithUnit(['organization']);
+        $unrelated = Unit::factory()->create(['is_active' => true]);
+        $user->units()->attach($unrelated->id, ['role' => 'staff', 'is_primary' => false]);
+        Session::flush();
+
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiPut("/api/units/{$a->id}", [
+            'parent_id' => $unrelated->id,
+        ], $token);
+
+        $response->assertStatus(200);
+
+        $this->assertSame($unrelated->id, $a->fresh()->parent_id);
+    }
+
     /**
      * #949: the happy path is now "a unit with nothing left in it". The old
      * version deleted `createUserWithUnit()`'s own unit — which carries that

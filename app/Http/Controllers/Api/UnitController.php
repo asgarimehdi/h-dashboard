@@ -170,12 +170,15 @@ class UnitController extends Controller
 
         $oldParentId = $unit->parent_id; // Capture before update for hierarchy-change detection (#371)
 
-        // Prevent hierarchy cycles: parent cannot be the unit itself or one of its descendants (#324)
+        // Prevent hierarchy cycles: parent cannot be the unit itself or one of
+        // its descendants (#324). #1737: the forbidden set must be STRUCTURAL —
+        // an inactive descendant is still a descendant, and traversing it is
+        // exactly how the cycle gets created.
         if (empty($validated['parent_id'])) {
             $unit->update($validated);
         } else {
-            $forbiddenIds = Unit::descendantIds($unit->id)->push($unit->id)->all();
-            if (in_array($validated['parent_id'], $forbiddenIds)) {
+            $forbiddenIds = Unit::structuralDescendantIds($unit->id)->push($unit->id)->all();
+            if (in_array((int) $validated['parent_id'], array_map('intval', $forbiddenIds), true)) {
                 return response()->json(['message' => 'Cannot set a descendant or self as parent (would create a cycle).'], 422);
             }
             $unit->update($validated);

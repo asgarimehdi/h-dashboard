@@ -252,6 +252,61 @@ class UnitModelTest extends TestCase
         });
     }
 
+    // ==================== #1737: structural descendant set for the cycle guard ====================
+
+    public function test_structural_descendant_ids_includes_inactive_descendants(): void
+    {
+        // #1737: the parent-cycle guard must see an inactive descendant. Its
+        // set is built from the CTE's recursive step, so an active-only filter
+        // there makes a deactivated child (and its subtree) invisible — and
+        // re-parenting the ancestor under it then passes validation.
+        $a = Unit::create(['name' => 'الف', 'is_active' => true]);
+        $b = Unit::create(['name' => 'ب', 'is_active' => false, 'parent_id' => $a->id]);
+        $c = Unit::create(['name' => 'ج', 'is_active' => true, 'parent_id' => $b->id]);
+
+        $structural = Unit::structuralDescendantIds($a->id);
+
+        $this->assertEqualsCanonicalizing(
+            [$a->id, $b->id, $c->id],
+            $structural->unique()->values()->all()
+        );
+
+        // The active-only default is unchanged: the traversal stops AT the
+        // inactive node, so only the seed row itself comes back.
+        $this->assertSame([$a->id], Unit::descendantIds($a->id)->all());
+    }
+
+    public function test_structural_descendant_ids_includes_an_inactive_seed(): void
+    {
+        // The seed row was never filtered, and the structural variant must not
+        // start filtering it: a user can hold an inactive unit directly.
+        $a = Unit::create(['name' => 'الف', 'is_active' => true]);
+        $b = Unit::create(['name' => 'ب', 'is_active' => false, 'parent_id' => $a->id]);
+
+        $this->assertSame([$b->id], Unit::structuralDescendantIds([$b->id])->all());
+    }
+
+    public function test_structural_descendant_ids_terminates_on_a_cycle_through_an_inactive_node(): void
+    {
+        // #1737 risk: dropping the is_active filter means the traversal walks
+        // THROUGH inactive nodes, so a pre-existing cycle that passes through
+        // one is now reachable. UNION (not UNION ALL) is the only thing that
+        // terminates it — this test is the guard against "optimising" it back.
+        $this->withStatementTimeout(10000, function () {
+            $a = Unit::create(['name' => 'الف', 'is_active' => true]);
+            $b = Unit::create(['name' => 'ب', 'is_active' => false, 'parent_id' => $a->id]);
+            $a->update(['parent_id' => $b->id]);
+
+            $descendants = Unit::structuralDescendantIds($a->id);
+
+            // Terminated, and did not loop: each unit appears exactly once.
+            $this->assertEqualsCanonicalizing(
+                [$a->id, $b->id],
+                $descendants->unique()->values()->all()
+            );
+        });
+    }
+
     /**
      * Run a callback under a Postgres statement_timeout, so a non-terminating
      * recursive query fails fast instead of hanging the whole suite.
