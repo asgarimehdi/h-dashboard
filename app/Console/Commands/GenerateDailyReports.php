@@ -44,7 +44,19 @@ class GenerateDailyReports extends Command
         // Issue #1021: the loop below used to cost five round-trips per unit
         // (Unit::find + one count per relation + exists + create). The units and
         // the two counts are each a single pass over the whole set now, so only
-        // the deliberate check-then-act write pair stays per unit.
+        // the per-unit write stays.
+        //
+        // #1760: the write used to be a check-then-act `exists()` + `create()`
+        // with no lock and no constraint, so two runs racing wrote two rows for
+        // the same unit+day. It is now one atomic `firstOrCreate`: the unique
+        // (unit_id, report_date) index added in 2026_11_24_000001 is what makes
+        // the race safe, and `Builder::createOrFirst` turns the loser's 23505
+        // into a read of the winner's row. No `Cache::lock` is added on purpose:
+        // a lock only serialises runs sharing one cache store (and does nothing
+        // if that store is down), whereas the constraint holds across processes,
+        // hosts and queue workers. `withoutOverlapping()` in bootstrap/app.php
+        // only covers the scheduled path; a manual run or a retried
+        // GenerateDailyReportsJob ($tries=2, #1010) bypasses it.
         //
         // Raw aggregates are equivalent here, verified rather than assumed:
         // neither Ticket nor Todo uses SoftDeletes or registers a global scope —
@@ -90,21 +102,20 @@ class GenerateDailyReports extends Command
                 continue;
             }
 
-            if (DailyReport::where('unit_id', $unitId)->where('report_date', $today)->exists()) {
-                continue;
-            }
-
-            DailyReport::create([
-                'unit_id' => $unitId,
-                'report_date' => $today,
-                'summary' => $summary,
-                'payload' => [
-                    'open_tickets' => $openTickets,
-                    'open_todos' => $openTodos,
+            $report = DailyReport::firstOrCreate(
+                ['unit_id' => $unitId, 'report_date' => $today],
+                [
+                    'summary' => $summary,
+                    'payload' => [
+                        'open_tickets' => $openTickets,
+                        'open_todos' => $openTodos,
+                    ],
                 ],
-            ]);
+            );
 
-            $created++;
+            if ($report->wasRecentlyCreated) {
+                $created++;
+            }
         }
 
         $this->line("  Generated {$created} daily report(s).");

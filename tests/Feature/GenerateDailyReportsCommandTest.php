@@ -7,9 +7,11 @@ use App\Models\DailyReport;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -133,6 +135,63 @@ class GenerateDailyReportsCommandTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertDatabaseCount('daily_reports', 1);
+    }
+
+    /**
+     * #1760 — the constraint, not the old exists()/create() pair, is what makes
+     * a racing run safe. Reported by Laravel's typed helper, so this asserts the
+     * index shape and not just its name.
+     */
+    public function test_daily_reports_has_a_unique_unit_date_index(): void
+    {
+        $index = collect(Schema::getIndexes('daily_reports'))->first(
+            fn (array $i) => $i['columns'] === ['unit_id', 'report_date'] && $i['unique'] === true,
+        );
+
+        $this->assertNotNull($index, 'daily_reports needs a UNIQUE (unit_id, report_date) index');
+    }
+
+    /**
+     * The write half of the race: once the winner's row is there, the loser's
+     * INSERT must be rejected by Postgres, not silently duplicated.
+     */
+    public function test_a_duplicate_unit_date_insert_is_rejected_by_the_database(): void
+    {
+        $unit = Unit::create(['name' => 'Ward Unique']);
+        $row = ['unit_id' => $unit->id, 'report_date' => now()->toDateString(), 'summary' => 'first'];
+
+        $this->expectException(UniqueConstraintViolationException::class);
+
+        // Inner transaction ⇒ savepoint, so the failed INSERT does not abort the
+        // RefreshDatabase transaction the whole test runs in.
+        DB::transaction(function () use ($row): void {
+            DB::table('daily_reports')->insert($row);
+            DB::table('daily_reports')->insert($row);
+        });
+    }
+
+    /**
+     * A re-run must not rewrite the numbers the 06:00 run stored — that is the
+     * difference between firstOrCreate and updateOrCreate.
+     */
+    public function test_a_second_run_keeps_the_first_rows_numbers(): void
+    {
+        $unit = Unit::create(['name' => 'Ward Frozen']);
+
+        $this->artisan('reports:generate-daily', ['--unit' => $unit->id])->assertExitCode(0);
+
+        $this->openTicket($unit); // arrives after the day's report was written
+
+        $this->artisan('reports:generate-daily', ['--unit' => $unit->id])
+            ->expectsOutputToContain('Generated 0 daily report(s)')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseCount('daily_reports', 1);
+        $this->assertSame(
+            ['open_tickets' => 0, 'open_todos' => 0],
+            DailyReport::first()->payload,
+            'the second run must not rewrite the stored report',
+        );
     }
 
     public function test_dry_run_creates_no_report(): void
@@ -297,9 +356,9 @@ class GenerateDailyReportsCommandTest extends TestCase
      * organisation. It is constant now — one pass over `units`, `tickets` and
      * `todos` each, for any N.
      *
-     * The residual per-unit queries are the deliberate `exists()` + `create()`
-     * pair; the plan leaves that check-then-act alone, so this test asserts the
-     * read side (which is what the issue is about) instead of a constant total.
+     * The residual per-unit queries are the `firstOrCreate` pair — one SELECT
+     * plus at most one INSERT per unit — so this test asserts the read side
+     * (which is what the issue is about) instead of a constant total.
      */
     public function test_read_queries_do_not_grow_with_the_unit_count(): void
     {
@@ -354,7 +413,7 @@ class GenerateDailyReportsCommandTest extends TestCase
 
         $statements = $this->queriesDuring(fn () => Artisan::call('reports:generate-daily'));
 
-        // 4 + 2N: allUnitIds + units preload + two aggregates + exists/create per unit.
+        // 4 + 2N: allUnitIds + units preload + two aggregates + firstOrCreate per unit.
         $this->assertLessThanOrEqual(
             4 + 2 * $units,
             count($statements),
