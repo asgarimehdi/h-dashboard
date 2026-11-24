@@ -424,6 +424,79 @@ class TicketCommentsLivewireTest extends TestCase
         $this->assertDatabaseMissing('ticket_comments', ['body' => 'پاسخ با جد حذف‌شده']);
     }
 
+    // ─── #1705: every reply renders once; reply/edit work on replies ────────
+
+    public function test_reply_is_rendered_exactly_once(): void
+    {
+        $root = $this->makeComment('ریشه-یکتا');
+        $this->makeComment('پاسخ-یکتا', $root->id);
+
+        $html = Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->html();
+
+        $this->assertSame(1, substr_count($html, 'ریشه-یکتا'));
+        $this->assertSame(1, substr_count($html, 'پاسخ-یکتا'));
+    }
+
+    // Guards the correction to the body's plan: roots-only without recursive
+    // rendering hides depth 2/3, and a one-level test would stay vacuously
+    // green while those comments vanished from the UI.
+    public function test_every_comment_in_a_four_level_thread_renders_exactly_once(): void
+    {
+        $d0 = $this->makeComment('سطح-۰-یکتا');
+        $d1 = $this->makeComment('سطح-۱-یکتا', $d0->id);
+        $d2 = $this->makeComment('سطح-۲-یکتا', $d1->id);
+        $this->makeComment('سطح-۳-یکتا', $d2->id);
+
+        $html = Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->html();
+
+        foreach (['سطح-۰-یکتا', 'سطح-۱-یکتا', 'سطح-۲-یکتا', 'سطح-۳-یکتا'] as $needle) {
+            $this->assertSame(1, substr_count($html, $needle), "«{$needle}» باید دقیقاً یک بار رندر شود.");
+        }
+    }
+
+    public function test_start_reply_on_a_reply_opens_the_form_and_replies_to_it(): void
+    {
+        $root = $this->makeComment('ریشه');
+        $reply = $this->makeComment('پاسخ', $root->id);
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->call('startReply', $reply->id)
+            ->assertSet('replyToId', $reply->id)
+            ->assertSee('پاسخ شما...')
+            ->set('replyBody', 'پاسخ به پاسخ')
+            ->call('addReply', $reply->id)
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('ticket_comments', [
+            'parent_id' => $reply->id,
+            'body' => 'پاسخ به پاسخ',
+        ]);
+    }
+
+    public function test_start_edit_on_a_reply_opens_the_form_and_saves(): void
+    {
+        $root = $this->makeComment('ریشه');
+        $reply = $this->makeComment('بدنه-قبلی', $root->id);
+
+        Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->call('startEdit', $reply->id)
+            ->assertSet('editing', true)
+            ->assertSet('editCommentId', $reply->id)
+            ->assertSet('editBody', 'بدنه-قبلی')
+            ->assertSeeHtml('wire:model="editBody"')
+            ->set('editBody', 'بدنه-بعدی')
+            ->call('saveEdit')
+            ->assertSet('editing', false);
+
+        $this->assertDatabaseHas('ticket_comments', ['id' => $reply->id, 'body' => 'بدنه-بعدی']);
+    }
+
     /**
      * A second user in the SAME unit holding only the given permissions — the
      * "expert after an individual revocation" shape (no seeded role matches it).

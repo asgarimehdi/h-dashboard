@@ -227,6 +227,30 @@ class TicketCommentsEdgeCasesTest extends TestCase
             ->assertSet('ticket', fn ($ticket) => $ticket && $ticket->comments->count() === 1);
     }
 
+    // #1705: the modal's eager load is scoped to roots, like the API; replies
+    // arrive through each root's `children`, not as top-level comments.
+    public function test_component_loads_only_root_comments(): void
+    {
+        $root = TicketComment::create([
+            'ticket_id' => $this->ticket->id,
+            'user_id' => $this->user->id,
+            'body' => 'ریشه',
+        ]);
+        $reply = TicketComment::create([
+            'ticket_id' => $this->ticket->id,
+            'user_id' => $this->user->id,
+            'parent_id' => $root->id,
+            'body' => 'پاسخ',
+        ]);
+
+        $ticket = Livewire::test('tickets.ticket-comments')
+            ->call('openForTicket', $this->ticket->id)
+            ->get('ticket');
+
+        $this->assertSame([$root->id], $ticket->comments->pluck('id')->all());
+        $this->assertSame([$reply->id], $ticket->comments->first()->children->pluck('id')->all());
+    }
+
     // ==================== ایشو #814 — عبور از تیکت (IDOR) ====================
 
     public function test_author_cannot_edit_comment_belonging_to_another_ticket(): void
