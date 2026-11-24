@@ -156,10 +156,12 @@ class ActivityLogDetailScopeTest extends TestCase
             ->assertDontSee(self::FOREIGN_DESCRIPTION);
     }
 
-    public function test_detail_of_a_log_without_any_person_record_is_not_reachable(): void
+    public function test_detail_of_a_log_whose_actor_has_neither_person_unit_nor_unit_row_is_not_reachable(): void
     {
-        // A log whose user has no `person` row is invisible in the scoped list
-        // (not in getAccessibleUserIds()), so the scoped detail must match it.
+        // An actor with no person-unit AND no user_units row in scope is
+        // invisible in the scoped list (not in getAccessibleUserIds()), so the
+        // scoped detail must match it. ("No person record" is not reachable:
+        // users.n_code is NOT NULL with an ON DELETE RESTRICT FK to persons.)
         $nCode = (string) fake()->unique()->numerify('##########');
         Person::create([
             'n_code' => $nCode, 'f_name' => 'بی‌شخص', 'l_name' => 'کاربر',

@@ -284,6 +284,91 @@ class ActivityLogPageLivewireTest extends TestCase
             ->assertDontSee('ورود کاربر حذف‌شده بیرون از محدوده');
     }
 
+    // ==================== Person-less actors (#1738) ====================
+
+    /**
+     * An account whose person has no unit, but which has a user_units row.
+     * users.n_code is NOT NULL and FKs persons.n_code (ON DELETE RESTRICT),
+     * so "no person row at all" is not a reachable state — a NULL
+     * persons.u_id is.
+     */
+    private function personlessActorIn(Unit $unit): User
+    {
+        $person = Person::factory()->create(['u_id' => null]);
+        $user = User::factory()->create(['n_code' => $person->n_code]);
+        $user->units()->attach($unit->id, ['role' => 'responsible', 'is_primary' => true]);
+
+        return $user;
+    }
+
+    public function test_activity_log_shows_a_person_less_account_in_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $user->givePermissionTo('manage_users');
+        session(['current_unit_id' => $unit->id]);
+        $this->actingAs($user);
+
+        $admin = $this->personlessActorIn($unit);
+        $log = ActivityLog::create([
+            'user_id' => $admin->id,
+            'type' => 'deleted',
+            'description' => 'حذف توسط حساب بدون واحد شخص',
+        ]);
+
+        Livewire::test('activity-log.index')
+            ->assertSee('حذف توسط حساب بدون واحد شخص')
+            ->assertSet('typeStats.deleted', 1)
+            ->call('showDetail', $log->id)
+            ->assertSet('showModal', true)
+            ->assertSet('selectedLog.id', $log->id);
+    }
+
+    public function test_activity_log_hides_a_person_less_account_out_of_scope(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $user->givePermissionTo('manage_users');
+        session(['current_unit_id' => $unit->id]);
+        $this->actingAs($user);
+
+        $foreign = Unit::factory()->create();
+        $admin = $this->personlessActorIn($foreign);
+        $log = ActivityLog::create([
+            'user_id' => $admin->id,
+            'type' => 'deleted',
+            'description' => 'حذف توسط حساب بیرون از محدوده',
+        ]);
+
+        $component = Livewire::test('activity-log.index');
+
+        $component->assertDontSee('حذف توسط حساب بیرون از محدوده');
+        $component->call('showDetail', $log->id)
+            ->assertSet('showModal', false)
+            ->assertSet('selectedLog', null);
+    }
+
+    public function test_activity_log_shows_nobody_when_the_scope_is_empty(): void
+    {
+        $person = Person::factory()->create(['u_id' => null]);
+        $caller = User::factory()->create(['n_code' => $person->n_code]);
+        $caller->givePermissionTo('manage_users');
+        $this->actingAs($caller);
+
+        $unit = Unit::factory()->create();
+        $admin = $this->personlessActorIn($unit);
+        $log = ActivityLog::create([
+            'user_id' => $admin->id,
+            'type' => 'login',
+            'description' => 'ورود حساب بدون واحد شخص',
+        ]);
+
+        $component = Livewire::test('activity-log.index');
+
+        $component->assertDontSee('ورود حساب بدون واحد شخص');
+        $component->call('showDetail', $log->id)
+            ->assertSet('showModal', false)
+            ->assertSet('selectedLog', null);
+    }
+
     // ==================== Pagination ====================
 
     public function test_activity_log_pagination_works(): void
