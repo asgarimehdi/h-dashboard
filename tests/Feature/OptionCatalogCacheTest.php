@@ -70,6 +70,30 @@ test('a warm maintenance render does not re-read unit options', function () {
     expect($reads())->toBe($cold);
 });
 
+test('a warm disease-index search render does not re-read the disease catalogue', function () {
+    $reads = option_cache_reads('select "id", "name_fa", "is_active" from "diseases"');
+
+    $component = Livewire::test('disease.index');
+    $cold = $reads();
+    expect($cold)->toBeGreaterThan(0);
+
+    $component->set('search', 'فشار');
+
+    expect($reads())->toBe($cold);
+});
+
+test('a warm disease-create re-render does not re-read the disease catalogue', function () {
+    $reads = option_cache_reads('select "id", "name_fa", "is_active" from "diseases"');
+
+    $component = Livewire::test('disease.create');
+    $cold = $reads();
+    expect($cold)->toBeGreaterThan(0);
+
+    $component->call('$refresh');
+
+    expect($reads())->toBe($cold);
+});
+
 test('the disease unit filter excludes an inactive base unit but keeps active descendants', function () {
     $child = Unit::factory()->create(['name' => 'واحد فعال ۱۷۶۱', 'parent_id' => $this->actorUnit->id]);
     Unit::factory()->create(['name' => 'واحد بیرون ۱۷۶۱']);
@@ -138,4 +162,27 @@ test('an empty scope does not inherit a warmed wider scope', function () {
     Livewire::test('disease.index')
         ->assertSet('emptyScope', true)
         ->assertDontSee($this->actorUnit->name);
+});
+
+test('a disease write invalidates the catalogue and the two pickers stay separate', function () {
+    $index = Livewire::test('disease.index');
+    $create = Livewire::test('disease.create');
+
+    $active = Disease::factory()->create(['name_fa' => 'بیماری تازه ۱۷۶۱']);
+    $retired = Disease::factory()->create(['name_fa' => 'بیماری بازنشسته ۱۷۶۱', 'is_active' => false]);
+
+    $index->call('$refresh');
+    $create->call('$refresh');
+
+    $indexValues = array_column($index->instance()->diseaseOptions(), 'value');
+    $createValues = array_column($create->instance()->diseaseOptions(), 'value');
+
+    expect($indexValues)->toContain($active->id)
+        ->and($indexValues)->toContain($retired->id);
+    expect($createValues)->toContain($active->id)
+        ->and($createValues)->not->toContain($retired->id);
+});
+
+test('a disease write bumps the disease_catalog namespace', function () {
+    $this->assertCacheInvalidated('disease_catalog', fn () => Disease::factory()->create());
 });

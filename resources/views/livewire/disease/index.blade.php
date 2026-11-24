@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Disease;
 use App\Models\DiseaseCase;
 use App\Models\Unit;
 use App\Rules\AccessibleUnit;
@@ -352,15 +351,7 @@ return new class extends Component
      */
     public function diseaseOptions(): array
     {
-        return Disease::query()
-            ->orderBy('sort')
-            ->orderBy('name_fa')
-            ->get(['id', 'name_fa'])
-            ->map(static fn (mixed $disease): array => [
-                'value' => (int) data_get($disease, 'id'),
-                'label' => (string) data_get($disease, 'name_fa'),
-            ])
-            ->all();
+        return OptionCatalog::diseases(false);
     }
 
     /**

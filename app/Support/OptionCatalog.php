@@ -51,4 +51,35 @@ final class OptionCatalog
 
         return $options;
     }
+
+    /**
+     * @return list<array{value: int, label: string}>
+     */
+    public static function diseases(bool $activeOnly): array
+    {
+        /** @var list<array{value: int, label: string}> $options */
+        $options = app(CacheInvalidationServiceInterface::class)->remember(
+            'disease_catalog',
+            'global',
+            function () use ($activeOnly): array {
+                $query = Disease::query()->orderBy('sort')->orderBy('name_fa');
+
+                if ($activeOnly) {
+                    $query->where('is_active', true);
+                }
+
+                return $query->get(['id', 'name_fa', 'is_active'])
+                    ->map(static fn (Disease $disease): array => [
+                        'value' => (int) $disease->id,
+                        'label' => (string) $disease->name_fa,
+                    ])
+                    ->values()
+                    ->all();
+            },
+            60,
+            ['view' => 'option-catalog.diseases', 'active_only' => $activeOnly],
+        );
+
+        return $options;
+    }
 }
