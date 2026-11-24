@@ -54,6 +54,14 @@ new class extends Component
     public bool $showBulkModal = false;
     public string $bulkAction = '';
     public string $bulkNote = '';
+    // #1690: dedicated bulk-modal destination state. It is deliberately NOT
+    // the single-ticket flow's `targetUnitId`: `openCompletionModal()` never
+    // resets that property (and the cancel button only flips the boolean), so
+    // sharing it would leak a cancelled single-forward destination into the
+    // bulk modal and vice versa.
+    public ?int $bulkTargetUnitId = null;
+    public string $bulkTargetUnitName = '';
+    public string $bulkUnitSearch = '';
 
     // Data properties
     public array $units = [];
@@ -98,6 +106,29 @@ new class extends Component
         $this->applyInboxFilters($query);
 
         return $query->latest()->paginate(20);
+    }
+
+    /**
+     * #1690: the bulk forward destination picker. Same eligibility filter as
+     * `loadData()` (and therefore `App\Rules\TicketTargetUnit`), scoped to the
+     * bulk modal's own search term.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    #[Computed]
+    public function bulkUnits(): array
+    {
+        if (mb_strlen($this->bulkUnitSearch) <= 1) {
+            return [];
+        }
+
+        return Unit::where('name', 'like', '%' . $this->bulkUnitSearch . '%')
+            ->where('can_receive_tickets', true)
+            ->where('is_active', true)
+            ->where('id', '!=', auth()->user()->person?->u_id)
+            ->limit(5)
+            ->get()
+            ->toArray();
     }
 
     /**
@@ -189,6 +220,7 @@ new class extends Component
             'completionNote', 'completionFiles', 'targetUnitId',
             'targetUnitName', 'unitSearch', 'selectedTickets',
             'selectAll', 'showBulkModal', 'bulkAction', 'bulkNote',
+            'bulkTargetUnitId', 'bulkTargetUnitName', 'bulkUnitSearch',
         ]);
     }
 
@@ -278,16 +310,63 @@ new class extends Component
 
     public function openBulkModal($action): void
     {
+        // #1690: an unknown action must not reach the modal — the confirm
+        // button would otherwise call executeBulkAction() with a value the
+        // server has to reject anyway.
+        if (! in_array($action, ['complete', 'forward'], true)) {
+            $this->dispatch('swal', ['title' => 'عملیات دسته‌ای نامعتبر است', 'icon' => 'warning']);
+            return;
+        }
+
         if ($this->selectedTicketsCount() === 0) {
             $this->dispatch('swal', ['title' => 'هیچ تیکتی انتخاب نشده', 'icon' => 'warning']);
             return;
         }
+
+        // #1690: start every open from a clean bulk state — a destination
+        // picked in a previous bulk forward must not survive into the next one.
+        $this->reset(['bulkNote', 'bulkTargetUnitId', 'bulkTargetUnitName', 'bulkUnitSearch']);
+        unset($this->bulkUnits);
+        $this->isCompletionModalOpen = false;
         $this->bulkAction = $action;
         $this->showBulkModal = true;
     }
 
+    /**
+     * #1690: the bulk modal's own cancel. It resets only the bulk-modal state
+     * and keeps `selectedTickets`/`selectAll` — routing this through
+     * `closeAllModals()` would wipe the operator's selection on a mere cancel.
+     */
+    public function closeBulkModal(): void
+    {
+        $this->reset([
+            'showBulkModal', 'bulkAction', 'bulkNote',
+            'bulkTargetUnitId', 'bulkTargetUnitName', 'bulkUnitSearch',
+        ]);
+        unset($this->bulkUnits);
+    }
+
+    public function selectBulkTargetUnit(?int $id): void
+    {
+        // #1690: server-resolved name (never the client's), mirroring the
+        // single-ticket `selectTargetUnit()` — the name is audit/notification
+        // text.
+        $this->bulkTargetUnitId = $id === null ? null : (int) $id;
+        $this->bulkTargetUnitName = (string) (Unit::query()->whereKey($this->bulkTargetUnitId)->value('name') ?? '');
+        $this->bulkUnitSearch = '';
+        unset($this->bulkUnits);
+    }
+
     public function executeBulkAction(): void
     {
+        // #1690: reject an unknown action FIRST — before the selection count,
+        // the permission check and any query. The old code treated it as an
+        // un-gated no-op that still dispatched a success toast.
+        if (! in_array($this->bulkAction, ['complete', 'forward'], true)) {
+            $this->dispatch('swal', ['title' => 'عملیات دسته‌ای نامعتبر است', 'icon' => 'warning']);
+            return;
+        }
+
         // #1040: the effective selection (select-all seen through the page's
         // filter, minus manual un-picks, or the manual picks alone) has to be
         // resolved BEFORE any state reset — this method is also the only
@@ -296,20 +375,31 @@ new class extends Component
             return;
         }
 
-        // Issue #818 / #1624: the bulk `complete` branch closes tickets in
-        // bulk, which is the same state change the single-ticket path needed
-        // `manage_unit_tickets` for. The bulk `forward` branch unassigns
-        // tickets (`current_assignee_id = null`) in bulk — the same state
-        // change the single-ticket `forward()` gates — so it needs the same
-        // permission. The UI hides both buttons behind
+        // Issue #818 / #1624 / #1690: both branches mutate tickets in bulk
+        // (`complete` closes them; `forward` moves them to another unit and
+        // unassigns them) — the same state changes the single-ticket paths
+        // gate on `manage_unit_tickets`. The UI hides both buttons behind
         // `@can('manage_unit_tickets')`, but that is presentation only:
         // Livewire mutators are reachable via `POST /livewire/update`, where
-        // the route gate does not run. Only the two named branches are gated:
-        // an unknown `bulkAction` still falls through to the no-op toast
-        // (`test_execute_bulk_action_unknown_action`).
-        if ($this->bulkAction === 'complete' || $this->bulkAction === 'forward') {
-            $this->authorizeMutation();
-        }
+        // the route gate does not run. Authorizing BEFORE destination
+        // validation keeps an expert at 403 even when no destination is set.
+        $this->authorizeMutation();
+
+        // #1690: destination is mandatory for a real bulk forward (parity with
+        // the single-ticket `forward()`); `complete` ignores it explicitly.
+        $this->validate([
+            'bulkNote' => 'nullable|string|max:500',
+            'bulkTargetUnitId' => $this->bulkAction === 'forward'
+                ? $this->targetUnitRule(required: true)
+                : 'nullable',
+        ]);
+
+        $destinationId = $this->bulkAction === 'forward' ? (int) $this->bulkTargetUnitId : null;
+        // #818: the client-supplied `bulkTargetUnitName` is display state only;
+        // the name written to audit/notification text is re-read from the DB.
+        $destinationName = $destinationId
+            ? (string) Unit::query()->whereKey($destinationId)->value('name')
+            : '';
 
         $now = now();
         $userId = auth()->id();
@@ -326,7 +416,7 @@ new class extends Component
         // bulk. `lockForUpdate()` closes the check-then-act window a
         // concurrent single-ticket transition would otherwise open between
         // resolution and the set-based UPDATE.
-        [$ticketIds, $skippedCount] = DB::transaction(function () use ($accessibleIds, $now, $userId, $bulkNote) {
+        [$ticketIds, $skippedCount] = DB::transaction(function () use ($accessibleIds, $now, $userId, $bulkNote, $destinationId, $destinationName) {
             // ۱. یک کوئری برای همه تیکت‌ها - فیلتر تیکت‌های پایانی (completed/rejected/آرشیوشده) + محدوده سازمانی
             //
             // #1040: «انتخاب همه» is NOT the whole accessible pool any more —
@@ -381,11 +471,12 @@ new class extends Component
             // #1409: one combined pre-read replaces the old-status pluck AND the
             // per-branch re-fetch; ticket_code/task_id feed the batched log insert.
             $ticketExtras = Ticket::whereIn('id', $ticketIds)
-                ->get(['id', 'status', 'ticket_code', 'task_id'])
+                ->get(['id', 'status', 'ticket_code', 'task_id', 'unit_id'])
                 ->keyBy('id');
             $oldStatuses = $ticketExtras->pluck('status', 'id');
             $ticketCodeMap = $ticketExtras->pluck('ticket_code', 'id');
             $taskIdMap = $ticketExtras->pluck('task_id');
+            $unitIdMap = $ticketExtras->pluck('unit_id', 'id');
 
             if ($this->bulkAction === 'complete') {
                 // ۲. یک UPDATE برای همه
@@ -444,7 +535,12 @@ new class extends Component
             }
 
             if ($this->bulkAction === 'forward') {
+                // #1690: a bulk forward now actually MOVES the ticket, exactly
+                // like `TicketsInboxFlow::forward()`: `unit_id` changes, the
+                // ticket becomes `forwarded` (part of the `pending` tab) and
+                // loses its assignee, so it appears in the destination unit.
                 Ticket::whereIn('id', $ticketIds)->update([
+                    'unit_id' => $destinationId,
                     'status' => 'forwarded',
                     'current_assignee_id' => null,
                 ]);
@@ -459,22 +555,23 @@ new class extends Component
                     'ticket_id' => $id,
                     'user_id' => $userId,
                     'action' => 'forwarded',
-                    'description' => 'ارجاع دسته‌ای تیکت' . ($bulkNote ? ": {$bulkNote}" : ''),
+                    'to_unit_id' => $destinationId,
+                    'description' => "ارجاع دسته‌ای تیکت به واحد: {$destinationName}" . ($bulkNote ? " - توضیحات: {$bulkNote}" : ''),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ])->toArray();
                 TaskActivity::insert($activityRows);
 
                 // #1409: one batched INSERT instead of one per ticket
-                $activityLogRows = $ticketIds->map(function ($id) use ($userId, $now, $oldStatuses, $ticketCodeMap) {
+                $activityLogRows = $ticketIds->map(function ($id) use ($userId, $now, $oldStatuses, $ticketCodeMap, $unitIdMap, $destinationId) {
                     return [
                         'user_id' => $userId,
                         'type' => 'updated',
                         'subject_type' => 'App\Models\Ticket',
                         'subject_id' => $id,
                         'description' => 'ارجاع دسته‌ای تیکت ' . ($ticketCodeMap->get($id) ?? ''),
-                        'old_values' => json_encode(['status' => $oldStatuses->get($id)]),
-                        'new_values' => json_encode(['status' => 'forwarded']),
+                        'old_values' => json_encode(['status' => $oldStatuses->get($id), 'unit_id' => $unitIdMap->get($id)]),
+                        'new_values' => json_encode(['status' => 'forwarded', 'unit_id' => $destinationId]),
                         'ip_address' => request()->ip(),
                         'user_agent' => request()->userAgent(),
                         'created_at' => $now,
@@ -483,6 +580,18 @@ new class extends Component
                 })->toArray();
 
                 \App\Models\ActivityLog::query()->insert($activityLogRows);
+
+                // #1690: ONE notification per destination unit (not per
+                // ticket), inside the same transaction as the move — parity
+                // with the single-ticket path. `notifyUnit` early-returns for
+                // a unit with no users; a throw rolls the move back.
+                \App\Services\NotificationService::notifyUnit(
+                    (int) $destinationId,
+                    'ticket_forwarded',
+                    'تیکت ارجاع شد',
+                    "{$ticketIds->count()} تیکت به واحد شما ارجاع شد",
+                    '/tickets/inbox'
+                );
             }
 
             return [$ticketIds, $skippedCount];
@@ -806,6 +915,58 @@ new class extends Component
                 <x-button label="انصراف" @click="$wire.isCompletionModalOpen = false" class="btn-ghost flex-1" />
             </div>
         </x-form>
+    </x-modal>
+
+    {{-- #1690: Bulk Actions modal. `x-modal` is CspModal, whose `data-model`
+         binding needs no JS change. The title deliberately avoids the bulk-bar
+         button labels so the permission-visibility tests keep seeing those
+         labels only where `@can('manage_unit_tickets')` renders them. --}}
+    <x-modal wire:model="showBulkModal"
+        :title="$this->bulkAction === 'forward' ? 'عملیات دسته‌ای — ارجاع تیکت‌ها' : 'عملیات دسته‌ای — تکمیل تیکت‌ها'"
+        separator>
+        <div class="grid gap-4" dir="rtl">
+            @if($this->bulkAction === 'forward')
+            <div class="relative">
+                <x-input label="ارجاع به واحد مقصد:"
+                    wire:model.live="bulkUnitSearch"
+                    placeholder="جستجوی نام واحد..."
+                    icon="o-magnifying-glass" />
+
+                @if(!empty($this->bulkUnits))
+                <div class="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-lg shadow-xl max-h-40 overflow-y-auto">
+                    @foreach($this->bulkUnits as $u)
+                    <button type="button" wire:click="selectBulkTargetUnit({{ $u['id'] }})"
+                        class="w-full text-right px-4 py-2 hover:bg-primary hover:text-white text-sm transition-colors border-b last:border-0">
+                        {{ $u['name'] }}
+                    </button>
+                    @endforeach
+                </div>
+                @endif
+
+                @if($this->bulkTargetUnitId)
+                <div class="mt-2 flex items-center gap-2 text-info text-sm">
+                    <x-icon name="o-check-circle" />
+                    <span class="font-bold">مقصد: {{ $this->bulkTargetUnitName }}</span>
+                    <x-ui.icon-button name="پاک کردن واحد هدف" icon="o-x-mark" wire:click="$set('bulkTargetUnitId', null)" class="btn-ghost btn-xs" />
+                </div>
+                @endif
+
+                @error('bulkTargetUnitId')
+                <div class="mt-2 text-error text-xs">{{ $message }}</div>
+                @enderror
+            </div>
+            @endif
+
+            <x-textarea label="توضیحات (اختیاری):" wire:model="bulkNote" rows="4" />
+
+            <div class="flex gap-4">
+                <x-button type="button"
+                    label="{{ $this->bulkAction === 'forward' ? 'تایید و ارجاع' : 'تکمیل و بستن' }}"
+                    wire:click="executeBulkAction"
+                    class="{{ $this->bulkAction === 'forward' ? 'btn-info' : 'btn-success' }} flex-1" spinner />
+                <x-button type="button" label="انصراف" wire:click="closeBulkModal" class="btn-ghost flex-1" />
+            </div>
+        </div>
     </x-modal>
 
     {{-- Ticket Comments modal --}}

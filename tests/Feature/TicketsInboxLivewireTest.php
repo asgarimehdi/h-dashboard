@@ -1510,20 +1510,24 @@ class TicketsInboxLivewireTest extends TestCase
             ->assertSet('selectAll', false)
             ->assertSet('selectedTickets', []);
 
-        // bulk forward
+        // bulk forward (#1690: a destination is mandatory and the ticket moves)
         $t4 = $this->createTicket(['status' => 'created', 'subject' => 'تیکت چهار']);
+        $forwardTarget = $this->createTargetUnit();
 
         Livewire::test('tickets.inbox')
             ->set('selectedTickets', [$t4->id])
             ->set('bulkAction', 'forward')
+            ->set('bulkTargetUnitId', $forwardTarget->id)
             ->call('executeBulkAction')
             ->assertDispatched('swal');
 
         $t4->refresh();
         $this->assertSame('forwarded', $t4->status);
+        $this->assertSame($forwardTarget->id, $t4->unit_id);
         $this->assertDatabaseHas('task_activities', [
             'ticket_id' => $t4->id,
             'action' => 'forwarded',
+            'to_unit_id' => $forwardTarget->id,
         ]);
     }
 
@@ -1716,10 +1720,12 @@ class TicketsInboxLivewireTest extends TestCase
 
         $forwardable = $this->createTicket(['status' => 'created']);
         $outOfScope = $this->createTicket(['status' => 'created', 'unit' => Unit::factory()->create()]);
+        $target = $this->createTargetUnit();
 
         Livewire::test('tickets.inbox')
             ->set('selectedTickets', [$forwardable->id, $outOfScope->id])
             ->set('bulkAction', 'forward')
+            ->set('bulkTargetUnitId', $target->id)
             ->call('executeBulkAction')
             ->assertDispatched('swal', function ($name, $params) {
                 $title = (string) ($params[0]['title'] ?? '');
@@ -1778,10 +1784,12 @@ class TicketsInboxLivewireTest extends TestCase
             'subject' => 'تیکت ردشده',
             'current_assignee_id' => $user->id,
         ]);
+        $target = $this->createTargetUnit();
 
         Livewire::test('tickets.inbox')
             ->set('selectedTickets', [$open->id, $rejected->id])
             ->set('bulkAction', 'forward')
+            ->set('bulkTargetUnitId', $target->id)
             ->call('executeBulkAction')
             ->assertDispatched('swal', function ($name, $params) {
                 $title = (string) ($params[0]['title'] ?? '');
@@ -1790,6 +1798,7 @@ class TicketsInboxLivewireTest extends TestCase
             });
 
         $this->assertSame('forwarded', $open->fresh()->status);
+        $this->assertSame($target->id, $open->fresh()->unit_id);
 
         $rejected->refresh();
         $this->assertSame('rejected', $rejected->status);
@@ -2522,16 +2531,170 @@ class TicketsInboxLivewireTest extends TestCase
 
         $t = $this->createTicket(['status' => 'created']);
 
+        // #1690: an unknown action is refused BEFORE the permission gate and
+        // never reports success. The old code dispatched a success toast.
         Livewire::test('tickets.inbox')
             ->set('selectedTickets', [$t->id])
             ->set('bulkAction', 'unknown_action')
             ->call('executeBulkAction')
             ->assertDispatched('swal', function ($name, $params) {
-                return str_contains((string) ($params[0]['title'] ?? ''), 'تیکت');
+                return ($params[0]['title'] ?? '') === 'عملیات دسته‌ای نامعتبر است'
+                    && ($params[0]['icon'] ?? '') === 'warning';
             });
 
         $t->refresh();
         $this->assertSame('created', $t->status);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $t->id]);
+    }
+
+    // =====================================================================
+    // #1690 — bulk modal is wired, and bulk forward actually moves tickets
+    // =====================================================================
+
+    public function test_bulk_modal_opens_for_both_actions_and_exposes_confirm(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
+
+        $component = Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->call('openBulkModal', 'forward')
+            ->assertSet('showBulkModal', true)
+            ->assertSet('bulkAction', 'forward')
+            // CspModal renders `data-model` for the plain-boolean open state;
+            // the confirm button is the only UI caller of executeBulkAction().
+            ->assertSeeHtml('data-model="showBulkModal"')
+            ->assertSeeHtml('wire:click="executeBulkAction"');
+
+        // Cancelling closes only the modal — the operator keeps the selection.
+        $component->call('closeBulkModal')
+            ->assertSet('showBulkModal', false)
+            ->assertSet('bulkAction', '')
+            ->assertSet('selectedTickets', [$ticket->id]);
+
+        $component->call('openBulkModal', 'complete')
+            ->assertSet('showBulkModal', true)
+            ->assertSet('bulkAction', 'complete');
+    }
+
+    public function test_bulk_forward_moves_tickets_to_target_unit_and_notifies_once(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit('واحد مقصد نهایی');
+        $recipient = $this->createUserOnUnit($target);
+
+        $open = $this->createTicket(['status' => 'created', 'current_assignee_id' => $user->id]);
+        $previouslyForwarded = $this->createTicket(['status' => 'forwarded']);
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$open->id, $previouslyForwarded->id])
+            ->set('bulkAction', 'forward')
+            ->set('bulkTargetUnitId', $target->id)
+            ->set('bulkNote', 'لطفا بررسی شود')
+            ->call('executeBulkAction')
+            ->assertHasNoErrors()
+            ->assertDispatched('swal');
+
+        foreach ([$open, $previouslyForwarded] as $ticket) {
+            $ticket->refresh();
+            $this->assertSame('forwarded', $ticket->status);
+            $this->assertSame($target->id, $ticket->unit_id);
+            $this->assertNull($ticket->current_assignee_id);
+
+            $activity = TaskActivity::query()
+                ->where('ticket_id', $ticket->id)
+                ->where('action', 'forwarded')
+                ->firstOrFail();
+            $this->assertSame($target->id, $activity->to_unit_id);
+            $this->assertStringContainsString('واحد مقصد نهایی', (string) $activity->description);
+            $this->assertStringContainsString('لطفا بررسی شود', (string) $activity->description);
+        }
+
+        // One notification per destination unit — not one per ticket.
+        $this->assertSame(1, DB::table('notifications')
+            ->where('user_id', $recipient->id)
+            ->where('type', 'ticket_forwarded')
+            ->count());
+    }
+
+    public function test_bulk_forward_without_target_unit_moves_nothing(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'created', 'current_assignee_id' => $user->id]);
+        $originUnitId = $ticket->unit_id;
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->set('bulkAction', 'forward')
+            ->call('executeBulkAction')
+            ->assertHasErrors(['bulkTargetUnitId']);
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+        $this->assertSame($originUnitId, $ticket->unit_id);
+        $this->assertSame($user->id, $ticket->current_assignee_id);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+        $this->assertSame(0, DB::table('notifications')->where('type', 'ticket_forwarded')->count());
+    }
+
+    public function test_bulk_forward_rejects_ineligible_target_unit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد غیرقابل دریافت',
+            'is_active' => true,
+            'can_receive_tickets' => false,
+        ]);
+
+        $ticket = $this->createTicket(['status' => 'created']);
+        $originUnitId = $ticket->unit_id;
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->set('bulkAction', 'forward')
+            ->set('bulkTargetUnitId', $target->id)
+            ->call('executeBulkAction')
+            ->assertHasErrors(['bulkTargetUnitId']);
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+        $this->assertSame($originUnitId, $ticket->unit_id);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'forwarded',
+        ]);
+    }
+
+    public function test_bulk_complete_ignores_bulk_target_unit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit('واحد مقصد تکمیل');
+        $ticket = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
+        $originUnitId = $ticket->unit_id;
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->set('bulkAction', 'complete')
+            ->set('bulkTargetUnitId', $target->id)
+            ->call('executeBulkAction')
+            ->assertHasNoErrors();
+
+        $ticket->refresh();
+        $this->assertSame('completed', $ticket->status);
+        $this->assertSame($originUnitId, $ticket->unit_id);
     }
 
     // =====================================================================
