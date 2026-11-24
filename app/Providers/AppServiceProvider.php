@@ -36,8 +36,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -67,6 +69,35 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // #1729: Livewire funnels every server-side action (import previews,
+        // global search, GIS, bulk ticket/hardware actions) through one update
+        // endpoint. Its default route carries only the `web` group, so a single
+        // client can loop expensive actions with no budget — guests included,
+        // because /login is itself a Livewire component. This is an
+        // endpoint-wide last line, not a replacement for per-action budgets.
+        //
+        // 120/min, not the 60 of `api-user`: the import pages poll every 3s
+        // (20/min per page, 40/min with two tabs) and `wire:model.live`
+        // debounces at 150ms, so typing a search emits roughly one call per
+        // key. 120 is still a ~2 req/s ceiling.
+        // `optional()` (not `?->`) is the repo's null-safe spelling here: the
+        // limiter must survive a guest (the /login page is Livewire) and
+        // PHPStan rejects `?->` on a non-nullable `user()` signature.
+        RateLimiter::for('livewire-update', function ($request) {
+            return Limit::perMinute(120)->by(
+                optional($request->user())->id ?? $request->ip()
+            );
+        });
+
+        // #1729: re-register the update route with that limiter. `web` must be
+        // listed first: StartSession/Auth must run before the limiter so
+        // `$request->user()` sees the session user (guests fall back to IP).
+        // Livewire appends RequireLivewireHeaders itself; the separate upload
+        // route keeps its own throttle:60,1.
+        Livewire::setUpdateRoute(function ($handle, $path) {
+            return Route::post($path, $handle)->middleware(['web', 'throttle:livewire-update']);
+        });
+
         // Per-user API rate limiter (replaces IP-based throttle)
         RateLimiter::for('api-user', function ($request) {
             return Limit::perMinute(60)->by(
