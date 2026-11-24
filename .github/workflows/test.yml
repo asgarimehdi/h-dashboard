@@ -72,6 +72,17 @@ jobs:
           composer validate --strict --check-lock
           git diff --exit-code -- composer.lock
 
+      # Issue #1749. Tinker and Boost are developer-only tooling; they used to
+      # sit in `require`, so every `composer install --no-dev` production host
+      # shipped an interactive REPL and a local MCP server with a database
+      # query tool. `composer validate` cannot catch the torn state (moving the
+      # package in composer.json but leaving it in lock `packages` changes only
+      # `content-hash`), so this asserts the production surface directly: no
+      # policy package in `require`/`packages`, and every lock `packages` entry
+      # reachable from the `require` roots.
+      - name: Assert no dev-only package is a production dependency (#1749)
+        run: php scripts/assert-prod-dependency-surface.php
+
       # Issue #953. A tracked env file committed with a real APP_KEY leaks the
       # master secret: it encrypts session payloads and signs the cookie MAC,
       # so anyone holding it can mint a cookie for any account. Blanking the

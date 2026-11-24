@@ -10,6 +10,8 @@
 #                 (--fast narrows it to the paths given on the command line)
 # 3b. dead files— no test file may run zero tests (issue #935)
 # 3c. lookup seed— no test file may hand-roll lookup seeding (issue #1044)
+# 3d. prod deps — no developer-only package may sit in the production
+#                 dependency surface (issue #1749)
 # 4. phpstan    — level 6 with the committed baseline, the exact CI command
 #                 (--fast SKIPS this; the banner says so)
 # 5. pest       — the full suite, or the paths given as arguments
@@ -136,6 +138,19 @@ step "Hand-rolled lookup seeding"
 if ! php scripts/find-hand-rolled-lookup-seeding.php; then
     echo ""
     echo "✗ Hand-rolled lookup seeding. Use InteractsWithTestSetup::seedLookupTables()."
+    exit 1
+fi
+
+# 3d. Production dependency surface (issue #1749). Tinker and Boost are
+# developer-only tooling; both used to sit in `require`, so `composer install
+# --no-dev` shipped them to every production host. `composer validate
+# --check-lock` passes on the torn state (package moved in composer.json but
+# still in lock `packages`), so the invariant is asserted directly. Cheap, and
+# it needs no database.
+step "Production dependency surface"
+if ! php scripts/assert-prod-dependency-surface.php; then
+    echo ""
+    echo "✗ Developer-only package in the production dependency surface. See above."
     exit 1
 fi
 
