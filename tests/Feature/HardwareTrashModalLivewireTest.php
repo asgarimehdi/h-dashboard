@@ -352,6 +352,31 @@ class HardwareTrashModalLivewireTest extends TestCase
         ]);
     }
 
+    public function test_restore_recreates_equals_prefixed_value_without_excel_escape(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $original = '=SUM(A1:A2)';
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-RestoreEq',
+            'comments' => $original,
+        ]);
+        $audit = $this->getCreatedAudit($hw);
+
+        $hw->delete();
+        $this->assertDatabaseMissing('hardwares', ['id' => $hw->id]);
+
+        Livewire::test('hardware.index')
+            ->call('restoreRecord', $audit->id);
+
+        $restored = Hardware::where('pc_name', 'PC-RestoreEq')->first();
+        $this->assertNotNull($restored);
+        $this->assertSame($original, $restored->comments);
+    }
+
     public function test_restore_denied_without_ncode_in_changes(): void
     {
         $data = $this->createUserWithUnit(['manage_hardware']);

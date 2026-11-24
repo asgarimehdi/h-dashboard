@@ -26,4 +26,23 @@ final class ExcelCell
 
         return "'".$value;
     }
+
+    /**
+     * Restore-side inverse of {@see self::escape()}.
+     *
+     * Only the exact shape escape() produces is reversed: a leading single
+     * quote followed by '='. A value that merely starts with a quote (e.g.
+     * "'abc") passes through untouched.
+     *
+     * LIMITATION: a genuine value that starts with "'=" is indistinguishable
+     * from an escaped "=..." value and loses its apostrophe on restore —
+     * escape() is not injective over that input (see #1748).
+     *
+     * Use ONLY when reading a stored audit value back for a restore write.
+     * Export and display paths must keep the escaped form (#886).
+     */
+    public static function unescape(string $value): string
+    {
+        return str_starts_with($value, "'=") ? substr($value, 1) : $value;
+    }
 }

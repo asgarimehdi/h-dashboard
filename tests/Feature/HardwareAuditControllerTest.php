@@ -238,6 +238,43 @@ class HardwareAuditControllerTest extends TestCase
         ]);
     }
 
+    public function test_rollback_restores_equals_prefixed_value_without_excel_escape(): void
+    {
+        $original = '=SUM(A1:A2)';
+
+        $this->hardware->update(['comments' => $original]);
+        $this->hardware->update(['comments' => 'plain']);
+
+        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')
+            ->latest('id')
+            ->first();
+
+        // The audit trail keeps the escaped form (#886); only the restore read
+        // is expected to invert it.
+        $this->assertSame("'".$original, $audit->changes[0]['old']);
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost(
+            "/api/hardware/{$this->hardware->id}/audits/{$audit->id}/rollback",
+            ['field' => 'comments'],
+            $token
+        );
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertSame($original, $this->hardware->fresh()->comments);
+
+        // The rollback row certifies the same escaped storage contract.
+        $rollback = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'rollback')
+            ->latest('id')
+            ->first();
+        $this->assertNotNull($rollback);
+        $this->assertSame("'".$original, $rollback->changes[0]['new']);
+    }
+
     public function test_rollback_refuses_stale_field_value(): void
     {
         $this->hardware->update(['cpu' => 'Intel i7']);            // A→B
@@ -300,6 +337,45 @@ class HardwareAuditControllerTest extends TestCase
             'pc_name' => 'TEST-PC-001',
             'cpu' => 'Intel i5',
         ]);
+    }
+
+    public function test_restore_record_restores_equals_prefixed_value_without_excel_escape(): void
+    {
+        $original = '=SUM(A1:A2)';
+
+        $hardware = Hardware::create([
+            'n_code' => $this->user->n_code,
+            'pc_name' => 'RESTORE-EQ-001',
+            'type' => 'pc',
+            'os' => 'Windows 11',
+            'cpu' => 'Intel i5',
+            'ram' => '8192',
+            'hdd' => 'SSD 256GB',
+            'mark' => false,
+            'shutdown' => false,
+            'comments' => $original,
+        ]);
+
+        $createdAudit = HardwareAudit::where('hardware_id', $hardware->id)
+            ->where('action', 'created')
+            ->first();
+
+        $this->assertSame(
+            "'".$original,
+            collect($createdAudit->changes)->firstWhere('field', 'comments')['new']
+        );
+
+        $hardware->forceDelete();
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read', 'hardware:write']);
+        $response = $this->apiPost("/api/hardware/audits/{$createdAudit->id}/restore-record", [], $token);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $restored = Hardware::where('pc_name', 'RESTORE-EQ-001')->first();
+        $this->assertNotNull($restored);
+        $this->assertSame($original, $restored->comments);
     }
 
     public function test_restore_record_rejects_non_created_audit(): void

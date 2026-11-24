@@ -7,6 +7,7 @@ use App\Models\HardwareAudit;
 use App\Models\User;
 use App\Observers\HardwareAuditObserver;
 use App\Services\HardwareAuditScope;
+use App\Support\ExcelCell;
 use App\Support\HardwareAuditChange;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -343,6 +344,10 @@ trait HardwareIndexHelpers
      */
     private function restoreAuditValue(string $displayValue, string $field): mixed
     {
+        // #1748: stored audit values are ExcelCell::escape()'d; invert that
+        // before the sentinel checks so the column gets the stored value back.
+        $displayValue = ExcelCell::unescape($displayValue);
+
         if ($displayValue === '—') {
             return null;
         }

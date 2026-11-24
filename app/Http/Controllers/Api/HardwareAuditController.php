@@ -11,6 +11,7 @@ use App\Models\Person;
 use App\Observers\HardwareAuditObserver;
 use App\Rules\PerPage;
 use App\Services\HardwareAuditScope;
+use App\Support\ExcelCell;
 use App\Support\HardwareAuditChange;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -433,6 +434,12 @@ class HardwareAuditController extends Controller
      */
     protected function parseValueForRestore(string $displayValue, string $field): mixed
     {
+        // #1748: the audit trail stores ExcelCell::escape()'d strings; undo
+        // that before type parsing so the column gets the value that was
+        // stored, not the export-safe form. Must stay ahead of the JSON branch
+        // — a stored "=[...]" value is a plain string, not an array.
+        $displayValue = ExcelCell::unescape($displayValue);
+
         if ($displayValue === '—') {
             return null;
         }

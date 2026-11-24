@@ -56,6 +56,17 @@ class ExcelFormulaEscapeTest extends TestCase
         $this->assertNull(ExcelCell::escape(null));
     }
 
+    public function test_unescape_reverses_escape_only_for_equals_prefixed_values(): void
+    {
+        // #1748: the restore paths read the stored, escaped form back into a
+        // column, so they need the exact inverse of escape().
+        $this->assertSame(self::PAYLOAD, ExcelCell::unescape(ExcelCell::escape(self::PAYLOAD)));
+        $this->assertSame('=', ExcelCell::unescape("'="));
+        $this->assertSame('-1+2', ExcelCell::unescape('-1+2'));
+        $this->assertSame("'abc", ExcelCell::unescape("'abc"));
+        $this->assertSame('', ExcelCell::unescape(''));
+    }
+
     public function test_persons_export_escapes_formula_payload(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['kargozini']);
