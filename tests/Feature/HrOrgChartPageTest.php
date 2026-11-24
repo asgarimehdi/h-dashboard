@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Person;
 use App\Models\Unit;
+use App\Models\User;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -136,6 +138,84 @@ class HrOrgChartPageTest extends TestCase
         $this->assertNotNull($selectedUnit);
         $this->assertEquals($unit->id, $selectedUnit->id);
         $this->assertNotNull($component->get('selectedPersonnel'));
+    }
+
+    /**
+     * Issue #1746: the personnel list must be capped in SQL, not after
+     * hydration, and assigned users must be counted instead of loaded.
+     */
+    public function test_select_unit_caps_personnel_in_sql_and_counts_assigned_users(): void
+    {
+        // UserFactory::configure() creates a Person in the lowest-id unit, so
+        // the extra user must be created BEFORE the target unit exists — its
+        // Person must not land inside the target unit.
+        $extraUser = User::factory()->create();
+
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        $extraUser->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => false]);
+
+        // createUserWithUnit() already seeded one Person in the target unit.
+        Person::factory()
+            ->count(max(0, 25 - Person::where('u_id', $unit->id)->count()))
+            ->create(['u_id' => $unit->id]);
+
+        $this->assertSame(25, Person::where('u_id', $unit->id)->count());
+
+        $component = Livewire::test('hr.org-chart');
+
+        // The listener must start after mount(): loadPersonCounts() runs a
+        // grouped COUNT in mount and must not fall inside the assertion window.
+        $statements = [];
+        DB::listen(function ($query) use (&$statements): void {
+            $statements[] = $query->sql;
+        });
+
+        $component->call('selectUnit', $unit->id);
+
+        // Snapshot the window: later assertions in this test also query persons.
+        $during = $statements;
+
+        // 20 rows, deterministic set/order, total still counts the whole unit.
+        $personnel = $component->get('selectedPersonnel');
+        $this->assertCount(20, $personnel);
+        $this->assertSame(25, $component->get('selectedPersonnelTotal'));
+        $this->assertSame(
+            array_map('intval', Person::where('u_id', $unit->id)->orderBy('id')->limit(20)->pluck('id')->all()),
+            array_map('intval', $personnel->pluck('id')->all()),
+        );
+
+        // The cap lives in the SQL, not after hydration.
+        $personSelects = array_values(array_filter(
+            $during,
+            fn (string $sql): bool => str_contains($sql, 'from "persons"')
+                && str_contains($sql, '"u_id" = ?')
+                && ! str_contains($sql, 'count(*)'),
+        ));
+        $this->assertCount(1, $personSelects);
+        $this->assertStringContainsString('limit 20', $personSelects[0]);
+
+        // The total still counts the whole unit (aggregate without LIMIT).
+        $countSelects = array_values(array_filter(
+            $during,
+            fn (string $sql): bool => str_contains($sql, 'count(*)')
+                && str_contains($sql, 'from "persons"')
+                && str_contains($sql, '"u_id" = ?'),
+        ));
+        $this->assertNotEmpty($countSelects);
+        $this->assertStringNotContainsString('limit', $countSelects[0]);
+
+        // assignedUsers is counted, never hydrated.
+        $selectedUnit = $component->get('selectedUnit');
+        $this->assertFalse($selectedUnit->relationLoaded('assignedUsers'));
+        $this->assertSame(2, (int) $selectedUnit->assigned_users_count);
+        $this->assertSame(2, $component->get('directUserCount'));
+
+        $this->assertSame([], array_values(array_filter(
+            $during,
+            fn (string $sql): bool => str_contains($sql, 'select "users".*, "user_units".'),
+        )));
     }
 
     public function test_unauthorized_select_unit_ignored_with_error_toast(): void
