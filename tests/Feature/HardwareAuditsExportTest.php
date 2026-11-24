@@ -357,6 +357,21 @@ class HardwareAuditsExportTest extends TestCase
         $this->assertSame("'=1+1", $cell);
     }
 
+    public function test_a_stored_escaped_payload_exports_escaped_and_never_as_a_formula(): void
+    {
+        // #1748: the restore paths unescape the stored form; the export must
+        // keep reading it as stored (#886) and must never start a cell with '='.
+        $audit = $this->storedAudit('updated', [
+            ['field' => 'comments', 'old' => "'=SUM(A1:A2)", 'new' => 'plain'],
+        ]);
+
+        $cell = (string) $this->export()->map($audit)[self::CHANGES_COLUMN];
+
+        $this->assertStringStartsNotWith('=', $cell);
+        $this->assertStringContainsString("'=SUM(A1:A2)", $cell);
+        $this->assertSame("'=SUM(A1:A2)", $audit->fresh()->changes[0]['old']);
+    }
+
     public function test_mapping_does_not_mutate_the_stored_payload(): void
     {
         $audit = $this->storedAudit('updated', [

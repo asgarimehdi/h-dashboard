@@ -113,6 +113,34 @@ it('rollbackHistoryField restores field value and logs rollback', function () {
     ]);
 });
 
+it('rollbackHistoryField restores an equals-prefixed value without the excel escape', function () {
+    [$user, $hardware] = makeAuditLivewireUser();
+
+    $original = '=SUM(A1:A2)';
+    $hardware->update(['comments' => $original]);
+    $hardware->update(['comments' => 'plain']);
+
+    $audit = HardwareAudit::where('hardware_id', $hardware->id)
+        ->where('action', 'updated')
+        ->latest('id')
+        ->first();
+
+    expect($audit->changes[0]['old'])->toBe("'".$original);
+
+    Livewire::actingAs($user)->test('hardware.index')
+        ->call('loadHistory', $hardware->id)
+        ->call('rollbackHistoryField', $audit->id, 'comments')
+        ->assertHasNoErrors();
+
+    expect($hardware->fresh()->comments)->toBe($original);
+
+    $rollback = HardwareAudit::where('hardware_id', $hardware->id)
+        ->where('action', 'rollback')
+        ->latest('id')
+        ->first();
+    expect($rollback->changes[0]['new'])->toBe("'".$original);
+});
+
 it('rollbackHistoryField refuses a stale audit row', function () {
     [$user, $hardware] = makeAuditLivewireUser();
 

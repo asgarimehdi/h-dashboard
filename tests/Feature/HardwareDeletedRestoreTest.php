@@ -7,6 +7,7 @@ use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
 use App\Observers\HardwareAuditObserver;
+use App\Support\ExcelCell;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
@@ -27,6 +28,8 @@ beforeEach(function () {
  */
 function simulateRestoreAuditValue(string $displayValue, string $field): mixed
 {
+    $displayValue = ExcelCell::unescape($displayValue);
+
     if ($displayValue === '\u2014') {
         return null;
     }
