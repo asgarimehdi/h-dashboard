@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\PersonController;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
+use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
@@ -144,6 +145,62 @@ class PersonApiTest extends TestCase
         $this->assertDatabaseHas('persons', ['n_code' => $person->n_code]);
         $this->assertDatabaseHas('hardwares', ['n_code' => $person->n_code]);
         $this->assertNotNull(Hardware::where('n_code', $person->n_code)->first()->person);
+    }
+
+    public function test_delete_person_with_user_account_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $existingPerson = Person::first();
+
+        $person = Person::factory()->create([
+            'n_code' => '4444444444',
+            'u_id' => $unit->id,
+            't_id' => $existingPerson->t_id,
+            'e_id' => $existingPerson->e_id,
+            's_id' => $existingPerson->s_id,
+            'r_id' => $existingPerson->r_id,
+        ]);
+        $account = User::factory()->create(['n_code' => $person->n_code]);
+
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+        $response = $this->apiDelete("/api/persons/{$person->n_code}", $token);
+
+        // Issue #1720: users.n_code is a RESTRICT FK — refuse with a reason, never 500.
+        $response->assertStatus(422);
+        $this->assertStringContainsString('user account', (string) $response->json('message'));
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code]);
+        $this->assertDatabaseHas('users', ['id' => $account->id, 'n_code' => $person->n_code]);
+    }
+
+    /**
+     * Issue #1720: "deleting" a user only soft-deletes it, so the users row
+     * survives and still trips the RESTRICT FK. The pre-check must see it.
+     */
+    public function test_delete_person_with_deactivated_user_account_is_refused(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $existingPerson = Person::first();
+
+        $person = Person::factory()->create([
+            'n_code' => '5555555555',
+            'u_id' => $unit->id,
+            't_id' => $existingPerson->t_id,
+            'e_id' => $existingPerson->e_id,
+            's_id' => $existingPerson->s_id,
+            'r_id' => $existingPerson->r_id,
+        ]);
+        $account = User::factory()->create(['n_code' => $person->n_code]);
+        $account->delete();
+        $this->assertSoftDeleted('users', ['id' => $account->id]);
+
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+        $response = $this->apiDelete("/api/persons/{$person->n_code}", $token);
+
+        // Same reason as the active-account case, not the generic race-catch message.
+        $response->assertStatus(422);
+        $this->assertStringContainsString('user account', (string) $response->json('message'));
+        $this->assertStringContainsString('deactivated accounts included', (string) $response->json('message'));
+        $this->assertDatabaseHas('persons', ['n_code' => $person->n_code]);
     }
 
     public function test_create_person_requires_required_fields(): void
