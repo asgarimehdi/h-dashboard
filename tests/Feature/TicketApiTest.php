@@ -124,6 +124,73 @@ class TicketApiTest extends TestCase
         $this->assertSame($expected, $keys, 'The list shape must stay unchanged apart from dropping content.');
     }
 
+    /**
+     * #1751: the page query must select exactly the allowlist and must never
+     * pull the TEXT `content` column. The anti-vacuous `assertCount(1, …)` is
+     * load-bearing: without it the test would pass on an empty query log.
+     */
+    public function test_index_page_query_selects_the_allowlist_without_content(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        Ticket::create([
+            'ticket_code' => 'T-HEAVY', 'user_id' => $user->id, 'unit_id' => $unit->id,
+            'subject' => 'Heavy', 'content' => str_repeat('م', 20000),
+            'priority' => 'normal', 'status' => 'created',
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read']);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->apiGet('/api/tickets', $token)->assertStatus(200);
+        $log = collect(DB::getQueryLog())->pluck('query');
+        DB::disableQueryLog();
+
+        $pageQueries = $log->filter(fn (string $sql): bool => str_starts_with($sql, 'select ')
+            && str_contains($sql, ' from "tickets"')
+            && ! str_contains($sql, 'count(*)'));
+
+        $this->assertCount(1, $pageQueries, 'exactly one tickets page query expected');
+
+        $sql = (string) $pageQueries->first();
+
+        $this->assertStringNotContainsString('"content"', $sql);
+
+        preg_match('/^select (.+?) from "tickets"/s', $sql, $m);
+        $columns = array_map(fn (string $c): string => trim($c, ' "'), explode(',', $m[1]));
+        sort($columns);
+
+        $expected = [
+            'id', 'ticket_code', 'subject', 'priority', 'status', 'user_id', 'unit_id',
+            'current_assignee_id', 'deadline', 'accepted_at', 'completed_at', 'created_at', 'updated_at',
+        ];
+        sort($expected);
+        $this->assertSame($expected, $columns, 'the list query must select exactly the allowlist.');
+    }
+
+    /**
+     * #1751: an FK column dropped from the allowlist nulls its relation
+     * silently, so assert the relation VALUES, not just their keys.
+     */
+    public function test_index_relations_still_resolve_after_explicit_select(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $assignee = $this->createSecondUserInUnit($unit);
+
+        $ticket = Ticket::create([
+            'ticket_code' => 'T-REL', 'user_id' => $user->id, 'unit_id' => $unit->id,
+            'subject' => 'Relations', 'content' => '', 'priority' => 'normal', 'status' => 'created',
+        ]);
+        $ticket->update(['current_assignee_id' => $assignee->id]);
+
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $this->apiGet('/api/tickets', $token)
+            ->assertStatus(200)
+            ->assertJsonPath('data.0.unit.id', $unit->id)
+            ->assertJsonPath('data.0.user.n_code', $user->n_code)
+            ->assertJsonPath('data.0.assignee.n_code', $assignee->n_code);
+    }
+
     public function test_user_can_show_ticket(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');

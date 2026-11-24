@@ -36,6 +36,23 @@ class TicketController extends Controller
 
     private const TRANSITION_MISSING = 'missing';
 
+    /**
+     * #1751: explicit column list for the ticket LIST payload. `content` is a
+     * TEXT column (up to 20000 chars on write) that `TicketResource` never
+     * returns — the list resource deliberately omits it (#1189). `task_id`,
+     * `schedule_id` and `archived_at` are internal bookkeeping and equally
+     * unread here. Field names in the payload are unchanged.
+     *
+     * Must stay in sync with TicketResource::toArray() and keep every key an
+     * eager load matches on (`user_id`, `unit_id`, `current_assignee_id`) —
+     * a missing FK column silently nulls the relation.
+     */
+    private const TICKET_LIST_COLUMNS = [
+        'id', 'ticket_code', 'subject', 'priority', 'status',
+        'user_id', 'unit_id', 'current_assignee_id',
+        'deadline', 'accepted_at', 'completed_at', 'created_at', 'updated_at',
+    ];
+
     public function index(UnitScopedRequest $request): AnonymousResourceCollection
     {
         $request->validate([
@@ -46,6 +63,7 @@ class TicketController extends Controller
         $user = $request->user();
 
         $query = Ticket::whereIn('unit_id', $request->accessibleIds())
+            ->select(self::TICKET_LIST_COLUMNS)
             ->with(['unit:id,name', 'user:id,n_code', 'assignee:id,n_code']);
 
         if ($request->filled('status')) {
