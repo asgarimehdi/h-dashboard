@@ -3,13 +3,16 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\GisController;
+use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Session;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -370,5 +373,109 @@ class GisApiTest extends TestCase
 
         $this->assertSame($key1, $key2);
         $this->assertSame($key1, $key3);
+    }
+
+    /**
+     * Every shape a client can get wrong: part count, non-numeric parts,
+     * reversed axes, a degenerate box, and out-of-range coordinates.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function malformedBboxSamples(): array
+    {
+        return [
+            'three parts' => ['48,36,49'],
+            'five parts' => ['48,36,49,37,5'],
+            'non numeric' => ['abc,def,ghi,jkl'],
+            'partially non numeric' => ['48,36,abc,37'],
+            'reversed lon' => ['49,36,48,37'],
+            'reversed lat' => ['48,37,49,36'],
+            'degenerate' => ['48,36,48,37'],
+            'out of range lon' => ['-181,36,49,37'],
+            'out of range lat' => ['48,-91,49,37'],
+        ];
+    }
+
+    /**
+     * #1721: a malformed viewport used to be a silent 200 — full data for a
+     * 3/5-part box, empty data for a non-numeric 4-part box. It must be a 422
+     * on every GIS endpoint, not an ignored filter.
+     */
+    #[DataProvider('malformedBboxSamples')]
+    public function test_every_gis_endpoint_rejects_a_malformed_bbox(string $bbox): void
+    {
+        ['user' => $user] = $this->createBBoxUser();
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        foreach (['units', 'hardware', 'tickets', 'stats', 'clusters'] as $endpoint) {
+            $this->apiGet("/api/gis/{$endpoint}?bbox=".urlencode($bbox), $token)
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('bbox');
+        }
+    }
+
+    /**
+     * An array bbox used to reach `explode(',', array)` and 500 (#1721).
+     *
+     * @test
+     */
+    public function test_gis_rejects_an_array_bbox_instead_of_500(): void
+    {
+        ['user' => $user] = $this->createBBoxUser();
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        $this->apiGet('/api/gis/units?bbox[]=1', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('bbox');
+    }
+
+    /**
+     * An empty bbox means "no viewport", not "invalid viewport" (#1721).
+     *
+     * @test
+     */
+    public function test_gis_treats_an_empty_bbox_as_absent(): void
+    {
+        ['user' => $user] = $this->createBBoxUser();
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        $this->apiGet('/api/gis/units?bbox=', $token)->assertStatus(200);
+    }
+
+    /**
+     * A rejected viewport never reaches the cache, so it cannot write an
+     * unfiltered payload under any key (#1721).
+     *
+     * @test
+     */
+    public function test_malformed_bbox_never_touches_the_cache(): void
+    {
+        ['user' => $user] = $this->createBBoxUser();
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        Cache::spy();
+        Cache::shouldReceive('remember')->never();
+
+        $this->apiGet('/api/gis/units?bbox=48,36,49', $token)->assertStatus(422);
+    }
+
+    /**
+     * The cache key format for a valid viewport is unchanged by #1721
+     * (4 decimals, `all` only when the parameter is absent).
+     *
+     * @test
+     */
+    public function test_normalized_bbox_key_format_is_unchanged(): void
+    {
+        $controller = $this->app->make(GisController::class);
+
+        $method = new \ReflectionMethod($controller, 'normalizedBbox');
+        $method->setAccessible(true);
+
+        $withBbox = UnitScopedRequest::create('/api/gis/units', 'GET', ['bbox' => '48.47163,36.669343,49,37']);
+        $withoutBbox = UnitScopedRequest::create('/api/gis/units', 'GET');
+
+        $this->assertSame('48.4716,36.6693,49,37', $method->invoke($controller, $withBbox));
+        $this->assertSame('all', $method->invoke($controller, $withoutBbox));
     }
 }

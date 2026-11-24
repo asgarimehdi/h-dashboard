@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\GisRequest;
 use App\Http\Requests\UnitScopedRequest;
 use App\Models\Hardware;
 use App\Models\Ticket;
@@ -22,22 +23,20 @@ class GisController extends Controller
 
     /**
      * Apply bbox spatial filter using lat/lng columns (works without geom column).
+     *
+     * The viewport has already been validated into an array by GisRequest, so
+     * there is no "malformed means unfiltered" branch left (#1721).
      */
     protected function applyBbox($query, UnitScopedRequest $request)
     {
-        if (! $request->filled('bbox')) {
+        $box = $request->bboxOrNull();
+
+        if ($box === null) {
             return $query;
         }
 
-        $bbox = explode(',', $request->bbox);
-        if (count($bbox) !== 4) {
-            return $query;
-        }
-
-        [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
-
-        $query->whereBetween('lat', [$minLat, $maxLat])
-            ->whereBetween('lng', [$minLon, $maxLon]);
+        $query->whereBetween('lat', [$box['minLat'], $box['maxLat']])
+            ->whereBetween('lng', [$box['minLon'], $box['maxLon']]);
 
         return $query;
     }
@@ -47,19 +46,14 @@ class GisController extends Controller
      */
     protected function applyBboxAliased($query, UnitScopedRequest $request)
     {
-        if (! $request->filled('bbox')) {
+        $box = $request->bboxOrNull();
+
+        if ($box === null) {
             return $query;
         }
 
-        $bbox = explode(',', $request->bbox);
-        if (count($bbox) !== 4) {
-            return $query;
-        }
-
-        [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
-
-        $query->whereBetween('units.lat', [$minLat, $maxLat])
-            ->whereBetween('units.lng', [$minLon, $maxLon]);
+        $query->whereBetween('units.lat', [$box['minLat'], $box['maxLat']])
+            ->whereBetween('units.lng', [$box['minLon'], $box['maxLon']]);
 
         return $query;
     }
@@ -70,22 +64,17 @@ class GisController extends Controller
      */
     protected function normalizedBbox(UnitScopedRequest $request): string
     {
-        if (! $request->filled('bbox')) {
+        $box = $request->bboxOrNull();
+
+        if ($box === null) {
             return 'all';
         }
-
-        $bbox = explode(',', $request->bbox);
-        if (count($bbox) !== 4) {
-            return 'all';
-        }
-
-        [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
 
         return implode(',', [
-            round($minLon, 4),
-            round($minLat, 4),
-            round($maxLon, 4),
-            round($maxLat, 4),
+            round($box['minLon'], 4),
+            round($box['minLat'], 4),
+            round($box['maxLon'], 4),
+            round($box['maxLat'], 4),
         ]);
     }
 
@@ -110,7 +99,7 @@ class GisController extends Controller
      * Get units as GeoJSON FeatureCollection within spatial bounds.
      * Query params: bbox (minLon,minLat,maxLon,maxLat)
      */
-    public function units(UnitScopedRequest $request): JsonResponse
+    public function units(GisRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
@@ -157,7 +146,7 @@ class GisController extends Controller
      * Get hardware as GeoJSON FeatureCollection with parent unit location.
      * Query params: bbox, type, shutdown, mark
      */
-    public function hardware(UnitScopedRequest $request): JsonResponse
+    public function hardware(GisRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
@@ -251,7 +240,7 @@ class GisController extends Controller
      * Get tickets as GeoJSON FeatureCollection with unit location.
      * Query params: bbox, priority, status
      */
-    public function tickets(UnitScopedRequest $request): JsonResponse
+    public function tickets(GisRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
@@ -325,7 +314,7 @@ class GisController extends Controller
      * Get summary stats for current viewport.
      * Query params: bbox
      */
-    public function stats(UnitScopedRequest $request): JsonResponse
+    public function stats(GisRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
@@ -334,17 +323,13 @@ class GisController extends Controller
         $data = Cache::remember($cacheKey, now()->addMinutes(60), function () use ($accessibleIds, $request) {
             // Build bbox conditions once and reuse across all three counts (#402)
             $bboxConditions = [];
-            if ($request->filled('bbox')) {
-                $bbox = explode(',', $request->bbox);
-                if (count($bbox) === 4) {
-                    [$minLon, $minLat, $maxLon, $maxLat] = array_map('floatval', $bbox);
-                    $bboxConditions = [
-                        ['units.lat', '>=', $minLat],
-                        ['units.lat', '<=', $maxLat],
-                        ['units.lng', '>=', $minLon],
-                        ['units.lng', '<=', $maxLon],
-                    ];
-                }
+            if (($box = $request->bboxOrNull()) !== null) {
+                $bboxConditions = [
+                    ['units.lat', '>=', $box['minLat']],
+                    ['units.lat', '<=', $box['maxLat']],
+                    ['units.lng', '>=', $box['minLon']],
+                    ['units.lng', '<=', $box['maxLon']],
+                ];
             }
 
             // Units count (in bbox)
@@ -383,7 +368,7 @@ class GisController extends Controller
      * Get clustered units for low zoom levels.
      * Query params: zoom, bbox
      */
-    public function clusters(UnitScopedRequest $request): JsonResponse
+    public function clusters(GisRequest $request): JsonResponse
     {
         $accessibleIds = $request->accessibleIds();
         $bbox = $this->normalizedBbox($request);
