@@ -3469,4 +3469,120 @@ class TicketsInboxLivewireTest extends TestCase
             'action' => 'forwarded',
         ]);
     }
+
+    // =====================================================================
+    // #1768 — completion-modal state
+    // =====================================================================
+
+    public function test_cancelling_completion_modal_clears_note_files_and_target(): void
+    {
+        Storage::fake('local');
+
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $a = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
+        $b = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
+        $file = UploadedFile::fake()->create('a.pdf', 10, 'application/pdf');
+
+        Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $a->id)
+            ->assertSeeHtml('wire:click="closeCompletionModal"')
+            ->set('completionNote', 'یادداشت تیکت الف')
+            ->set('completionFiles', [$file])
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
+            ->set('unitSearch', 'مقصد')
+            ->call('closeCompletionModal')
+            ->assertSet('isCompletionModalOpen', false)
+            ->assertSet('completionNote', '')
+            ->assertSet('completionFiles', [])
+            ->assertSet('targetUnitId', null)
+            ->assertSet('targetUnitName', '')
+            ->assertSet('unitSearch', '')
+            ->call('openCompletionModal', $b->id)
+            ->assertSet('isCompletionModalOpen', true)
+            ->assertSet('showingTicketId', $b->id)
+            ->assertSet('completionNote', '')
+            ->assertSet('completionFiles', [])
+            ->assertSet('targetUnitId', null);
+    }
+
+    public function test_client_side_completion_modal_close_resets_its_state(): void
+    {
+        Storage::fake('local');
+
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $ticket = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
+        $file = UploadedFile::fake()->create('a.pdf', 10, 'application/pdf');
+
+        Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $ticket->id)
+            ->set('completionNote', 'پیش‌نویس')
+            ->set('completionFiles', [$file])
+            ->set('targetUnitId', $target->id)
+            // CspModal's ✕/backdrop/Escape do exactly this (`$wire.set(...)`).
+            ->set('isCompletionModalOpen', false)
+            ->assertSet('completionNote', '')
+            ->assertSet('completionFiles', [])
+            ->assertSet('targetUnitId', null)
+            ->assertSet('targetUnitName', '')
+            ->assertSet('unitSearch', '');
+    }
+
+    public function test_close_detail_closes_completion_modal_and_submit_without_ticket_toasts(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->call('openCompletionModal', $ticket->id)
+            ->set('completionNote', 'گزارش نهایی')
+            ->call('closeDetail')
+            ->assertSet('showModal', false)
+            ->assertSet('showingTicketId', null)
+            ->assertSet('isCompletionModalOpen', false)
+            ->assertSet('completionNote', '')
+            // Stale-form submit: must toast, not findOrFail(null) → 404.
+            ->call('submitAction')
+            ->assertDispatched('swal', function ($name, $params) {
+                return ($params[0]['icon'] ?? null) === 'warning';
+            })
+            ->assertSet('isCompletionModalOpen', false);
+
+        $this->assertSame('accepted', $ticket->fresh()->status);
+        $this->assertDatabaseMissing('task_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'completed',
+        ]);
+    }
+
+    public function test_cancelling_completion_modal_keeps_an_open_detail_modal_on_its_ticket(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+            'content' => 'محتوای یکتای تیکت الف',
+        ]);
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->call('openCompletionModal', $ticket->id)
+            ->set('completionNote', 'پیش‌نویس')
+            ->call('closeCompletionModal')
+            ->assertSet('showModal', true)
+            ->assertSet('showingTicketId', $ticket->id)
+            ->assertSet('isCompletionModalOpen', false)
+            ->assertSee('محتوای یکتای تیکت الف');
+    }
 }
