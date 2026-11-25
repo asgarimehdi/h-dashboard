@@ -68,6 +68,14 @@ return Application::configure(basePath: dirname(__DIR__))
         // generation.
         $schedule->command('imports:prune-sheets')->dailyAt('05:15')->withoutOverlapping(60);
 
+        // #1820: /api/login mints a token on every call and no prior token is
+        // revoked, so guard-expired rows accumulated in personal_access_tokens.
+        // 05:30 sits between imports:prune-sheets (05:15) and
+        // reports:generate-daily (06:00). Sanctum keeps its default 24h grace,
+        // so a row is removed once created_at passes expiration+24h (48h with
+        // the default 1440-minute token lifetime).
+        $schedule->command('sanctum:prune-expired')->dailyAt('05:30')->withoutOverlapping(60);
+
         // Report generation — daily at 06:00 Tehran time
         // Issue #1021: withoutOverlapping() so a slow run cannot stack on the
         // next one, matching the Zabbix entry below. This stays a command rather
