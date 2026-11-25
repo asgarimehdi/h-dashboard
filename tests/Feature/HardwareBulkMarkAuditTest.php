@@ -2,14 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Events\HardwareUpdated;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -22,8 +20,8 @@ use Tests\TestCase;
  * `bulkMark()` used a mass update, which fires no model events, and wrote no
  * audit at all — so every web bulk mark was invisible in the audit history
  * while the identical API call was audited. These tests pin the write, the
- * changed-rows-only filter (#1670), the actor/metadata, the suppression window
- * and the event dispatch parity.
+ * changed-rows-only filter (#1670), the actor/metadata and the suppression
+ * window.
  */
 covers(Hardware::class);
 
@@ -171,23 +169,5 @@ class HardwareBulkMarkAuditTest extends TestCase
         // the `finally` — a leaked flag would silently mute every later audit.
         $this->assertNull(request()->attributes->get('suppress_audit'));
         $this->assertFalse(Hardware::$suppressAudit);
-    }
-
-    public function test_web_bulk_mark_dispatches_the_hardware_updated_event(): void
-    {
-        Event::fake([HardwareUpdated::class]);
-
-        $data = $this->createUserWithHardware(1);
-        $this->actingAs($data['user']);
-        Session::put('current_unit_id', $data['unit']->id);
-
-        $id = $data['hardware'][0]->id;
-        $this->webBulkMark([$id], true);
-
-        Event::assertDispatched(
-            HardwareUpdated::class,
-            fn (HardwareUpdated $event): bool => $event->action === 'bulk_mark'
-                && $event->hardware->id === $id
-        );
     }
 }

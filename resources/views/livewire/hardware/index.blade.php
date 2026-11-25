@@ -1,6 +1,5 @@
 <?php
 
-use App\Events\HardwareUpdated;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\Person;
@@ -523,13 +522,12 @@ return new class extends Component
         }
 
         // After the commit, synchronously — not inside the transaction and not
-        // via `afterCommit()`: no listener reads uncommitted rows, and
-        // `flushStatsCache()` touches no database.
+        // via `afterCommit()`: `flushStatsCache()` touches no database.
 
-        // #1026/#1675: parity with the API path — listeners on HardwareUpdated
-        // and the stats cache must see a web bulk mark too.
-        app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {
-            event(new HardwareUpdated($hardwares->first(), 'bulk_mark'));
+        // #1026/#1675: parity with the API path — the stats cache must see a web
+        // bulk mark too. Invalidation is `Hardware::flushStatsCache()`; there is
+        // no event listener.
+        app(CacheInvalidationServiceInterface::class)->batch(function () {
             Hardware::flushStatsCache(); // Issue #376: bulk update bypasses Eloquent events
         });
 
@@ -635,11 +633,9 @@ return new class extends Component
             request()->attributes->remove('suppress_audit');
         }
 
-        // #1026: parity with the API path — listeners on HardwareUpdated and the
-        // stats cache must see a web bulk delete too. After the commit,
-        // synchronously — see bulkMark().
-        app(CacheInvalidationServiceInterface::class)->batch(function () use ($hardwares) {
-            event(new HardwareUpdated($hardwares->first(), 'bulk_deleted'));
+        // #1026: parity with the API path — the stats cache must see a web bulk
+        // delete too. After the commit, synchronously — see bulkMark().
+        app(CacheInvalidationServiceInterface::class)->batch(function () {
             Hardware::flushStatsCache(); // Issue #376: bulk delete bypasses Eloquent events
         });
 
