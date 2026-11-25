@@ -99,6 +99,78 @@ test('whitespace-only query does not search', function () {
         ->assertSet('results.units', []);
 });
 
+test('percent wildcards do not match every row', function () {
+    $this->actingAs($this->user);
+    $this->user->givePermissionTo(['view_all_tickets', 'manage_users']);
+
+    Ticket::create([
+        'user_id' => $this->user->id,
+        'unit_id' => $this->unit->id,
+        'ticket_code' => 'TKT-'.uniqid(),
+        'subject' => 'QwxAlpha',
+        'content' => 'x',
+        'status' => 'created',
+        'priority' => 'urgent',
+    ]);
+
+    Todo::create([
+        'title' => 'QwxAlpha',
+        'start_at' => now(),
+        'unit_id' => $this->unit->id,
+        'user_id' => $this->user->id,
+    ]);
+
+    $component = Livewire::test('search.index')->set('query', '%%')->call('search');
+
+    expect($component->get('hasSearched'))->toBeTrue()
+        ->and($component->get('results'))->toBe([
+            'tickets' => [], 'todos' => [], 'users' => [], 'units' => [],
+        ]);
+});
+
+test('underscore matches only a literal underscore', function () {
+    $this->actingAs($this->user);
+    $this->user->givePermissionTo('view_all_tickets');
+
+    foreach (['Qwx_One', 'QwxXOne'] as $subject) {
+        Ticket::create([
+            'user_id' => $this->user->id,
+            'unit_id' => $this->unit->id,
+            'ticket_code' => 'TKT-'.uniqid(),
+            'subject' => $subject,
+            'content' => 'x',
+            'status' => 'created',
+            'priority' => 'urgent',
+        ]);
+    }
+
+    $tickets = Livewire::test('search.index')
+        ->set('query', 'Qwx_O')
+        ->call('search')
+        ->get('results.tickets');
+
+    expect(array_column($tickets, 'subject'))->toBe(['Qwx_One']);
+});
+
+test('escaping does not fold persian variants', function () {
+    $this->actingAs($this->user);
+
+    $zwnj = 'حرفه'."\u{200C}".'ای';   // U+200C inside the word
+    $arabicYeh = 'عل'."\u{064A}";     // U+064A (Arabic yeh)
+
+    Unit::create(['name' => $zwnj, 'parent_id' => $this->unit->id]);
+    Unit::create(['name' => $arabicYeh, 'parent_id' => $this->unit->id]);
+
+    foreach ([$zwnj, $arabicYeh] as $q) {
+        $names = array_column(
+            Livewire::test('search.index')->set('query', $q)->call('search')->get('results.units'),
+            'name'
+        );
+
+        expect($names)->toContain($q);
+    }
+});
+
 test('search page filters tickets by query', function () {
     $this->actingAs($this->user);
     $this->user->givePermissionTo('view_all_tickets');

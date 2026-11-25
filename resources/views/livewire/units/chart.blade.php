@@ -3,12 +3,14 @@
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
+use App\Traits\PersianNormalizer;
 use Illuminate\Support\Collection;
 use Livewire\Component;
 use Mary\Traits\Toast;
 
 return new class extends Component
 {
+    use PersianNormalizer;
     use Toast;
 
     public bool $showHelpModal = false;
@@ -86,8 +88,15 @@ return new class extends Component
         $this->expanded = [];
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        if (strlen($this->search) > 2) {
-            $matchingUnits = Unit::where('name', 'LIKE', "%{$this->search}%")
+        // Issue #1722: characters, not bytes. The old `strlen() > 2` guard
+        // counted bytes, so two Persian letters (4 bytes) passed while the
+        // intent is "more than 2 characters" (#1483 fixed the same bug in
+        // search/index.blade.php). The scope `whereIn` stays unconditional:
+        // [] must compile to 0 = 1, never be skipped.
+        $term = trim($this->search);
+
+        if (mb_strlen($term) > 2) {
+            $matchingUnits = Unit::where('name', 'LIKE', '%'.self::escapeLikeWildcards($term).'%')
                 ->whereIn('id', $accessibleIds)
                 ->get();
 

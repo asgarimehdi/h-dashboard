@@ -2797,7 +2797,7 @@ parameters:
 			path: resources/views/livewire/roles/index.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/search/index\.blade\.php\:13\:\:\$results type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/search/index\.blade\.php\:14\:\:\$results type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/search/index.blade.php
@@ -3115,37 +3115,37 @@ parameters:
 			path: resources/views/livewire/tools/tools.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:expandFirstNLevels\(\) return type has no value type specified in iterable type array\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:11\:\:expandFirstNLevels\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:expandParents\(\) has parameter \$unit with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:11\:\:expandParents\(\) has parameter \$unit with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:toggle\(\) has parameter \$id with no type specified\.$#'
+			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:11\:\:toggle\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:\$expanded type has no value type specified in iterable type array\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:11\:\:\$expanded type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:\$rootUnits has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:11\:\:\$rootUnits has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:10\:\:\$selectedUnit has no type specified\.$#'
+			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:11\:\:\$selectedUnit has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
 			path: resources/views/livewire/units/chart.blade.php
