@@ -42,19 +42,30 @@ class ArchiveActivityLogsJob implements ShouldQueue
 
     public function handle(): int
     {
+        $isOrgWide = $this->unitIds === [];
+
         // Org-wide retention (empty $unitIds) is every live user, including
         // accounts whose person has no usable unit — and, if such a row could
         // ever exist, accounts with no person row at all. Never resolve
         // accessibleUnitIds() here: it is request-scoped and always [] on a
         // worker, so the job would silently delete nothing (#836). A caller that
         // wants a scoped run passes $unitIds (the Tools page does, #950).
-        $userIds = $this->unitIds === []
+        //
+        // Null-actor rows are written by design (queue/scheduler paths,
+        // `logAs(null)` on restore, and `ON DELETE SET NULL`). `whereIn('user_id',
+        // …)` can never match them, so an org-wide run sweeps them separately. A
+        // scoped run deliberately skips them: no column attributes a null row to
+        // a unit, and a unit manager's cleanup must not erase org-wide audit
+        // history (#1804).
+        $userIds = $isOrgWide
             ? User::query()->pluck('id')->toArray()
             : User::whereHas('person', fn ($q) => $q->whereIn('u_id', $this->unitIds))
                 ->pluck('id')
                 ->toArray();
 
-        if (empty($userIds)) {
+        // A scoped run with no users has nothing to do. An org-wide run with no
+        // live users must still sweep null-actor rows, so it cannot early-return.
+        if (! $isOrgWide && $userIds === []) {
             Log::info('ArchiveActivityLogsJob: no users in scope, nothing archived');
 
             return 0;
@@ -62,16 +73,30 @@ class ArchiveActivityLogsJob implements ShouldQueue
 
         $cutoff = now()->subDays($this->days);
         $deleted = 0;
+        $nullActorDeleted = 0;
 
-        ActivityLog::whereIn('user_id', $userIds)
-            ->where('created_at', '<', $cutoff)
-            ->orderBy('id')
-            ->chunkById(1000, function ($logs) use (&$deleted) {
-                ActivityLog::whereIn('id', $logs->pluck('id'))->delete();
-                $deleted += $logs->count();
-            });
+        if ($userIds !== []) {
+            ActivityLog::whereIn('user_id', $userIds)
+                ->where('created_at', '<', $cutoff)
+                ->orderBy('id')
+                ->chunkById(1000, function ($logs) use (&$deleted) {
+                    ActivityLog::whereIn('id', $logs->pluck('id'))->delete();
+                    $deleted += $logs->count();
+                });
+        }
 
-        Log::info("ArchiveActivityLogsJob: deleted {$deleted} activity logs older than {$this->days} days");
+        if ($isOrgWide) {
+            ActivityLog::whereNull('user_id')
+                ->where('created_at', '<', $cutoff)
+                ->orderBy('id')
+                ->chunkById(1000, function ($logs) use (&$deleted, &$nullActorDeleted) {
+                    ActivityLog::whereIn('id', $logs->pluck('id'))->delete();
+                    $deleted += $logs->count();
+                    $nullActorDeleted += $logs->count();
+                });
+        }
+
+        Log::info("ArchiveActivityLogsJob: deleted {$deleted} activity logs older than {$this->days} days (null-actor: {$nullActorDeleted})");
 
         return $deleted;
     }
