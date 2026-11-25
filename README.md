@@ -15,7 +15,7 @@ Health Dashboard is a Laravel application for managing hospital/healthcare cente
 - Hardware inventory tracking with audit history
 - Interactive GIS map with PostGIS spatial queries
 - Ticket system with assignment and workflow
-- Todo management with recurring tasks
+- Todo management
 - HR dashboard with org charts and analytics
 - Bilingual UI (RTL Persian/English)
 

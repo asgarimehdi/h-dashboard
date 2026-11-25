@@ -58,7 +58,6 @@ class ScheduledJobInfrastructureTest extends TestCase
         }
 
         $this->assertContains('cache:prune-stale', $commands);
-        $this->assertContains('todos:generate-recurring', $commands);
         $this->assertContains('maintenance:generate-due', $commands);
         $this->assertContains('data:archive', $commands);
         $this->assertContains('backup:prune-archives', $commands);
@@ -82,25 +81,24 @@ class ScheduledJobInfrastructureTest extends TestCase
         $events = $this->app->make(Schedule::class)->events();
 
         $this->assertCount(
-            8,
+            7,
             $events,
-            'the schedule must keep exactly the eight registered items — zero means the wiring was dropped'
+            'the schedule must keep exactly the seven registered items — zero means the wiring was dropped'
         );
     }
 
     /**
-     * #1305: the three writers that had no overlap guard. The expiry is pinned
+     * #1305: the writers that had no overlap guard. The expiry is pinned
      * too: the default 1440 minutes is the entire interval of a daily run, so a
      * crashed run would hold the lock until the next start.
      */
-    public function test_the_three_writers_hold_a_bounded_overlap_lock(): void
+    public function test_the_writers_hold_a_bounded_overlap_lock(): void
     {
         $this->bootConsoleSchedule();
 
         $events = $this->app->make(Schedule::class)->events();
 
         $expected = [
-            'todos:generate-recurring' => 60,
             'maintenance:generate-due' => 60,
             'data:archive' => 120,
         ];
@@ -139,12 +137,6 @@ class ScheduledJobInfrastructureTest extends TestCase
     public function test_prune_stale_cache_command_runs(): void
     {
         $exitCode = Artisan::call('cache:prune-stale');
-        $this->assertEquals(0, $exitCode);
-    }
-
-    public function test_generate_recurring_todos_command_runs(): void
-    {
-        $exitCode = Artisan::call('todos:generate-recurring');
         $this->assertEquals(0, $exitCode);
     }
 

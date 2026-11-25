@@ -43,9 +43,6 @@ return Application::configure(basePath: dirname(__DIR__))
         // 60 minutes leaves the dailies ~23 hours to recover; 120 fits the
         // weekly archive. `data:archive` also locks inside the command, which
         // is what stops a manual run racing the scheduled one.
-        // Recurring todos — daily at 02:00 Tehran time
-        $schedule->command('todos:generate-recurring')->dailyAt('02:00')->withoutOverlapping(60);
-
         // Maintenance tasks — daily at 03:00 Tehran time
         $schedule->command('maintenance:generate-due')->dailyAt('03:00')->withoutOverlapping(60);
 

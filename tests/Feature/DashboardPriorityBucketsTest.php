@@ -44,7 +44,6 @@ class DashboardPriorityBucketsTest extends TestCase
             'unit_id' => $unit->id,
             'title' => 'Nightly generator check',
             'frequency' => 'monthly',
-            'recurrence_interval' => 1,
             'next_due_at' => now()->subDay(),
         ]);
         $this->artisan('maintenance:generate-due')->assertExitCode(0);

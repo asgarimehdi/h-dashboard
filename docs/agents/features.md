@@ -251,18 +251,17 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 ## Scheduler & Console Commands
 
-**Five commands plus one queued job** are scheduled in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864, landed by PR #896). The previous home, `app/Console/Kernel.php`, was never bound (`withKernels()` binds the framework's base console kernel), so the schedule silently never ran; that file is deleted — do not recreate it. The commands all take `--dry-run`, except `cache:prune-stale` — since #981 it is an audit-only report and takes no options:
+**Four commands plus one queued job** are scheduled in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864, landed by PR #896). The previous home, `app/Console/Kernel.php`, was never bound (`withKernels()` binds the framework's base console kernel), so the schedule silently never ran; that file is deleted — do not recreate it. The commands all take `--dry-run`, except `cache:prune-stale` — since #981 it is an audit-only report and takes no options:
 
 | Scheduled item | Schedule |
 |---|---|
 | `cache:prune-stale` | hourly |
-| `todos:generate-recurring` | daily 02:00, `->withoutOverlapping(60)` |
 | `maintenance:generate-due` | daily 03:00, `->withoutOverlapping(60)` |
 | `data:archive` | weekly (Mon 04:00), `->withoutOverlapping(120)` + in-command lock |
 | `reports:generate-daily` | daily 06:00, `->withoutOverlapping()` |
 | `SyncZabbixJob` (queued, **not** the `zabbix:sync` command) | `everyFiveMinutes()`, `->withoutOverlapping()` |
 
-**Lock expiry is explicit on the three writers (#1305)** — the `withoutOverlapping()` default of 1440 minutes is the entire interval of a daily run, so a crashed run would hold the lock right up to the next start. `data:archive` also takes `Cache::lock('command:data:archive', 6h)` inside `ArchiveOldRecords`, because the schedule lock is only read on the `Schedule::run()` path and a manual `php artisan data:archive` would otherwise race it. There is no `--force` flag: an emergency manual run releases the lock with `Cache::lock('command:data:archive', 1)->forceRelease()`.
+**Lock expiry is explicit on the two writers (#1305)** — the `withoutOverlapping()` default of 1440 minutes is the entire interval of a daily run, so a crashed run would hold the lock right up to the next start. `data:archive` also takes `Cache::lock('command:data:archive', 6h)` inside `ArchiveOldRecords`, because the schedule lock is only read on the `Schedule::run()` path and a manual `php artisan data:archive` would otherwise race it. There is no `--force` flag: an emergency manual run releases the lock with `Cache::lock('command:data:archive', 1)->forceRelease()`.
 
 `zabbix:sync` (plan 018) is **no longer scheduled** — the schedule dispatches `SyncZabbixJob` instead, so a slow Zabbix API can never block the scheduler. Run `php artisan zabbix:sync` manually when you need the command.
 
