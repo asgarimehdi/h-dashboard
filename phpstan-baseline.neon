@@ -433,60 +433,6 @@ parameters:
 			path: app/Imports/AbstractImportPipeline.php
 
 		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:clean\(\) has parameter \$value with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:detectChanges\(\) has parameter \$newData with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:detectChanges\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:findExistingRecord\(\) has parameter \$data with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:findExistingRecord\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:getImportResults\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:mapRowToData\(\) has parameter \$row with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:mapRowToData\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:normalizeForComparison\(\) has parameter \$value with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
 			message: '#^Method App\\Imports\\HardwareImport\:\:parseBoolean\(\) has parameter \$value with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
@@ -499,43 +445,7 @@ parameters:
 			path: app/Imports/HardwareImport.php
 
 		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:setAccessibleUnitIds\(\) has parameter \$ids with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Method App\\Imports\\HardwareImport\:\:setSelectedActions\(\) has parameter \$actions with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Property App\\Imports\\HardwareImport\:\:\$accessibleUnitIds type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
 			message: '#^Property App\\Imports\\HardwareImport\:\:\$existingPersons type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Property App\\Imports\\HardwareImport\:\:\$existingRecords type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Property App\\Imports\\HardwareImport\:\:\$importResults type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Imports/HardwareImport.php
-
-		-
-			message: '#^Property App\\Imports\\HardwareImport\:\:\$selectedActions type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: app/Imports/HardwareImport.php
