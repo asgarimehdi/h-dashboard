@@ -237,7 +237,7 @@ return new class extends Component
 
             if ($user = $person->user) {
                 app(AccessService::class)->clearCache($user);
-                $user->units()->syncWithoutDetaching([$this->u_id => ['role' => 'staff', 'is_primary' => true]]);
+                $user->setPrimaryUnit((int) $this->u_id);
             }
 
             $this->success('شخص به‌روزرسانی شد');
@@ -264,7 +264,7 @@ return new class extends Component
 
             if ($user = $person->user) {
                 app(AccessService::class)->clearCache($user);
-                $user->units()->syncWithoutDetaching([$this->u_id => ['role' => 'staff', 'is_primary' => true]]);
+                $user->setPrimaryUnit((int) $this->u_id);
             }
 
             $this->success('شخص جدید ثبت شد');
