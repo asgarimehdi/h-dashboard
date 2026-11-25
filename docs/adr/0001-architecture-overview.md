@@ -16,7 +16,7 @@
 ## سیستم
 
 Laravel 13 روی PHP ^8.4. رابط کاربری Livewire 4 + MaryUI/DaisyUI + Alpine.js،
-کاملاً RTL و فارسی. دو مصرف‌کننده دارد: وب‌UI، و اپ موبایل Flutter (توکن Sanctum).
+کاملاً RTL و فارسی. مصرف‌کنندهٔ فعلی فقط وب‌UI است؛ توکن‌های Sanctum وجود دارند اما فعلاً هیچ کلاینت موبایل واقعی‌ای از API استفاده نمی‌کند.
 PostgreSQL 16 + PostGIS برای داده هندسی؛ Redis برای cache/session/queue.
 
 اندازه‌ی ریپو: ۶۱ کامپوننت Livewire، ۱۰۰ فایل PHP زیر `app/`، ۱۹۲ فایل زیر `tests/`.
