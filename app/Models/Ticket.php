@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AttachmentFiles;
 use App\Traits\HasOrganizationalScope;
 use Carbon\Carbon;
 use Database\Factories\TicketFactory;
@@ -11,7 +12,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * @property int $id
@@ -243,7 +243,9 @@ class Ticket extends Model
                 ->all();
 
             if ($paths !== []) {
-                Storage::disk('local')->delete($paths);
+                // The traversal guard (`..`) and the legacy-prefix
+                // normalisation live in the shared helper (#1776).
+                AttachmentFiles::delete($paths);
             }
 
             $ids = $attachments->pluck('id')->all();

@@ -285,4 +285,25 @@ class TicketAttachmentCleanupTest extends TestCase
         Storage::disk('local')->assertExists('attachments/report.pdf');
         $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
     }
+
+    public function test_a_ticket_delete_with_a_traversal_path_keeps_the_real_file(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        [, $ticket, $attachment] = $this->createTicketWithAttachment('report.pdf');
+
+        $attachment->update(['file_path' => 'attachments/../attachments/report.pdf']);
+
+        $user = User::find($ticket->user_id);
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+
+        $this->apiDelete("/api/tickets/{$ticket->id}", $token)->assertStatus(200);
+
+        // The ticket path used to delete the raw path — which the OS resolves
+        // to the real file. It now shares AttachmentFiles' guard (#1776), so a
+        // `..` segment must delete nothing.
+        Storage::disk('local')->assertExists('attachments/report.pdf');
+        $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
+    }
 }
