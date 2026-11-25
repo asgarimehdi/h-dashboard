@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\UnitController;
+use App\Models\DiseaseCase;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
+use App\Models\UnitPopulation;
 use App\Models\UnitType;
 use App\Models\User;
 use App\Services\CacheInvalidationServiceInterface;
@@ -330,6 +332,33 @@ class UnitApiTest extends TestCase
             ->assertJson([
                 'message' => 'Cannot delete unit.',
                 'blockers' => ['persons' => 3, 'todos' => 2],
+            ]);
+    }
+
+    /**
+     * #1791: the two RESTRICT FKs added by the disease/population feature are
+     * now counted, so the API reports them instead of letting the delete fail
+     * at the database and return a bare 422.
+     */
+    public function test_delete_refusal_reports_disease_and_population_blockers(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $target = Unit::create(['name' => 'Diseased', 'parent_id' => $unit->id]);
+        DiseaseCase::factory()->create(['unit_id' => $target->id]);
+        UnitPopulation::create([
+            'unit_id' => $target->id,
+            'year' => now()->year,
+            'population' => 100,
+        ]);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiDelete("/api/units/{$target->id}", $token);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'message' => 'Cannot delete unit.',
+                'blockers' => ['disease_cases' => 1, 'populations' => 1],
             ]);
     }
 

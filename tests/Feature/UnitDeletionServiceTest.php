@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\DiseaseCase;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
+use App\Models\UnitPopulation;
 use App\Models\User;
 use App\Services\UnitDeletionImpact;
 use App\Services\UnitDeletionService;
@@ -19,9 +21,9 @@ use Tests\TestCase;
 /**
  * #949 steps 2–3 — the impact report that runs before any delete.
  *
- * `units` has eight inbound foreign keys and the two `RESTRICT` ones were the
- * only ones the code guarded. The other six do what the database tells them to,
- * quietly: `persons.u_id`, `todos.unit_id` → NULL, `user_units` → CASCADE.
+ * `units` has eleven inbound foreign keys and the five `RESTRICT` ones were the
+ * only ones the database guarded. The other six do what the database tells them
+ * to, quietly: `persons.u_id`, `todos.unit_id` → NULL, `user_units` → CASCADE.
  * This service is the single place that knows what a delete would destroy, so
  * the Livewire list and the API controller cannot drift apart on it.
  *
@@ -193,5 +195,83 @@ class UnitDeletionServiceTest extends TestCase
             'todos' => 1,
             'accounts' => 1,
         ], $impact->blockers());
+    }
+
+    /**
+     * #1791: `disease_cases.unit_id` is a plain RESTRICT FK. Before the count
+     * existed, the delete reached the database and failed there, and the UI
+     * reported it as «هم‌زمان تغییری رخ داد» even though nothing changed
+     * concurrently.
+     */
+    public function test_disease_case_on_recording_unit_blocks_the_delete(): void
+    {
+        $unit = Unit::factory()->create();
+        DiseaseCase::factory()->create(['unit_id' => $unit->id]);
+
+        $impact = $this->impact($unit);
+
+        $this->assertSame(1, $impact->diseaseCases);
+        $this->assertSame(1, $impact->blockers()['disease_cases']);
+        $this->assertFalse($impact->isClear());
+    }
+
+    /**
+     * #1791: the main regression. A case whose patient belongs to this unit
+     * but was recorded elsewhere still RESTRICTs this unit's delete through
+     * `subject_unit_id`; counting only `unit_id` would miss it.
+     */
+    public function test_disease_case_on_subject_unit_only_blocks_the_delete(): void
+    {
+        $unit = Unit::factory()->create();
+        $otherUnit = Unit::factory()->create();
+        DiseaseCase::factory()->create([
+            'unit_id' => $otherUnit->id,
+            'subject_unit_id' => $unit->id,
+        ]);
+
+        $impact = $this->impact($unit);
+
+        $this->assertSame(1, $impact->diseaseCases);
+        $this->assertSame(1, $impact->blockers()['disease_cases']);
+        $this->assertFalse($impact->isClear());
+    }
+
+    /**
+     * #1791: `unit_populations.unit_id` is a plain RESTRICT FK. Only leaf
+     * units own a row, and a delete must refuse rather than fail at the
+     * database.
+     */
+    public function test_unit_population_blocks_the_delete(): void
+    {
+        $unit = Unit::factory()->create();
+        UnitPopulation::create([
+            'unit_id' => $unit->id,
+            'year' => now()->year,
+            'population' => 100,
+        ]);
+
+        $impact = $this->impact($unit);
+
+        $this->assertSame(1, $impact->populations);
+        $this->assertSame(1, $impact->blockers()['populations']);
+        $this->assertFalse($impact->isClear());
+    }
+
+    /**
+     * #1791: one row can match both unit columns. The blocker is the number of
+     * rows that would block the delete, never the sum of two column counts.
+     */
+    public function test_disease_case_matching_both_columns_is_counted_once(): void
+    {
+        $unit = Unit::factory()->create();
+        DiseaseCase::factory()->create([
+            'unit_id' => $unit->id,
+            'subject_unit_id' => $unit->id,
+        ]);
+
+        $impact = $this->impact($unit);
+
+        $this->assertSame(1, $impact->diseaseCases);
+        $this->assertSame(1, $impact->blockers()['disease_cases']);
     }
 }

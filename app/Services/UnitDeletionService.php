@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * #949 steps 2–3 — the impact report that has to run before any unit delete.
  *
- * Six counts, one service, two callers (`units.index::deleteUnit` and
+ * Eight counts, one service, two callers (`units.index::deleteUnit` and
  * `UnitController::destroy`). It exists so the Livewire list and the JSON API
  * cannot drift apart on what "safe to delete" means — which is exactly how the
  * API became strictly weaker than the UI while both claimed to guard deletes.
@@ -21,8 +21,11 @@ use Illuminate\Support\Facades\DB;
  * `maintenance_schedules` (issue #876's approved contract — counting it here
  * would take that issue's decision away from it), plus `daily_reports` and
  * `task_activities`, which are reporting and audit history rather than live
- * operational data. The FK survey that started this found eight inbound
- * constraints and six non-RESTRICT ones; five of those six are counted below.
+ * operational data. The FK survey that started this found eleven inbound
+ * constraints and six non-RESTRICT ones; three of those six are counted below.
+ * The two #1791 counts (`disease_cases`, `unit_populations`) are themselves
+ * `RESTRICT` and stop the delete at the database, so they are counted here to
+ * refuse it with a reason instead.
  */
 class UnitDeletionService
 {
@@ -31,6 +34,20 @@ class UnitDeletionService
         return new UnitDeletionImpact(
             children: $unit->children()->count(),
             tickets: Ticket::query()->where('unit_id', $unit->id)->count(),
+            // RESTRICT. `disease_cases` reaches `units` twice (`unit_id` is the
+            // recording unit, `subject_unit_id` the patient's unit); a row
+            // matching both must count once, so this is one grouped query, not
+            // two counts added together.
+            diseaseCases: DB::table('disease_cases')
+                ->where(function ($q) use ($unit): void {
+                    $q->where('unit_id', $unit->id)
+                        ->orWhere('subject_unit_id', $unit->id);
+                })
+                ->count(),
+            // RESTRICT. Only leaf units own a row (unique on unit + year).
+            populations: DB::table('unit_populations')
+                ->where('unit_id', $unit->id)
+                ->count(),
             persons: Person::query()->where('u_id', $unit->id)->count(),
             // Hardware has no unit column: it reaches a unit through the person
             // who owns it (`hardwares.n_code` → `persons.n_code`). Deleting the
