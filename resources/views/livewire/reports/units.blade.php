@@ -84,32 +84,9 @@ return new class extends Component
                 }
             });
 
-        $total = $query->count();
+        $aggregates = $this->aggregatePayload($accessibleIds, $query);
 
         $hasBoundaryFilter = $this->showOnlyNoBoundary !== null;
-
-        $byType = Unit::query()
-            ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
-            ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
-            ->whereIn('units.id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
-            ->groupBy('type_name')
-            ->pluck('count', 'type_name')
-            ->toArray();
-
-        $noBoundary = Unit::query()
-            ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->whereNull('boundary_id')
-            ->count();
-
-        $withBoundary = Unit::query()
-            ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->whereNotNull('boundary_id')
-            ->count();
 
         // Eager loads first: a top-level whereIn() degrades the chain to
         // Query\Builder, on which `with()` is undefined (issue #819).
@@ -135,15 +112,81 @@ return new class extends Component
             ->all();
 
         return [
-            'total' => $total,
-            'byType' => $byType,
-            'no_boundary' => $noBoundary,
-            'with_boundary' => $withBoundary,
+            ...$aggregates,
             // `units` stays a plain array (the fail-closed security test treats
             // it as one); the paginator rides alongside for the links.
             'units' => $units,
             'unitsPaginator' => $unitsPage,
         ];
+    }
+
+    /**
+     * Issue #1821 — the aggregates are the expensive half of the payload and do
+     * not depend on the page, so they are cached for 10 minutes like the
+     * advanced report (#1282). The paginator and its rows stay live in
+     * chartPayload(); only this slice is frozen.
+     *
+     * `site` is mandatory, not cosmetic: `remember()` hashes empty extras to
+     * `'none'`, and `ReportController::units()` caches a different payload
+     * under `report_units` with no extras — without the `site` extra this page
+     * would read the API's shape and render empty charts (#1821).
+     *
+     * @param  array<int>  $accessibleIds
+     * @param  \Illuminate\Database\Eloquent\Builder<Unit>  $query
+     * @return array{total: int, byType: array<string, int>, no_boundary: int, with_boundary: int}
+     */
+    private function aggregatePayload(array $accessibleIds, $query): array
+    {
+        $cache = app(CacheInvalidationServiceInterface::class);
+
+        /** @var array{total: int, byType: array<string, int>, no_boundary: int, with_boundary: int} $data */
+        $data = $cache->remember(
+            'report_units',
+            \App\Support\ScopeCacheKey::hash($accessibleIds),
+            function () use ($accessibleIds, $query): array {
+                $total = (clone $query)->count();
+
+                $hasBoundaryFilter = $this->showOnlyNoBoundary !== null;
+
+                $byType = Unit::query()
+                    ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
+                    ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
+                    ->whereIn('units.id', $accessibleIds)
+                    ->when($this->selectedUnitTypeId, fn($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
+                    ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
+                    ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
+                    ->groupBy('type_name')
+                    ->pluck('count', 'type_name')
+                    ->toArray();
+
+                $noBoundary = Unit::query()
+                    ->whereIn('id', $accessibleIds)
+                    ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+                    ->whereNull('boundary_id')
+                    ->count();
+
+                $withBoundary = Unit::query()
+                    ->whereIn('id', $accessibleIds)
+                    ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+                    ->whereNotNull('boundary_id')
+                    ->count();
+
+                return [
+                    'total' => $total,
+                    'byType' => $byType,
+                    'no_boundary' => $noBoundary,
+                    'with_boundary' => $withBoundary,
+                ];
+            },
+            10,
+            [
+                'site' => 'reports_units_payload',
+                'unit_type' => $this->selectedUnitTypeId,
+                'boundary' => $this->showOnlyNoBoundary,
+            ],
+        );
+
+        return $data;
     }
 }; ?>
 
