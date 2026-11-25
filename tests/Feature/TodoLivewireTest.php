@@ -1371,7 +1371,33 @@ test('update_todo_dates treats an empty end as no end', function () {
     $fresh = $todo->fresh();
 
     expect($fresh->start_at->format('Y-m-d H:i'))->toBe('2026-09-26 10:00')
-        ->and($fresh->end_at->format('Y-m-d H:i'))->toBe('2026-09-26 10:00');
+        ->and($fresh->end_at)->toBeNull();
+
+    $this->assertDatabaseHas('todos', ['id' => $todo->id, 'end_at' => null]);
+});
+
+test('update_todo_dates keeps a null end null when dragging an end-less todo', function () {
+    $this->actingAs($this->user);
+
+    $todo = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'درگ بدون پایان',
+        'start_at' => '2026-09-24 10:00:00',
+        'end_at' => null,
+    ]);
+
+    Livewire::test('todo.todo')
+        ->call('updateTodoDates', $todo->id, '2026-09-26T10:00:00', '')
+        ->assertDispatched('swal', function ($name, $params) {
+            return ($params[0]['icon'] ?? '') === 'success';
+        });
+
+    $fresh = $todo->fresh();
+
+    expect($fresh->start_at->format('Y-m-d H:i'))->toBe('2026-09-26 10:00')
+        ->and($fresh->end_at)->toBeNull();
+
+    $this->assertDatabaseHas('todos', ['id' => $todo->id, 'end_at' => null]);
 });
 
 test('update_todo_dates rejects an unparseable date without writing', function () {
