@@ -546,13 +546,26 @@ new class extends Component
                 // Plan 005: Auto-complete parent tasks where all child tickets are completed
                 // #1728: the sibling check uses the shared OPEN predicate, so a
                 // rejected (terminal) sibling no longer blocks completion.
-                foreach ($completedTaskIds as $taskId) {
-                    $incompleteCount = Ticket::where('task_id', $taskId)
-                        ->open()
-                        ->count();
-                    if ($incompleteCount === 0) {
-                        \App\Models\Todo::where('id', $taskId)->update(['is_completed' => true]);
-                    }
+                //
+                // One grouped count + one mass update (was: one count + one update
+                // per linked todo, inside this transaction). Invariant: a todo with
+                // zero open tickets has NO row in $openCounts — a missing key means
+                // "all closed", never "unknown". Do not rewrite this as a LEFT JOIN
+                // against todos without preserving that, or a partially-completed
+                // todo gets marked done.
+                $openCounts = Ticket::query()
+                    ->whereIn('task_id', $completedTaskIds->all())
+                    ->open()
+                    ->selectRaw('task_id, count(*) as open_count')
+                    ->groupBy('task_id')
+                    ->pluck('open_count', 'task_id');
+
+                $doneTaskIds = $completedTaskIds
+                    ->reject(fn ($taskId) => $openCounts->has($taskId))
+                    ->values();
+
+                if ($doneTaskIds->isNotEmpty()) {
+                    Todo::query()->whereIn('id', $doneTaskIds->all())->update(['is_completed' => true]);
                 }
             }
 
