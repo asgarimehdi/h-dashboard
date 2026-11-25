@@ -87,7 +87,15 @@ return new class extends Component
             $query->where('start_at', '>=', $from);
         }
         if ($to = JalaliDateRange::parse($this->dateTo, endOfDay: true)) {
-            $query->where('end_at', '<=', $to);
+            // #1792 — a todo with no end date is open-ended, not out of range.
+            // The upper bound on start_at keeps the window honest for those rows
+            // too: without it a dateless todo starting after `to` would count in
+            // completed/pending while `byDay` (which only materialises from..to)
+            // has no day for it.
+            $query->where('start_at', '<=', $to)
+                ->where(function ($q) use ($to) {
+                    $q->where('end_at', '<=', $to)->orWhereNull('end_at');
+                });
         }
 
         $now = now();

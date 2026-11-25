@@ -129,8 +129,9 @@ class ReportsDailyWindowTest extends TestCase
         $from = now()->subDays(6);
         $to = now()->addDays(1);
 
-        // end_at is set because the page's own "to" filter is `end_at <= to`,
-        // which excludes todos with no due date.
+        // end_at is set so this fixture pins the dated case; since #1792 the
+        // page's "to" filter also keeps todos with no due date (open-ended,
+        // not out of range).
         Todo::create([
             'title' => 'یک',
             'unit_id' => $user->units()->first()->id,
