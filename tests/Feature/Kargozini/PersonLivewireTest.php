@@ -739,10 +739,45 @@ class PersonLivewireTest extends TestCase
         );
     }
 
+    public function test_transferring_a_person_twice_leaves_exactly_one_primary_unit(): void
+    {
+        // #1803: each transfer marked the new unit primary and never cleared
+        // the old one, so the linked user accumulated primaries forever and
+        // TodoController's fallback picked one nondeterministically.
+        $nCode = (string) fake()->unique()->numerify('##########');
+        $person = PersonModel::create($this->personData(['n_code' => $nCode]));
+        $linkedUser = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+
+        // Children of the acting user's unit, so both transfer targets are
+        // inside the actor's organizational scope.
+        $unitB = Unit::create(['name' => 'واحد دوم', 'parent_id' => $this->unit->id]);
+        $unitC = Unit::create(['name' => 'واحد سوم', 'parent_id' => $this->unit->id]);
+
+        $primaries = fn () => DB::table('user_units')
+            ->where('user_id', $linkedUser->id)
+            ->where('is_primary', true)
+            ->pluck('unit_id')
+            ->all();
+
+        foreach ([$unitB, $unitC] as $target) {
+            $component = Livewire::test('kargozini.person')
+                ->call('editPerson', $person->id);
+            $this->fillForm($component, $this->personData([
+                'n_code' => $nCode,
+                'u_id' => $target->id,
+            ]));
+            $component->call('savePerson');
+
+            $this->assertDatabaseHas('persons', ['id' => $person->id, 'u_id' => $target->id]);
+            $this->assertSame([$target->id], $primaries());
+        }
+
+        $this->assertSame($unitC->id, $linkedUser->fresh()->primaryUnit()?->id);
+    }
+
     // -----------------------------------------------------------
     //  شماره تماس (#738)
     // -----------------------------------------------------------
-
     public function test_save_person_stores_the_phone(): void
     {
         $data = $this->personData();

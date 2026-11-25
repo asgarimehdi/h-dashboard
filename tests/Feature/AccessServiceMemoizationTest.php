@@ -224,7 +224,7 @@ class AccessServiceMemoizationTest extends TestCase
     {
         $parent = Unit::create(['name' => 'Parent']);
         $result = $this->createUserWithUnit();
-        $result['user']->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => true]);
+        $result['user']->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => false]);
         Session::put('current_unit_id', $parent->id);
         $this->actingAs($result['user']);
 
@@ -249,7 +249,7 @@ class AccessServiceMemoizationTest extends TestCase
         $parent = Unit::create(['name' => 'Parent']);
         $child = Unit::create(['name' => 'Child 1', 'parent_id' => $parent->id]);
         $result = $this->createUserWithUnit();
-        $result['user']->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => true]);
+        $result['user']->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => false]);
         Session::put('current_unit_id', $parent->id);
         $this->actingAs($result['user']);
 
@@ -276,7 +276,7 @@ class AccessServiceMemoizationTest extends TestCase
     {
         $parent = Unit::create(['name' => 'Parent']);
         $result = $this->createUserWithUnit();
-        $result['user']->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => true]);
+        $result['user']->units()->attach($parent->id, ['role' => 'staff', 'is_primary' => false]);
         Session::put('current_unit_id', $parent->id);
         $this->actingAs($result['user']);
 
