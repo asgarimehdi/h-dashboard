@@ -251,7 +251,7 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 ## Scheduler & Console Commands
 
-**Seven commands plus one queued job** are scheduled in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864, landed by PR #896). The previous home, `app/Console/Kernel.php`, was never bound (`withKernels()` binds the framework's base console kernel), so the schedule silently never ran; that file is deleted — do not recreate it. The commands all take `--dry-run`, except `cache:prune-stale` — since #981 it is an audit-only report and takes no options:
+**Eight commands plus one queued job** are scheduled in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864, landed by PR #896). The previous home, `app/Console/Kernel.php`, was never bound (`withKernels()` binds the framework's base console kernel), so the schedule silently never ran; that file is deleted — do not recreate it. All app-owned commands take `--dry-run` (plus `--unit` for reports), except `cache:prune-stale` — since #981 it is an audit-only report and takes no options; `sanctum:prune-expired` is Sanctum's command and takes `--hours` (default 24):
 
 | Scheduled item | Schedule |
 |---|---|
@@ -261,6 +261,7 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 | `activity:prune-null-actor` | weekly (Tue 04:00), `->withoutOverlapping(120)` |
 | `backup:prune-archives` | daily 05:00, `->withoutOverlapping(60)` |
 | `imports:prune-sheets` | daily 05:15, `->withoutOverlapping(60)` |
+| `sanctum:prune-expired` | daily 05:30, `->withoutOverlapping(60)` |
 | `reports:generate-daily` | daily 06:00, `->withoutOverlapping()` |
 | `SyncZabbixJob` (queued, **not** the `zabbix:sync` command) | `everyFiveMinutes()`, `->withoutOverlapping()` |
 

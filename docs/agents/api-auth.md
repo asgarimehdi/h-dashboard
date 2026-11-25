@@ -18,6 +18,14 @@
 - Livewire components expect session-based auth. **API tokens are NOT accepted** for Livewire pages.
 - Login form at `/login`. API login: `POST /api/login` with `n_code` + `password` (throttled 5/min per account **and** per IP; the per-account key is the submitted `n_code`, so rotating IPs does not reset it — #1666).
 
+### Token lifecycle & pruning (#1820)
+
+`POST /api/login` mints a fresh `flutter-app` token on every call and does **not** revoke the caller's previous tokens (a single-live-token policy is an open product decision; revoking on role/permission change is #1823). The 24-hour lifetime is enforced by the **guard** off `created_at`, not by `expires_at`: `createToken()` is called without the third argument, so every token this app mints has `expires_at = NULL`.
+
+- `sanctum:prune-expired` runs daily at 05:30 (between `imports:prune-sheets` 05:15 and `reports:generate-daily` 06:00) with Sanctum's default 24-hour grace, so a row is deleted once `expires_at` is more than 24h past **or** `created_at` is more than `expiration + 24h` old — 48 hours with the default `SANCTUM_TOKEN_EXPIRATION=1440`.
+- Password change deletes **all** of the user's tokens (#678/#1030); logout deletes only the caller's current token (#1071). Neither path is a substitute for the prune.
+- `SANCTUM_TOKEN_EXPIRATION=0` disables guard expiry, and the command then skips the config-based branch with a warning (the `expires_at` branch still runs).
+
 ### Cookie-authenticated `/api/*` calls from the web UI (#1399, #1532)
 
 The GIS dashboard and the Zabbix pages call `/api/gis/*` and `/api/zabbix/*` with the **session cookie and no `Authorization` header**. Sanctum only runs the stateful pipeline for such a request when its `Referer`/`Origin` host is in `config('sanctum.stateful')`; otherwise every call answers `401 {"message":"Unauthenticated."}`.
@@ -130,4 +138,4 @@ REST API endpoints for the Flutter mobile app (`/api/notifications/*`):
 
 Controller: `App\Http\Controllers\Api\NotificationController`. Requires Sanctum auth.
 
-> **Sanctum token expiration** reduced from 7 days (10080 min) to 24 hours (1440 min). Configurable via `SANCTUM_TOKEN_EXPIRATION` env var.
+> **Sanctum token expiration** is 24 hours (1440 min), configurable via the `SANCTUM_TOKEN_EXPIRATION` env var. Expiry is applied by the guard off `created_at`, and expired rows are pruned daily — see [Token lifecycle & pruning](#token-lifecycle--pruning-1820).
