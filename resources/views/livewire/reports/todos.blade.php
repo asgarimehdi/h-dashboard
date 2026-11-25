@@ -98,39 +98,9 @@ return new class extends Component
                 });
         }
 
+        $aggregates = $this->aggregatePayload($accessibleIds, $query);
+
         $now = now();
-        $completed = (clone $query)->where('is_completed', true)->count();
-        $pending = (clone $query)->where('is_completed', false)->count();
-        $overdue = (clone $query)->where('is_completed', false)
-            ->whereNotNull('end_at')->where('end_at', '<', $now)->count();
-
-        $byUnit = Todo::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
-            ->whereIn('todos.unit_id', $accessibleIds)
-            ->when($this->selectedUnitId, fn ($q) => $q->where('todos.unit_id', $this->selectedUnitId))
-            ->leftJoin('units', 'todos.unit_id', '=', 'units.id')
-            ->groupBy('unit_name')
-            ->pluck('count', 'unit_name')
-            ->toArray();
-
-        // Issue #736: materialise every day in the chosen range, zeros included,
-        // so a day with no todos is a zero rather than a missing column. The
-        // filtered $query is reused, so unit/status/date filters still apply.
-        $range = $this->dateRange();
-        $byDay = $range
-            ? array_map(
-                fn (array $row) => [
-                    'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
-                    'count' => $row['count'],
-                ],
-                DailySeries::between($range[0], $range[1])->counts(clone $query, 'start_at')
-            )
-            : [];
-
-        $byStatus = [
-            'تکمیل شده' => $completed,
-            'در انتظار' => $pending,
-            'سررسید گذشته' => $overdue,
-        ];
 
         // Issue #1024: only the row list is paginated — `completed`/`pending`/
         // `overdue`/`byUnit`/`byDay` are computed from their own unpaginated
@@ -156,18 +126,96 @@ return new class extends Component
             ->all();
 
         return [
-            'completed' => $completed,
-            'pending' => $pending,
-            'overdue' => $overdue,
-            'byUnit' => $byUnit,
-            'byDay' => $byDay,
-            'byStatus' => $byStatus,
+            ...$aggregates,
             // `items` stays a plain array (the fail-closed security test and the
             // `empty()` check in the view both treat it as one); the paginator
             // rides alongside for `->hasPages()`/`->links()`.
             'items' => $items,
             'itemsPaginator' => $itemsPage,
         ];
+    }
+
+    /**
+     * Issue #1821 — the aggregates are the expensive half of the payload and do
+     * not depend on the page, so they are cached for 10 minutes like the
+     * advanced report (#1282). The paginator and its rows stay live in
+     * chartPayload(); only this slice is frozen.
+     *
+     * `statusFilter` is deliberately NOT in the key: it only narrows the
+     * paginated rows (#1024), never these aggregates. The key does carry the
+     * `unit_hierarchy` generation because `byUnit` joins `units.name` and a Unit
+     * write bumps only `report_units`, never `report_todos` (#1821). `site` is
+     * mandatory — an empty extras array hashes to `'none'`.
+     *
+     * `overdue` depends on `now()`, so it can be at most 10 minutes behind —
+     * the same freshness contract the advanced report accepts (advanced:203).
+     *
+     * @param  array<int>  $accessibleIds
+     * @param  \Illuminate\Database\Eloquent\Builder<Todo>  $query
+     * @return array{completed: int, pending: int, overdue: int, byUnit: array<string, int>, byDay: array<int, array{day: string, count: int}>, byStatus: array<string, int>}
+     */
+    private function aggregatePayload(array $accessibleIds, $query): array
+    {
+        $cache = app(\App\Services\CacheInvalidationServiceInterface::class);
+
+        /** @var array{completed: int, pending: int, overdue: int, byUnit: array<string, int>, byDay: array<int, array{day: string, count: int}>, byStatus: array<string, int>} $data */
+        $data = $cache->remember(
+            'report_todos',
+            \App\Support\ScopeCacheKey::hash($accessibleIds),
+            function () use ($accessibleIds, $query): array {
+                $now = now();
+                $completed = (clone $query)->where('is_completed', true)->count();
+                $pending = (clone $query)->where('is_completed', false)->count();
+                $overdue = (clone $query)->where('is_completed', false)
+                    ->whereNotNull('end_at')->where('end_at', '<', $now)->count();
+
+                $byUnit = Todo::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
+                    ->whereIn('todos.unit_id', $accessibleIds)
+                    ->when($this->selectedUnitId, fn ($q) => $q->where('todos.unit_id', $this->selectedUnitId))
+                    ->leftJoin('units', 'todos.unit_id', '=', 'units.id')
+                    ->groupBy('unit_name')
+                    ->pluck('count', 'unit_name')
+                    ->toArray();
+
+                // Issue #736: materialise every day in the chosen range, zeros
+                // included, so a day with no todos is a zero rather than a
+                // missing column. The filtered $query is reused, so unit/date
+                // filters still apply.
+                $range = $this->dateRange();
+                $byDay = $range
+                    ? array_map(
+                        fn (array $row) => [
+                            'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
+                            'count' => $row['count'],
+                        ],
+                        DailySeries::between($range[0], $range[1])->counts(clone $query, 'start_at')
+                    )
+                    : [];
+
+                return [
+                    'completed' => $completed,
+                    'pending' => $pending,
+                    'overdue' => $overdue,
+                    'byUnit' => $byUnit,
+                    'byDay' => $byDay,
+                    'byStatus' => [
+                        'تکمیل شده' => $completed,
+                        'در انتظار' => $pending,
+                        'سررسید گذشته' => $overdue,
+                    ],
+                ];
+            },
+            10,
+            [
+                'site' => 'reports_todos_payload',
+                'unit' => $this->selectedUnitId,
+                'from' => $this->dateFrom,
+                'to' => $this->dateTo,
+                'hierarchy' => $cache->getVersion('unit_hierarchy'),
+            ],
+        );
+
+        return $data;
     }
 
     public function getAccessibleUnitsProperty()
