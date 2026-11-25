@@ -295,11 +295,14 @@ return new class extends Component
         // `'' ?? $startDate` is still '' and Eloquent's datetime cast parses ''
         // as now(), so blank must be normalised to null BEFORE the range is
         // resolved — otherwise this path itself can store end < start.
+        // #1822: "no end supplied" means "no end", never "end = start".
+        // FullCalendar's endStr is '' for an event without an end (v6.1.10),
+        // so a pure drag must not fabricate a deadline.
         $endDate = $endDate !== null && trim($endDate) !== '' ? $endDate : null;
 
         try {
             $start = Carbon::parse($startDate);
-            $end = $endDate !== null ? Carbon::parse($endDate) : $start;
+            $end = $endDate !== null ? Carbon::parse($endDate) : null;
         } catch (\Exception) {
             $this->dispatch('swal', ['title' => 'تاریخ واردشده معتبر نیست.', 'icon' => 'error']);
             $this->dispatch('calendar-updated', events: $this->getEvents());
@@ -307,7 +310,7 @@ return new class extends Component
             return;
         }
 
-        if ($end->lt($start)) {
+        if ($end !== null && $end->lt($start)) {
             $this->dispatch('swal', ['title' => 'تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد.', 'icon' => 'error']);
             $this->dispatch('calendar-updated', events: $this->getEvents());
 
