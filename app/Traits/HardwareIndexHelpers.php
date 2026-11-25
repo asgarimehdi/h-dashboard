@@ -53,14 +53,31 @@ trait HardwareIndexHelpers
     #[Locked]
     public ?int $historyHardwareId = null;
 
+    #[Locked]
     public array $history = [];
 
+    /**
+     * #1779: both pagination properties are server-written only — the modal's
+     * prev/next buttons call historyPage(int $page), never write a property —
+     * so the client has no business changing them. Without the lock a tampered
+     * `updates` payload either divides by zero in the Blade (perPage = 0), or
+     * drops the SQL LIMIT entirely (a negative perPage → the whole audit
+     * history into public Livewire state), or lands on a page that does not
+     * exist. Mirrors the `#[Locked] historyHardwareId` decision above.
+     */
+    #[Locked]
     public int $historyCurrentPage = 1;
 
+    /** Same ceiling as ClampsPageSize::MAX_PER_PAGE / App\Rules\PerPage (#894/#909). */
+    private const HISTORY_PER_PAGE_MAX = 100;
+
+    #[Locked]
     public int $historyPerPage = 15;
 
+    #[Locked]
     public int $historyTotal = 0;
 
+    #[Locked]
     public ?string $historyActionFilter = null;
 
     // ── History methods ──────────────────────────────────────────────
@@ -79,6 +96,11 @@ trait HardwareIndexHelpers
      */
     private function fetchHistory(): void
     {
+        // #1779: defence in depth — the modal divides by this value, so it
+        // must never reach 0 here even if a future refactor unlocks the
+        // property. Runs before every early return below.
+        $this->historyPerPage = max(1, min(self::HISTORY_PER_PAGE_MAX, $this->historyPerPage));
+
         if (! $this->historyHardwareId) {
             return;
         }
@@ -115,6 +137,11 @@ trait HardwareIndexHelpers
 
         $this->historyTotal = $query->count();
 
+        // #1779: same bounds as fetchTrashPage() (#1170) — the last page
+        // depends on the filtered total, so only the count knows it.
+        $lastPage = max(1, (int) ceil($this->historyTotal / $this->historyPerPage));
+        $this->historyCurrentPage = min(max(1, $this->historyCurrentPage), $lastPage);
+
         $items = $query
             ->orderByDesc('created_at')
             ->forPage($this->historyCurrentPage, $this->historyPerPage)
@@ -143,7 +170,7 @@ trait HardwareIndexHelpers
      */
     public function historyPage(int $page): void
     {
-        $this->historyCurrentPage = $page;
+        $this->historyCurrentPage = max(1, $page);
         $this->fetchHistory();
     }
 
