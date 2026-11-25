@@ -229,6 +229,53 @@ class JobsTest extends TestCase
         ]);
     }
 
+    // ── Null-actor (system) rows (#1804) ──────────────────────────────
+    //
+    // Queue/scheduler writers, `logAs(null, …)` on restore, and
+    // `ON DELETE SET NULL` all leave `user_id = null`. SQL `whereIn` can never
+    // match NULL, so only an org-wide run sweeps them; a scoped run keeps them
+    // because no column attributes a null row to a unit (#950).
+
+    public function test_archive_activity_logs_job_org_wide_deletes_null_actor_logs(): void
+    {
+        $this->createUserWithUnit();
+        $this->seedNullActorActivityLogs();
+
+        $result = (new ArchiveActivityLogsJob(90, []))->handle();
+
+        $this->assertSame(1, $result);
+        $this->assertDatabaseMissing('activity_logs', ['description' => 'System old log']);
+        $this->assertDatabaseHas('activity_logs', ['description' => 'System recent log']);
+    }
+
+    public function test_archive_activity_logs_job_scoped_keeps_null_actor_logs(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+        $this->seedActivityLogs($user->id);
+        $this->seedNullActorActivityLogs();
+
+        $result = (new ArchiveActivityLogsJob(90, [$unit->id]))->handle();
+
+        $this->assertSame(1, $result);
+        $this->assertDatabaseMissing('activity_logs', [
+            'user_id' => $user->id, 'description' => 'Old log',
+        ]);
+        $this->assertDatabaseHas('activity_logs', ['description' => 'System old log']);
+        $this->assertDatabaseHas('activity_logs', ['description' => 'System recent log']);
+    }
+
+    public function test_archive_activity_logs_job_org_wide_sweeps_null_actor_logs_with_no_live_users(): void
+    {
+        $this->seedNullActorActivityLogs();
+        User::query()->delete(); // soft delete → User::query()->pluck('id') === []
+
+        $result = (new ArchiveActivityLogsJob(90, []))->handle();
+
+        $this->assertSame(1, $result);
+        $this->assertDatabaseMissing('activity_logs', ['description' => 'System old log']);
+        $this->assertDatabaseHas('activity_logs', ['description' => 'System recent log']);
+    }
+
     public function test_generate_daily_reports_job_creates_reports_without_authenticated_user(): void
     {
         Session::flush();
@@ -405,6 +452,30 @@ class JobsTest extends TestCase
                 'user_id' => $userId,
                 'type' => 'test',
                 'description' => 'Recent log',
+                'created_at' => now()->subDays(10),
+                'updated_at' => now()->subDays(10),
+            ],
+        ]);
+    }
+
+    /**
+     * One old null-actor row (past every retention window) plus one recent row
+     * that must survive, mirroring `seedActivityLogs()` for system rows.
+     */
+    private function seedNullActorActivityLogs(): void
+    {
+        \DB::table('activity_logs')->insert([
+            [
+                'user_id' => null,
+                'type' => 'system',
+                'description' => 'System old log',
+                'created_at' => now()->subDays(100),
+                'updated_at' => now()->subDays(100),
+            ],
+            [
+                'user_id' => null,
+                'type' => 'system',
+                'description' => 'System recent log',
                 'created_at' => now()->subDays(10),
                 'updated_at' => now()->subDays(10),
             ],
