@@ -11,7 +11,9 @@ use App\Support\HardwareAuditChange;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -194,6 +196,22 @@ class HardwareAuditModalLivewireTest extends TestCase
             ->assertSee('btn-primary');
     }
 
+    /**
+     * Append $count 'updated' audits to the hardware's history.
+     */
+    protected function createAudits(Hardware $hw, User $user, int $count): void
+    {
+        for ($i = 0; $i < $count; $i++) {
+            HardwareAudit::create([
+                'hardware_id' => $hw->id,
+                'user_id' => $user->id,
+                'action' => 'updated',
+                'changes' => [['field' => 'ram', 'old' => '4GB', 'new' => '8GB']],
+                'source' => 'web',
+            ]);
+        }
+    }
+
     // ==================== S4: Pagination controls ====================
 
     public function test_pagination_controls(): void
@@ -275,6 +293,94 @@ class HardwareAuditModalLivewireTest extends TestCase
 
         // On the last page, the next button should be disabled
         $component->assertSee('صفحه 2 از 2');
+    }
+
+    /**
+     * #1779: the page argument of historyPage() is clamped, so a tampered
+     * call can never produce a page that does not exist.
+     */
+    public function test_history_page_zero_lands_on_the_first_page(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+        $this->createAudits($hw, $data['user'], 20);
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('historyPage', 0)
+            ->assertOk()
+            ->assertSet('historyCurrentPage', 1);
+
+        $component->assertSee('صفحه 1 از 2');
+        $this->assertCount(15, $component->get('history'));
+    }
+
+    public function test_history_page_negative_lands_on_the_first_page(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+        $this->createAudits($hw, $data['user'], 20);
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('historyPage', -3)
+            ->assertOk()
+            ->assertSet('historyCurrentPage', 1);
+
+        $component->assertSee('صفحه 1 از 2');
+        $this->assertCount(15, $component->get('history'));
+    }
+
+    public function test_history_page_beyond_the_last_page_clamps_to_the_last(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+        $this->createAudits($hw, $data['user'], 20);
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadHistory', $hw->id)
+            ->call('historyPage', 99)
+            ->assertSet('historyCurrentPage', 2);
+
+        $component->assertSee('صفحه 2 از 2');
+        $this->assertCount(6, $component->get('history'));
+    }
+
+    /**
+     * @return array<string, array{string, int}>
+     */
+    public static function lockedPaginationStateCases(): array
+    {
+        return [
+            'perPage zero' => ['historyPerPage', 0],
+            'perPage negative' => ['historyPerPage', -15],
+            'perPage oversized' => ['historyPerPage', 10000],
+            'currentPage zero' => ['historyCurrentPage', 0],
+        ];
+    }
+
+    /**
+     * #1779: pagination state is server-written only — a client update is
+     * rejected instead of reaching the query or the Blade division.
+     */
+    #[DataProvider('lockedPaginationStateCases')]
+    public function test_history_pagination_state_is_locked(string $property, int $value): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        $hw = $this->createHardware($data['user']);
+        $this->createAudits($hw, $data['user'], 20);
+
+        $component = Livewire::test('hardware.index')->call('loadHistory', $hw->id);
+
+        $this->assertNotEmpty($component->get('history'));
+
+        $this->expectException(CannotUpdateLockedPropertyException::class);
+
+        $component->set($property, $value);
     }
 
     // ==================== S5: Rollback ====================
