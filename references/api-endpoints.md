@@ -13,6 +13,9 @@ Scheduled tasks are registered in `bootstrap/app.php` via `->withSchedule(...)` 
 | `cache:prune-stale` | hourly | `PruneStaleCache` | Resets all cache version counters (see **Cache Version Namespaces**) so stale versioned keys expire |
 | `maintenance:generate-due` | daily 03:00, `->withoutOverlapping(60)` | `GenerateDueMaintenance` | Generates due maintenance tickets from `maintenance_schedules` |
 | `data:archive` | weekly (Mon 04:00), `->withoutOverlapping(120)` + in-command lock | `ArchiveOldRecords` | Moves old `activity_logs` (>12 months) into `activity_log_archives` |
+| `activity:prune-null-actor` | weekly (Tue 04:00), `->withoutOverlapping(120)` | `PruneNullActorActivityLogs` | Deletes only `user_id IS NULL` `activity_logs` rows older than 90 days (#1809) |
+| `backup:prune-archives` | daily 05:00, `->withoutOverlapping(60)` | `PruneBackupArchives` | Removes backup archives left behind by a killed worker (#1692) |
+| `imports:prune-sheets` | daily 05:15, `->withoutOverlapping(60)` | `PruneImportSheets` | Removes failed import sheets older than `--days=7` (#1759) |
 | `reports:generate-daily` | daily 06:00 | `GenerateDailyReports` | Builds `daily_reports` rows per unit, org-wide (no actor at 06:00 — see #836) |
 | `SyncZabbixJob` (**queued job**, not a command) | every 5 min | `App\Jobs\SyncZabbixJob` | Pulls Zabbix interface traffic, caches `zabbix_traffic_data` for 5 min |
 
@@ -24,7 +27,7 @@ Scheduled tasks are registered in `bootstrap/app.php` via `->withSchedule(...)` 
 - `data:archive` — chunks `activity_logs` older than `--months=12` (default), copies them to `activity_log_archives` (preserving `original_created_at`/`original_updated_at`) and deletes the originals. Supports `--dry-run`. Since #1305 it holds `Cache::lock('command:data:archive', 6h)` for the whole run: the schedule's `withoutOverlapping(120)` is only read on the `Schedule::run()` path, so a manual run would otherwise race a scheduled one and archive the same rows twice. A run that cannot take the lock warns, logs, and exits 0. Emergency manual runs release it with `Cache::lock('command:data:archive', 1)->forceRelease()` — there is deliberately no `--force` flag. Since #1696 `--months` must be an integer in `1..1200`; an invalid value (including a bare `--months`, which Symfony parses as `null`) exits 1 with a usage error **before** the lock is taken and before any query.
 - `reports:generate-daily` — iterates `AccessService::allUnitIds()` (or `--unit=N`) and upserts a `daily_reports` row for today with open-ticket/open-todo counts. Supports `--dry-run`. **Org-wide by default, not actor-scoped** (#836): the 06:00 schedule runs with no authenticated user, so `accessibleUnitIds()` would be `[]` and the command would write nothing. `--unit=N` scopes a manual single-unit run.
 
-> All four take a `--dry-run` flag (or `--unit` for reports) so CI/ops can preview without side effects.
+> All scheduled commands except `cache:prune-stale` accept `--dry-run` (plus `--unit` for reports) so CI/ops can preview without side effects.
 
 The old `zabbix:sync` schedule entry used `->withoutOverlapping()` + `->runInBackground()` to avoid blocking the scheduler; today the equivalent protection is dispatching `SyncZabbixJob` (queued) instead of running the command inline. **Do not add `->timeout(N)` to any schedule entry** — that method does not exist on the installed Laravel version and throws `BadMethodCallException` (was attempted and reverted; the per-request HTTP timeout lives in `ZabbixService::request()` via `->timeout(10)` instead).
 

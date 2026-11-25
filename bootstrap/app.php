@@ -49,6 +49,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // Data archival — weekly Monday 04:00 Tehran time
         $schedule->command('data:archive')->weeklyOn(1, '04:00')->withoutOverlapping(120);
 
+        // #1809: system (null-actor) activity rows are written by queue/scheduler
+        // paths and ON DELETE SET NULL; whereIn('user_id', …) can never match them,
+        // so the archive job's 90-day window silently skips them. Deliberately NOT
+        // ->job(new ArchiveActivityLogsJob(90)): an org-wide run would also delete
+        // user-owned logs older than 90 days and bypass the 12-month data:archive
+        // policy. Inline so withoutOverlapping() is a real execution lock; Tuesday
+        // 04:00 keeps it a day off data:archive.
+        $schedule->command('activity:prune-null-actor')->weeklyOn(2, '04:00')->withoutOverlapping(120);
+
         // Issue #1692: the download removes its archive once it is sent, so any
         // archive still here is a leftover from a killed worker. 05:00 clears
         // them daily, between archival and report generation.
