@@ -5,6 +5,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\AccessService;
 use App\Traits\ClampsPageSize;
+use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -14,6 +15,7 @@ use Mary\Traits\Toast;
 return new class extends Component
 {
     use ClampsPageSize;
+    use PersianNormalizer;
     use Toast;
     use WithPagination;
 
@@ -327,7 +329,7 @@ return new class extends Component
         });
 
         if (! empty($this->search)) {
-            $query->where('title', 'LIKE', '%'.$this->search.'%');
+            $query->where('title', 'LIKE', '%'.self::escapeLikeWildcards($this->search).'%');
         }
 
         $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)

@@ -5,36 +5,44 @@ use App\Models\Todo;
 use App\Models\Unit;
 use App\Services\AccessService;
 use App\Support\JalaliDateRange;
-use Livewire\Component;
-use Livewire\WithPagination;
+use App\Traits\PersianNormalizer;
+use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
-use Livewire\Attributes\Computed;
+use Livewire\Component;
+use Livewire\WithPagination;
 use Mary\Traits\Toast;
-use Illuminate\Support\Facades\Auth;
 
 new class extends Component
 {
-    use WithPagination;
-    use Toast;
     // Fully qualified: a top-of-file import would shift the anonymous class's
     // identity line and break every line-keyed PHPStan-baseline entry for it.
     // The top `JalaliDateRange` import is now unused (this trait owns the date
     // parse) but stays in place so the identity line keeps its beta position.
     use \App\Traits\TicketsQueryScopes;
+    use PersianNormalizer;
+    use Toast;
+
+    use WithPagination;
 
     public bool $showHelpModal = false;
 
     #[Url]
     public string $search = '';
+
     #[Url]
     public string $statusFilter = 'all';
+
     #[Url]
     public ?int $selectedUnitId = null;
+
     #[Url]
     public string $unitSearch = '';
+
     #[Url]
     public string $dateFrom = '';
+
     #[Url]
     public string $dateTo = '';
 
@@ -51,6 +59,7 @@ new class extends Component
     public bool $modalDetail = false;
 
     public array $filterUnits = [];
+
     public ?Unit $currentUnit = null;
 
     // Issue #1632: the route gate (`role_or_permission:view_all_tickets`) runs only
@@ -93,7 +102,7 @@ new class extends Component
 
         $units = [];
         if (mb_strlen($this->unitSearch) > 1) {
-            $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
+            $units = Unit::where('name', 'like', '%'.self::escapeLikeWildcards($this->unitSearch).'%')
                 ->where('can_receive_tickets', true)
                 ->whereIn('id', $accessibleIds)
                 ->limit(10)->get()->toArray();

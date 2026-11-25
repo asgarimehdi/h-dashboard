@@ -4,6 +4,7 @@ use App\Models\ActivityLog;
 use App\Services\AccessService;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Support\JalaliDateRange;
+use App\Traits\PersianNormalizer;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -11,6 +12,7 @@ use Livewire\WithPagination;
 
 return new class extends Component
 {
+    use PersianNormalizer;
     use WithPagination;
 
     public string $search = '';
@@ -106,8 +108,8 @@ return new class extends Component
 
         if (! empty($this->search)) {
             $query->where(function ($q) {
-                $q->where('description', 'like', '%'.$this->search.'%')
-                    ->orWhere('type', 'like', '%'.$this->search.'%');
+                $q->where('description', 'like', '%'.self::escapeLikeWildcards($this->search).'%')
+                    ->orWhere('type', 'like', '%'.self::escapeLikeWildcards($this->search).'%');
             });
         }
 

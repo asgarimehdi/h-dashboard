@@ -3,31 +3,43 @@
 use App\Models\User;
 use App\Support\RoleGuard;
 use App\Traits\ClampsPageSize;
+use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+
 return new class extends Component
 {
     use ClampsPageSize;
-    use WithPagination;
+    use PersianNormalizer;
     use Toast;
+    use WithPagination;
 
     // تعریف صریح پروپرتی‌ها با مقدار اولیه
     public string $name = '';
+
     public string $label = '';
-    public int|null $editingId = null;
+
+    public ?int $editingId = null;
+
     public string $search = '';
+
     public int $perPage = 20;
+
     public bool $modal = false;
+
     public array $allPermissions = [];
+
     public array $permissions = [];
+
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
 
     // #914: `sortBy` is client-settable, so only real columns are sortable.
     private const SORTABLE_COLUMNS = ['id', 'label', 'name'];
+
     public bool $showHelpModal = false;
 
     // تعریف headers به عنوان پروپرتی برای جلوگیری از خطای Method Not Found
@@ -93,7 +105,7 @@ return new class extends Component
             // 403 stays distinguishable from a foreign-key violation.
             throw $e;
         } catch (\Exception $e) {
-            $this->error("امکان حذف وجود ندارد.", position: 'toast-bottom');
+            $this->error('امکان حذف وجود ندارد.', position: 'toast-bottom');
         }
     }
 
@@ -109,7 +121,7 @@ return new class extends Component
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name',
             'label' => 'required|string|max:255|unique:roles,label',
-            'permissions' => 'required'
+            'permissions' => 'required',
         ]);
 
         $newRole = Role::create(['name' => $this->name, 'label' => $this->label]);
@@ -129,7 +141,7 @@ return new class extends Component
         $this->label = $role->label;
 
         // تبدیل IDها به رشته برای سازگاری با x-choices
-        $this->permissions = $role->permissions->pluck('name')->map(fn($name) => (string) $name)->toArray();
+        $this->permissions = $role->permissions->pluck('name')->map(fn ($name) => (string) $name)->toArray();
 
         $this->modal = true;
     }
@@ -139,8 +151,8 @@ return new class extends Component
         $this->authorize('manage_roles');
 
         $this->validate([
-            'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name,' . $this->editingId,
-            'label' => 'required|string|max:255|unique:roles,label,' . $this->editingId,
+            'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name,'.$this->editingId,
+            'label' => 'required|string|max:255|unique:roles,label,'.$this->editingId,
             'permissions' => 'required',
         ]);
 
@@ -165,12 +177,12 @@ return new class extends Component
     public function roles(): LengthAwarePaginator
     {
         $query = Role::query();
-        
-        if (!empty($this->search)) {
-            $query->where('name', 'LIKE', '%' . $this->search . '%')
-                  ->orWhere('label', 'LIKE', '%' . $this->search . '%');
+
+        if (! empty($this->search)) {
+            $query->where('name', 'LIKE', '%'.self::escapeLikeWildcards($this->search).'%')
+                ->orWhere('label', 'LIKE', '%'.self::escapeLikeWildcards($this->search).'%');
         }
-        
+
         $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
             ? $this->sortBy['column'] : 'id';
         $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';

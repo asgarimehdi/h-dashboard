@@ -1,22 +1,32 @@
 <?php
 
 use App\Traits\ClampsPageSize;
+use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
 use Spatie\Permission\Models\Permission;
+
 return new class extends Component
 {
     use ClampsPageSize;
-    use WithPagination;
+    use PersianNormalizer;
     use Toast;
+    use WithPagination;
 
-    public string $name, $label;
-    public int|null $editingId = null;
+    public string $name;
+
+    public string $label;
+
+    public ?int $editingId = null;
+
     public string $search = '';
+
     public int $perPage = 20;
+
     public bool $modal = false;
+
     public bool $showHelpModal = false;
 
     public array $sortBy = ['column' => 'id', 'direction' => 'asc'];
@@ -47,7 +57,7 @@ return new class extends Component
             // generic "still used in another table" foreign-key toast.
             throw $e;
         } catch (\Exception $e) {
-            $this->error("امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.", position: 'toast-bottom');
+            $this->error('امکان حذف وجود ندارد زیرا در جدول دیگری استفاده شده است.', position: 'toast-bottom');
         }
     }
 
@@ -98,14 +108,14 @@ return new class extends Component
                 'required',
                 'string',
                 'max:255',
-                'unique:permissions,name,' . $this->editingId,
+                'unique:permissions,name,'.$this->editingId,
                 'regex:/^[a-zA-Z0-9\s\-]+$/u',
             ],
             'label' => [
                 'required',
                 'string',
                 'max:255',
-                'unique:permissions,label,' . $this->editingId,
+                'unique:permissions,label,'.$this->editingId,
                 'regex:/^[\p{L}\p{N}\s\-]+$/u',
             ],
         ]);
@@ -118,7 +128,7 @@ return new class extends Component
             $this->reset();
             $this->modal = false;
         } catch (\Exception $e) {
-            $this->error("خطا در ویرایش", position: 'toast-bottom');
+            $this->error('خطا در ویرایش', position: 'toast-bottom');
         }
     }
 
@@ -135,15 +145,16 @@ return new class extends Component
     {
         $query = Permission::query();
 
-        if (!empty($this->search)) {
-            $query->where('name', 'LIKE', '%' . $this->search . '%')
-                  ->orWhere('label', 'LIKE', '%' . $this->search . '%');
+        if (! empty($this->search)) {
+            $query->where('name', 'LIKE', '%'.self::escapeLikeWildcards($this->search).'%')
+                ->orWhere('label', 'LIKE', '%'.self::escapeLikeWildcards($this->search).'%');
         }
-        
+
         $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
             ? $this->sortBy['column'] : 'id';
         $direction = ($this->sortBy['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($column, $direction);
+
         return $query->paginate($this->pageSize());
     }
 
@@ -152,7 +163,7 @@ return new class extends Component
         return [
             'editingId' => $this->editingId,
             'permissions' => $this->permissions(),
-            'headers' => $this->headers()
+            'headers' => $this->headers(),
         ];
     }
 }; ?>
