@@ -81,47 +81,7 @@ return new class extends Component
             ->when($this->selectedSematId, fn($q) => $q->where('s_id', $this->selectedSematId))
             ->when($this->selectedEstekhdamId, fn($q) => $q->where('e_id', $this->selectedEstekhdamId));
 
-        $total = $baseQuery->count();
-
-        $byTahsil = Person::selectRaw('COALESCE(tahsils.name, ?) as tahsil_name, COUNT(*) as count', ['نامشخص'])
-            ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
-            ->whereIn('persons.u_id', $accessibleIds)
-            ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
-            ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
-            ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
-            ->groupBy('tahsil_name')
-            ->pluck('count', 'tahsil_name')
-            ->toArray();
-
-        $bySemat = Person::selectRaw('COALESCE(semats.name, ?) as semat_name, COUNT(*) as count', ['نامشخص'])
-            ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
-            ->whereIn('persons.u_id', $accessibleIds)
-            ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
-            ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
-            ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
-            ->groupBy('semat_name')
-            ->pluck('count', 'semat_name')
-            ->toArray();
-
-        $byEstekhdam = Person::selectRaw('COALESCE(estekhdams.name, ?) as estekhdam_name, COUNT(*) as count', ['نامشخص'])
-            ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
-            ->whereIn('persons.u_id', $accessibleIds)
-            ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
-            ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
-            ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
-            ->groupBy('estekhdam_name')
-            ->pluck('count', 'estekhdam_name')
-            ->toArray();
-
-        $byUnit = Person::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
-            ->leftJoin('units', 'persons.u_id', '=', 'units.id')
-            ->whereIn('persons.u_id', $accessibleIds)
-            ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
-            ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
-            ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
-            ->groupBy('unit_name')
-            ->pluck('count', 'unit_name')
-            ->toArray();
+        $aggregates = $this->aggregatePayload($accessibleIds, $baseQuery);
 
         // Eager loads first, exactly like reports/units (#819): `with()` must
         // precede any degrading call in the chain.
@@ -146,17 +106,102 @@ return new class extends Component
             ->all();
 
         return [
-            'total' => $total,
-            'byTahsil' => $byTahsil,
-            'bySemat' => $bySemat,
-            'byEstekhdam' => $byEstekhdam,
-            'byUnit' => $byUnit,
+            ...$aggregates,
             // `persons` stays a plain array (the fail-closed security tests and
             // the `empty()` check in the view both treat it as one); the
             // paginator rides alongside for `->hasPages()`/`->links()`.
             'persons' => $persons,
             'personsPaginator' => $personsPage,
         ];
+    }
+
+    /**
+     * Issue #1821 — the aggregates are the expensive half of the payload and do
+     * not depend on the page, so they are cached for 10 minutes like the
+     * advanced report (#1282). The paginator and its rows stay live in
+     * chartPayload(); only this slice is frozen.
+     *
+     * The key carries every filter that shapes the aggregates plus the
+     * `unit_hierarchy` generation: `byUnit` joins `units.name`, and a Unit write
+     * bumps only `report_units`, never `report_persons` (#1821). `site` is
+     * mandatory — an empty extras array hashes to `'none'`, which is the key
+     * `ReportController::units()` uses for a different payload shape.
+     *
+     * @param  array<int>  $accessibleIds
+     * @param  \Illuminate\Database\Eloquent\Builder<Person>  $baseQuery
+     * @return array{total: int, byTahsil: array<string, int>, bySemat: array<string, int>, byEstekhdam: array<string, int>, byUnit: array<string, int>}
+     */
+    private function aggregatePayload(array $accessibleIds, $baseQuery): array
+    {
+        $cache = app(\App\Services\CacheInvalidationServiceInterface::class);
+
+        /** @var array{total: int, byTahsil: array<string, int>, bySemat: array<string, int>, byEstekhdam: array<string, int>, byUnit: array<string, int>} $data */
+        $data = $cache->remember(
+            'report_persons',
+            \App\Support\ScopeCacheKey::hash($accessibleIds),
+            function () use ($accessibleIds, $baseQuery): array {
+                $total = (clone $baseQuery)->count();
+
+                $byTahsil = Person::selectRaw('COALESCE(tahsils.name, ?) as tahsil_name, COUNT(*) as count', ['نامشخص'])
+                    ->leftJoin('tahsils', 'persons.t_id', '=', 'tahsils.id')
+                    ->whereIn('persons.u_id', $accessibleIds)
+                    ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
+                    ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
+                    ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
+                    ->groupBy('tahsil_name')
+                    ->pluck('count', 'tahsil_name')
+                    ->toArray();
+
+                $bySemat = Person::selectRaw('COALESCE(semats.name, ?) as semat_name, COUNT(*) as count', ['نامشخص'])
+                    ->leftJoin('semats', 'persons.s_id', '=', 'semats.id')
+                    ->whereIn('persons.u_id', $accessibleIds)
+                    ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
+                    ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
+                    ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
+                    ->groupBy('semat_name')
+                    ->pluck('count', 'semat_name')
+                    ->toArray();
+
+                $byEstekhdam = Person::selectRaw('COALESCE(estekhdams.name, ?) as estekhdam_name, COUNT(*) as count', ['نامشخص'])
+                    ->leftJoin('estekhdams', 'persons.e_id', '=', 'estekhdams.id')
+                    ->whereIn('persons.u_id', $accessibleIds)
+                    ->when($this->selectedUnitId, fn($q) => $q->where('persons.u_id', $this->selectedUnitId))
+                    ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
+                    ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
+                    ->groupBy('estekhdam_name')
+                    ->pluck('count', 'estekhdam_name')
+                    ->toArray();
+
+                $byUnit = Person::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
+                    ->leftJoin('units', 'persons.u_id', '=', 'units.id')
+                    ->whereIn('persons.u_id', $accessibleIds)
+                    ->when($this->selectedTahsilId, fn($q) => $q->where('persons.t_id', $this->selectedTahsilId))
+                    ->when($this->selectedSematId, fn($q) => $q->where('persons.s_id', $this->selectedSematId))
+                    ->when($this->selectedEstekhdamId, fn($q) => $q->where('persons.e_id', $this->selectedEstekhdamId))
+                    ->groupBy('unit_name')
+                    ->pluck('count', 'unit_name')
+                    ->toArray();
+
+                return [
+                    'total' => $total,
+                    'byTahsil' => $byTahsil,
+                    'bySemat' => $bySemat,
+                    'byEstekhdam' => $byEstekhdam,
+                    'byUnit' => $byUnit,
+                ];
+            },
+            10,
+            [
+                'site' => 'reports_persons_payload',
+                'unit' => $this->selectedUnitId,
+                'tahsil' => $this->selectedTahsilId,
+                'semat' => $this->selectedSematId,
+                'estekhdam' => $this->selectedEstekhdamId,
+                'hierarchy' => $cache->getVersion('unit_hierarchy'),
+            ],
+        );
+
+        return $data;
     }
 
     public function getAccessibleUnitsProperty()
