@@ -54,7 +54,7 @@ return new class extends Component
         Session::regenerate();
 
         // ثبت فعالیت ورود
-        \App\Services\ActivityLogService::login('ورود موفق به سیستم با کد ملی: ' . $this->n_code);
+        \App\Services\ActivityLogService::login();
 
         // در Livewire 3 از redirect() برای ناوبری کامل استفاده می‌کنیم
         // navigate: true باعث میشه Livewire به جای full reload، wire:navigate استفاده کنه

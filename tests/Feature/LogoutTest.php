@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -43,13 +44,20 @@ class LogoutTest extends TestCase
     public function test_logout_creates_activity_log(): void
     {
         ['user' => $user] = $this->createUserWithUnit();
+        $displayName = $user->name;
 
         $this->actingAs($user)->post('/logout');
 
         $this->assertDatabaseHas('activity_logs', [
             'type' => 'logout',
             'user_id' => $user->id,
+            'description' => 'خروج از سیستم',
         ]);
+
+        // #1812: the actor is identified by user_id; the display name is no
+        // longer duplicated into the free-text description.
+        $log = ActivityLog::where('type', 'logout')->latest('id')->firstOrFail();
+        $this->assertStringNotContainsString($displayName, (string) $log->description);
     }
 
     public function test_guest_cannot_access_logout(): void
