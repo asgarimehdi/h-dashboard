@@ -119,3 +119,7 @@ REDIS_PASSWORD=<same-as-dev>
 
 ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php
 ZABBIX_TOKEN=
+# Traffic item IDs — numeric Zabbix "itemid" for outbound / inbound interfaces.
+# Unset, the 5-minute sync records a failed run and the dashboard banner flags it.
+ZABBIX_OUT_ITEM_ID=<item-id>
+ZABBIX_IN_ITEM_ID=<item-id>
