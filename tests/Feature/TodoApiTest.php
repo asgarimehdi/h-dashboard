@@ -54,6 +54,31 @@ class TodoApiTest extends TestCase
             ]);
     }
 
+    public function test_todo_without_unit_id_falls_back_to_the_primary_unit(): void
+    {
+        // #1803: the fallback chain is `unit_id -> primaryUnit() -> person.u_id`.
+        // With exactly one primary enforced, primaryUnit() is deterministic —
+        // pin that a todo with no unit_id lands in the pivot primary, not the
+        // person's home unit.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
+        $primaryUnit = Unit::create(['name' => 'واحد اصلی', 'parent_id' => $unit->id]);
+        $user->setPrimaryUnit($primaryUnit->id);
+        $token = $this->createApiToken($user, ['todos:read', 'todos:write']);
+
+        $response = $this->apiPost('/api/todos', [
+            'title' => 'تسک بدون واحد',
+            'start_at' => '2026-07-15 10:00:00',
+        ], $token);
+
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('todos', [
+            'title' => 'تسک بدون واحد',
+            'unit_id' => $primaryUnit->id,
+            'user_id' => $user->id,
+        ]);
+    }
+
     public function test_user_can_create_todo_in_accessible_unit(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['calendar']);
