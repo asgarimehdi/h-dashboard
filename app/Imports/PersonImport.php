@@ -735,6 +735,13 @@ class PersonImport implements ToCollection, WithCustomCsvSettings, WithHeadingRo
 
     private function detectChanges(Person $existing, array $newData): array
     {
+        // #1769 (mirror of #1758): compare what will actually be WRITTEN.
+        // `normalizeWriteData()` applies the same folding as Person's `saving`
+        // hook — only `f_name`/`l_name`, and both are in `$compareFields`
+        // below — so a cell that differs only in Persian variants (ي/ك, أ/إ/آ,
+        // ZWNJ, digits) is not reported as an update the write would not perform.
+        $newData = $this->normalizeWriteData($newData);
+
         $changes = [];
         $compareFields = ['f_name', 'l_name', 't_id', 'e_id', 'r_id', 's_id', 'u_id', 'phone'];
 

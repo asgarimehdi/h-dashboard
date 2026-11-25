@@ -598,4 +598,99 @@ class PersonImportEdgeCasesTest extends TestCase
 
         @unlink($file);
     }
+
+    // -----------------------------------------------------------
+    //  ایشو #1769: آینهٔ #1758 — پیش‌نمایش باید همان چیزی را مقایسه کند
+    //  که نوشته می‌شود (ي/ك/أ و ارقام فارسی)
+    // -----------------------------------------------------------
+
+    public function test_a_name_that_differs_only_in_persian_variants_is_not_a_change(): void
+    {
+        $this->createExistingPerson(); // احمد / محمدی (هوک saving آن‌ها را folded ذخیره کرده)
+
+        // أ = U+0623 و ي = U+064A؛ هر دو در normalizeForSearch به ا/ی تبدیل می‌شوند.
+        $file = $this->csv([$this->personRow('1234567890', 'أحمد', 'محمدي')]);
+
+        $import = $this->scopedImport();
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame('unchanged', $results['preview'][0]['status']);
+        $this->assertSame(0, $results['updated']);
+        $this->assertSame(1, $results['skipped']);
+        $this->assertArrayNotHasKey('changes', $results['preview'][0]);
+        $this->assertSame(1, $results['created'] + $results['updated'] + $results['skipped']);
+        $this->assertDatabaseHas('persons', [
+            'n_code' => '1234567890',
+            'f_name' => 'احمد',
+            'l_name' => 'محمدی',
+        ]);
+
+        @unlink($file);
+    }
+
+    public function test_confirming_a_variant_only_row_writes_nothing(): void
+    {
+        $this->createExistingPerson(); // احمد / محمدی
+
+        $file = $this->csv([$this->personRow('1234567890', 'احمد', 'محمدي')]);
+
+        $import = $this->scopedImport();
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+
+        $this->assertSame(0, $results['updated']);
+        $this->assertSame(1, $results['skipped']);
+        $this->assertSame([], $results['changes']);
+        $this->assertSame([], $results['errors']);
+        $this->assertDatabaseHas('persons', [
+            'n_code' => '1234567890',
+            'f_name' => 'احمد',
+            'l_name' => 'محمدی',
+        ]);
+
+        @unlink($file);
+    }
+
+    public function test_a_genuinely_different_name_still_updates_and_reimport_is_stable(): void
+    {
+        $this->createExistingPerson(); // احمد / محمدی
+
+        // أ→ا و ي→ی: تغییر واقعی است، و `new` در پیش‌نمایش باید folded باشد.
+        $file = $this->csv([$this->personRow('1234567890', 'أکبر', 'رضايي')]);
+
+        $preview = $this->scopedImport();
+        Excel::import($preview, $file);
+        $results = $preview->getImportResults();
+
+        $this->assertSame('update', $results['preview'][0]['status']);
+        $this->assertSame(1, $results['updated']);
+        $this->assertSame(['f_name', 'l_name'], array_keys($results['preview'][0]['changes']));
+        $this->assertSame(['old' => 'احمد', 'new' => 'اکبر'], $results['preview'][0]['changes']['f_name']);
+        $this->assertSame(['old' => 'محمدی', 'new' => 'رضایی'], $results['preview'][0]['changes']['l_name']);
+
+        $confirm = $this->scopedImport();
+        $confirm->setSelectedActions(['row_2' => 'update']);
+        Excel::import($confirm, $file);
+
+        $this->assertSame(1, $confirm->getImportResults()['updated']);
+        $this->assertDatabaseHas('persons', [
+            'n_code' => '1234567890',
+            'f_name' => 'اکبر',
+            'l_name' => 'رضایی',
+        ]);
+
+        // round-trip: write با همان تابعی fold کرد که مقایسه fold می‌کند
+        $again = $this->scopedImport();
+        Excel::import($again, $file);
+        $againResults = $again->getImportResults();
+
+        $this->assertSame(0, $againResults['updated']);
+        $this->assertSame('unchanged', $againResults['preview'][0]['status']);
+
+        @unlink($file);
+    }
 }
