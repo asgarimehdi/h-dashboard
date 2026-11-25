@@ -186,7 +186,7 @@ class GisController extends Controller
             $this->applyBboxAliased($query, $request);
 
             if ($request->filled('type')) {
-                $type = self::normalizeForQuery($request->type);
+                $type = self::normalizeForQuery((string) $request->type);
                 $query->where('hardwares.type', 'LIKE', "%{$type}%");
             }
             if ($request->filled('shutdown')) {
@@ -271,10 +271,10 @@ class GisController extends Controller
                 });
 
             if ($request->filled('priority')) {
-                $query->where('priority', $request->priority);
+                $query->where('priority', (string) $request->priority);
             }
             if ($request->filled('status')) {
-                $query->where('status', $request->status);
+                $query->where('status', (string) $request->status);
             }
 
             $tickets = $query->limit(1000)->get();

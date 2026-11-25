@@ -137,6 +137,19 @@ class HrStatsController extends Controller
      */
     public function personnel(UnitScopedRequest $request): JsonResponse
     {
+        // Issue #1811: malformed list/filter params must be a 422, never a
+        // 500 from a typed helper or a typed column. Validate before any
+        // query use — the same pattern as PersonController (#1777).
+        $validated = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string'],
+            'unit_id' => ['sometimes', 'nullable', 'integer'],
+            'semat_id' => ['sometimes', 'nullable', 'integer'],
+            'tahsil_id' => ['sometimes', 'nullable', 'integer'],
+            'estekhdam_id' => ['sometimes', 'nullable', 'integer'],
+            'radif_id' => ['sometimes', 'nullable', 'integer'],
+            'status' => ['sometimes', 'nullable', 'in:active,inactive,retired'],
+        ]);
+
         $accessibleIds = $request->accessibleIds();
 
         $query = Person::leftJoin('units', 'persons.u_id', '=', 'units.id')
@@ -156,7 +169,7 @@ class HrStatsController extends Controller
 
         $p = 'persons.';
         if ($request->filled('search')) {
-            $s = self::normalizeForQuery($request->search);
+            $s = self::normalizeForQuery((string) $validated['search']);
             $query->where(function ($q) use ($s, $p) {
                 $q->where($p.'n_code', 'LIKE', "%{$s}%")
                     ->orWhere($p.'f_name', 'LIKE', "%{$s}%")
@@ -168,7 +181,7 @@ class HrStatsController extends Controller
         }
         foreach (['unit_id' => 'u_id', 'semat_id' => 's_id', 'tahsil_id' => 't_id', 'estekhdam_id' => 'e_id', 'radif_id' => 'r_id', 'status' => 'status'] as $param => $col) {
             if ($request->filled($param)) {
-                $query->where($p.$col, $request->{$param});
+                $query->where($p.$col, $validated[$param]);
             }
         }
 
