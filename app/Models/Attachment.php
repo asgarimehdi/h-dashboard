@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Support\AttachmentFiles;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * @property int $id
@@ -40,16 +40,10 @@ class Attachment extends Model
     protected static function booted(): void
     {
         static::deleting(function (self $attachment): void {
-            $path = ltrim((string) $attachment->file_path, '/');
-
-            // Same guard as TicketAttachmentController::show(): `file_path` is
-            // database data, but a `..` segment must never address a file
-            // outside the disk root.
-            if ($path === '' || in_array('..', explode('/', $path), true)) {
-                return;
-            }
-
-            Storage::disk('local')->delete($path);
+            // The traversal guard (`..`) and the legacy-prefix normalisation
+            // live in the shared helper, so the restore path and this hook
+            // cannot drift apart (#1776).
+            AttachmentFiles::delete([$attachment->file_path]);
         });
     }
 

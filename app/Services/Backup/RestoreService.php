@@ -2,8 +2,12 @@
 
 namespace App\Services\Backup;
 
+use App\Console\Commands\PruneStaleCache;
 use App\Exceptions\BackupValidationException;
 use App\Models\User;
+use App\Services\CacheInvalidationServiceInterface;
+use App\Support\AttachmentFiles;
+use App\Support\AttachmentPath;
 use App\Support\Backup\RestoreResult;
 use App\Support\Backup\TableRegistry;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +66,26 @@ use Illuminate\Support\Facades\DB;
  * morph map is registered. If `personal_access_tokens` is ever registered in
  * {@see TableRegistry}, this revocation has to be re-examined — restoring
  * back-up tokens would re-open the re-binding hazard it closes.
+ *
+ * ## Files and caches (issue #1776)
+ *
+ * The replacement stays RAW on purpose. A model-driven delete would fire
+ * `HardwareAuditObserver` — writing phantom `hardware_audits` rows after that
+ * table has already been emptied — and `Ticket::deleting` would delete the
+ * files of the rows the SAME file is about to re-insert.
+ *
+ * So only the files that lost their last row are removed: the set difference
+ * between the paths before the replace and the paths the restored rows still
+ * reference. That is what keeps a full restore from destroying the files its
+ * own rows return with.
+ *
+ * The cleanup and the cache invalidation run in `DB::afterCommit`: files and
+ * caches are not transactional, and a rolled-back restore must touch neither.
+ * All registered namespaces are bumped (over-invalidation is harmless;
+ * under-invalidation is the bug this closes).
+ *
+ * `attachments:prune-orphans` remains a MANUAL sweep — it is still not
+ * scheduled — and this path only covers the rows a restore itself drops.
  */
 class RestoreService
 {
@@ -83,6 +107,11 @@ class RestoreService
      * The preferred number of rows per insert/upsert statement.
      */
     private const ROW_CHUNK_SIZE = 500;
+
+    /**
+     * How many attachment rows are read per snapshot chunk.
+     */
+    private const PATH_CHUNK_SIZE = 1000;
 
     public function __construct(
         private readonly BackupArchiveReader $reader,
@@ -139,6 +168,11 @@ class RestoreService
         return DB::transaction(function () use ($table, $source): RestoreResult {
             $this->validator->validateTable($table, $source);
 
+            // Files are not transactional: remember what the rows point at
+            // BEFORE the replace, so only the paths the file leaves orphaned
+            // are removed afterwards (#1776).
+            $pathsBefore = $this->attachmentPaths();
+
             if ($table === 'users') {
                 // Before the replace: the ids of the accounts that are about
                 // to be upserted or deleted are the ones whose grants go.
@@ -147,6 +181,15 @@ class RestoreService
 
             $rowCount = $this->replaceRows($table, $source);
             $this->resyncSequence($table);
+
+            $stale = $this->attachmentPathsRemovedBy($pathsBefore);
+
+            // A rolled-back restore must not touch a file or a cache
+            // version: both are outside the transaction.
+            DB::afterCommit(function () use ($stale): void {
+                AttachmentFiles::delete($stale);
+                $this->invalidateCaches();
+            });
 
             return new RestoreResult(
                 full: false,
@@ -178,6 +221,10 @@ class RestoreService
             $order = $this->registry->topologicalOrder();
             $available = array_flip($source->tables());
 
+            // BEFORE the tables are emptied — `attachments` is one of them,
+            // so the snapshot cannot be taken inside the delete loop (#1776).
+            $pathsBefore = $this->attachmentPaths();
+
             if (in_array('users', $order, true)) {
                 // Every account row is replaced by a full restore, so the
                 // snapshot has to be taken before the tables are emptied.
@@ -201,6 +248,15 @@ class RestoreService
             foreach ($order as $table) {
                 $this->resyncSequence($table);
             }
+
+            $stale = $this->attachmentPathsRemovedBy($pathsBefore);
+
+            // A rolled-back restore must not touch a file or a cache
+            // version: both are outside the transaction.
+            DB::afterCommit(function () use ($stale): void {
+                AttachmentFiles::delete($stale);
+                $this->invalidateCaches();
+            });
 
             return new RestoreResult(
                 full: true,
@@ -255,6 +311,74 @@ class RestoreService
                 ->whereIn('model_id', $ids)
                 ->delete();
         }
+    }
+
+    /**
+     * Every attachment file path the database references right now.
+     *
+     * Read in chunks so the snapshot never holds the rows themselves
+     * (issue #1418); only the distinct normalised paths stay in memory.
+     *
+     * @return list<string>
+     */
+    private function attachmentPaths(): array
+    {
+        $paths = [];
+
+        DB::table('attachments')
+            ->select(['id', 'file_path'])
+            ->orderBy('id')
+            ->chunkById(self::PATH_CHUNK_SIZE, function ($rows) use (&$paths): void {
+                foreach ($rows as $row) {
+                    $paths[] = AttachmentPath::normalize((string) (((array) $row)['file_path'] ?? ''));
+                }
+            });
+
+        return array_values(array_unique(array_filter(
+            $paths,
+            static fn (string $path): bool => $path !== ''
+        )));
+    }
+
+    /**
+     * The attachment paths the restore has left without a row.
+     *
+     * The set difference is the whole point: a full restore deletes rows the
+     * same file re-inserts, so "every path the replaced rows carried" would
+     * delete the files the restored rows still use.
+     *
+     * @param  list<string>  $before
+     * @return list<string>
+     */
+    private function attachmentPathsRemovedBy(array $before): array
+    {
+        $after = array_fill_keys($this->attachmentPaths(), true);
+
+        return array_values(array_filter(
+            $before,
+            static fn (string $path): bool => ! isset($after[$path])
+                && ! in_array('..', explode('/', $path), true)
+        ));
+    }
+
+    /**
+     * Bump every registered cache namespace once.
+     *
+     * A restore is a whole-DB replacement: namespaces with no model hook
+     * (`report_tickets`, `calendar`, `global_search`, the disease maps, …)
+     * are stale too. Over-invalidation is harmless; under-invalidation is the
+     * bug (#1776). {@see PruneStaleCache::NAMESPACES} is the single source of
+     * truth.
+     */
+    private function invalidateCaches(): void
+    {
+        $cache = app(CacheInvalidationServiceInterface::class);
+
+        $cache->batch(function () use ($cache): void {
+            foreach (PruneStaleCache::NAMESPACES as $namespace) {
+                $cache->increment($namespace);
+            }
+        });
     }
 
     /**
