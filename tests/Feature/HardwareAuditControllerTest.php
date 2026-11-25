@@ -432,6 +432,60 @@ class HardwareAuditControllerTest extends TestCase
         $this->assertEquals(0, $response->json('meta.total'));
     }
 
+    public function test_index_rejects_non_integer_user_id(): void
+    {
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+
+        $this->apiGet("/api/hardware/{$this->hardware->id}/audits?user_id=abc", $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('user_id');
+    }
+
+    public function test_index_rejects_garbage_date_from(): void
+    {
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+
+        $this->apiGet("/api/hardware/{$this->hardware->id}/audits?date_from=garbage", $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('date_from');
+    }
+
+    public function test_index_binds_a_postgres_safe_literal_for_a_two_digit_year_date(): void
+    {
+        $this->hardware->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->latest('created_at')
+            ->first();
+
+        // The `date` rule accepts `26-11-25`, but Postgres rejects the raw
+        // string with 22008 — the controller must bind a normalized literal.
+        $twoDigit = substr((string) $audit->getRawOriginal('created_at'), 2, 8);
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$this->hardware->id}/audits?date_from={$twoDigit}", $token);
+
+        $response->assertStatus(200);
+        $this->assertGreaterThan(0, $response->json('meta.total'));
+    }
+
+    public function test_export_rejects_non_integer_user_id(): void
+    {
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+
+        $this->apiGet("/api/hardware/{$this->hardware->id}/audits/export?user_id=abc", $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('user_id');
+    }
+
+    public function test_export_rejects_garbage_date_to(): void
+    {
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+
+        $this->apiGet("/api/hardware/{$this->hardware->id}/audits/export?date_to=garbage", $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('date_to');
+    }
+
     // ──────────────────────────────────────────────
     // Explicit-ability token tests
     // ──────────────────────────────────────────────
