@@ -17,8 +17,8 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 ### Tech Stack
 
 - **Framework:** Laravel 13.x on PHP ^8.4 (CI runs 8.5; Symfony 8.1 requires ≥8.4)
-- **PHP 8.6 preview:** only `brianium/paratest` v7.20.0 (dev) still caps `require.php` below 8.6, so `test-php86` installs with `--ignore-platform-req=php`; the nette pair (`nette/schema` v1.4.0, `nette/utils` v4.1.6) already allows 8.6 inside today's `^1.2`/`^4.0` (#1506). The long pole is upstream: `brianium/paratest` ≥7.25.0 needs `phpunit ^13` (pest 5).
-- **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php` as `return new class extends Component { ... };` (no separate file under `app/Livewire/`). Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
+- **PHP 8.6 preview:** only `brianium/paratest` v7.20.0 (dev) still caps `require.php` below 8.6, so `test-php86` installs with `--ignore-platform-req=php`; `nette/schema` v1.4.0 + `nette/utils` v4.1.6 already allow 8.6 (`^1.2`/`^4.0`) (#1506). Long pole: `brianium/paratest` ≥7.25.0 needs `phpunit ^13` (pest 5).
+- **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php`. Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
 - **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
 - **Auth:** Laravel Sanctum (session guard for web, Bearer tokens for the Flutter app)
@@ -39,7 +39,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 
 **Key facts:** the `persons` PK is `id` (bigint) — `n_code` is only a *unique* `string(10)` and is **not** a safe key to carry across a JS boundary. `s_id` (not `semat_id`) is the FK column on `persons` for job title. `user_units` is the many-to-many user↔unit pivot (role enum `responsible`/`staff`, `is_primary` flag).
 
-**Abbreviations:** `n_code` national code (person unique ID); `u_id` unit FK on persons; `CTE` common table expression (recursive SQL); `GIS` geographic information system; `SRID` spatial reference identifier (4326 = WGS84).
+**Abbreviations:** `n_code` national code (person unique ID); `u_id` unit FK on persons; `CTE` common table expression; `GIS` geographic information system; `SRID` spatial reference id (4326 = WGS84).
 
 ---
 
@@ -86,15 +86,14 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **CSS:** Tailwind utility classes over custom CSS
 - **Pagination:** `LengthAwarePaginator` with `WithPagination` trait
 - **Forms:** MaryUI `x-input`, `x-select`, `x-button` components
-- **x-select key mapping:** MaryUI defaults to `optionValue='id'` / `optionLabel='name'`. If your options use `value`/`label` keys you **must** pass `option-value="value" option-label="label"`, otherwise every `<option>` renders **empty** and the control looks blank (#706). Build option lists in a component method (`typeOptions()`) and pass `:options="$this->typeOptions()"` — a bare `$typeOptions` is undefined in the Blade view.
+- **x-select key mapping:** MaryUI defaults to `optionValue='id'` / `optionLabel='name'`; for `value`/`label` options pass `option-value="value" option-label="label"`, or every `<option>` renders **empty** (#706). Build the list in a component method (`typeOptions()`); a bare `$typeOptions` is undefined in Blade.
 - **Modal:** `x-modal` with `close-on-backdrop`
-- **Testing:** Pest — `tests/Feature/*`, run via **`composer test`**
 - **Test Review Rule:** Every code change MUST include test review. Before finalizing: (1) check if existing tests cover the changed code, (2) add/update tests for new behavior, bug fixes, or contract changes. No code change ships without corresponding test coverage verification.
-- **Factories:** 18 factories exist under `database/factories/` — `Ticket` DOES use `HasFactory`, so `Ticket::factory()` works (the old "no `HasFactory`" gotcha was wrong, #983 — see [testing](docs/agents/testing.md)); `created_at` is not fillable — back-date with `forceFill([...])->saveQuietly()`.
-- **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes. Pint is enforced in CI and via pre-commit hook.
+- **Factories:** 18 factories exist under `database/factories/` — `Ticket` DOES use `HasFactory`, so `Ticket::factory()` works (old 'no `HasFactory`' gotcha was wrong, #983); `created_at` is not fillable — back-date with `forceFill([...])->saveQuietly()`.
+- **Formatting:** run `vendor/bin/pint --dirty --format agent` before finalizing PHP changes.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
-- **Frontend rebuild:** After frontend changes run `npm run build` (or `vite build`).
+- **Frontend rebuild:** After frontend changes run `npm run build`.
 - **JS lint/format:** `npm run lint` + `npm run format` after touching `resources/js/`.
 
 ### Composer Scripts
@@ -115,13 +114,13 @@ composer hooks:install  # git config core.hooksPath .githooks
 ### Laravel Boost (MCP)
 Prefer `database-query`, `database-schema`, `search-docs`, `get-absolute-url`, `browser-logs` over manual alternatives; always search docs before code changes. When no MCP transport is available: `php scripts/boost_tool.php <tool> '<json-args>'` (e.g. `php scripts/boost_tool.php application-info '{}'`).
 
-Discover MCP tools with `tool_search`, load schemas with `tool_describe`, invoke with `tool_call`. Always use CodeGraph before grep/glob for code-understanding tasks.
+Discover MCP tools with `tool_search`, load schemas with `tool_describe`, invoke with `tool_call`.
 
 ---
 
 ## Code Intelligence (CodeGraph)
 
-[CodeGraph](https://github.com/colbymchenry/codegraph) — local (100% on-machine, SQLite, no API keys) code knowledge graph. Supports PHP/Laravel (routes → handlers) and cross-language flows.
+[CodeGraph](https://github.com/colbymchenry/codegraph) — local (100% on-machine, SQLite, no API keys) code knowledge graph for PHP/Laravel and cross-language flows.
 
 **Hermes Agent MUST use CodeGraph for code-understanding tasks.** Before crawling files with grep/glob/Read to answer a structural question, run `codegraph explore` / `codegraph query` first.
 
