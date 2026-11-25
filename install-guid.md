@@ -156,9 +156,16 @@ DB_DEFAULT_PASSWORD=...
 
 ZABBIX_URL=http://127.0.0.1:8443/api_jsonrpc.php
 ZABBIX_TOKEN=...
+ZABBIX_OUT_ITEM_ID=...    # Zabbix itemid — outbound interface
+ZABBIX_IN_ITEM_ID=...     # Zabbix itemid — inbound interface
 # Map tiles: only TILE_URL_TEMPLATE has any effect (TILE_SERVER_* were retired in #1508).
 TILE_URL_TEMPLATE=https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
 ```
+
+`ZABBIX_OUT_ITEM_ID` / `ZABBIX_IN_ITEM_ID` feed the 5-minute traffic sync; with
+either unset the sync records a failed run and the dashboard sync banner flags
+it. The `/it/networks` and `/it/wireless` widgets read the item IDs registered
+in `zabbix_devices` instead (#1621).
 
 `APP_URL` is the canonical public URL — it no longer has to equal the host the
 browser uses. The GIS map and the Zabbix charts call `/api/*` with the session
@@ -573,6 +580,7 @@ default (§6), and a deployment left on `true` leaks stack traces on every error
 | Upload of Excel fails with 413 | Body size limit | `client_max_body_size 64M;` in vhost |
 | Pages show stale config after `.env` change | Config cached by `optimize` | `php artisan config:clear && php artisan optimize` |
 | Livewire Entangle error in console: property cannot be found | Blade wires `wireModel="showHelpModal"` but component lacks it | Add `public bool $showHelpModal = false;` to the page's class/SFC |
+| Dashboard banner: `sync زیبکس ناموفق — داده ترافیک در دسترس نیست` | `zabbix_sync_logs.error` = `Zabbix item IDs not configured` | Set `ZABBIX_OUT_ITEM_ID` / `ZABBIX_IN_ITEM_ID` in `.env`, then `php artisan config:clear` |
 
 ---
 
