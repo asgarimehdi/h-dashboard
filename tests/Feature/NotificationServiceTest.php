@@ -264,7 +264,7 @@ class NotificationServiceTest extends TestCase
         // Create two users in same unit
         foreach (range(1, 2) as $i) {
             ['user' => $user] = $this->createUserWithUnit();
-            $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+            $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => false]);
         }
 
         NotificationService::notifyUnit($unit->id, 'test', 'اعلان واحد', 'متن تست', '/dashboard');
