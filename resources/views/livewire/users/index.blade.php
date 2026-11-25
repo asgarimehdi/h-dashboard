@@ -504,13 +504,22 @@ return new class extends Component
 
                 $user->update($data);
 
+                // Issue #1823: capture the abilities the holder's live tokens
+                // were minted from BEFORE the role/permission sync below. A
+                // Sanctum token snapshots its abilities at login, so only
+                // deleting the token makes a demotion reach the API.
+                $abilitiesBefore = $user->getApiTokenAbilities();
+                sort($abilitiesBefore);
+
                 // Issue #1030: an admin password reset must revoke the target's
                 // Sanctum tokens, exactly like the self-service path
                 // (`auth/changepassword`) already does. Guarded on an
                 // actually-changed password: a plain profile/role edit must not log
                 // the user's devices out. Every token dies (including
                 // `map-dashboard`) so both password-change paths stay in lockstep —
-                // see `docs/agents/api-auth.md`.
+                // see `docs/agents/api-auth.md`. A role/permission edit that
+                // actually changes the API ability set revokes them too (#1823
+                // below); a privilege-neutral edit still keeps them alive.
                 if ($passwordChanged) {
                     $user->tokens()->delete();
                 }
@@ -518,6 +527,23 @@ return new class extends Component
                 $user->roles()->sync($this->role_ids);
                 $user->syncPermissions($this->user_permissions);
                 $user->units()->sync($this->unit_ids);
+
+                // Issue #1823: `hasRole('admin')` above already cached `roles`
+                // on this instance and `roles()->sync()` does not unset it (nor
+                // `getPermissionsViaRoles()`'s `roles.permissions`), so the
+                // "after" snapshot would be stale and a role-based demotion
+                // would revoke nothing. Any ability-set change — grant or
+                // revoke — revokes every token, keeping token abilities equal
+                // to the holder's current abilities; a privilege-neutral edit
+                // (no-op, unit-only) leaves them alive.
+                $user->unsetRelation('roles')->unsetRelation('permissions');
+
+                $abilitiesAfter = $user->getApiTokenAbilities();
+                sort($abilitiesAfter);
+
+                if ($abilitiesAfter !== $abilitiesBefore) {
+                    $user->tokens()->delete();
+                }
 
                 // #1803: `sync()` writes bare ids, so a fresh user (or one
                 // whose primary unit was just removed) would have none. The

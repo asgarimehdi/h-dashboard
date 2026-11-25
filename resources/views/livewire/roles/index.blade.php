@@ -96,7 +96,18 @@ return new class extends Component
         RoleGuard::assertAdminRoleSurvives($role);
 
         try {
-            $role->delete();
+            // Issue #1823: capture the holders BEFORE the delete — the
+            // `model_has_roles` rows cascade away with the role. Deleting a
+            // role strips its permissions from every holder, so their tokens
+            // must die with it; otherwise the invariant "token abilities =
+            // the holder's current abilities" breaks on delete.
+            $holderIds = $role->users()->pluck('users.id')->all();
+
+            \Illuminate\Support\Facades\DB::transaction(function () use ($role, $holderIds): void {
+                $role->delete();
+                $this->revokeTokensForUserIds($holderIds);
+            });
+
             $this->warning("$role->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
             // Issue #892: the generic `catch (\Exception $e)` swallowed the
@@ -167,11 +178,48 @@ return new class extends Component
         // locks everyone out exactly like deleting it.
         RoleGuard::assertAdminRoleKeepsItsName($role, $this->name);
 
-        $role->update(['name' => $this->name, 'label' => $this->label]);
-        $role->syncPermissions($this->permissions);
+        // Issue #1823: a role's permission set is the source of its holders'
+        // token abilities. Capture it before the rewrite, plus the holder ids
+        // — the fan-out must stay scoped to THIS role, never org-wide.
+        $permissionsBefore = $role->permissions->pluck('name')->sort()->values()->all();
+        $holderIds = $role->users()->pluck('users.id')->all();
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($role, $permissionsBefore, $holderIds): void {
+            $role->update(['name' => $this->name, 'label' => $this->label]);
+            $role->syncPermissions($this->permissions);
+
+            $permissionsAfter = $role->permissions()->pluck('name')->sort()->values()->all();
+
+            // A rename-only or label-only edit leaves the set identical and
+            // must not log holders out; any grant or revoke changes it.
+            if ($permissionsAfter !== $permissionsBefore) {
+                $this->revokeTokensForUserIds($holderIds);
+            }
+        });
 
         $this->success("$this->name بروزرسانی شد ", 'با موفقیت', position: 'toast-bottom');
         $this->clear();
+    }
+
+    /**
+     * Issue #1823 — revoke the Sanctum tokens of the given user ids.
+     *
+     * Bulk delete (not `each(fn ($u) => $u->tokens()->delete())`) so a role
+     * with many holders costs one query. The morph-type filter keeps the
+     * delete scoped to User tokens, never another tokenable model.
+     *
+     * @param  array<int, int|string>  $userIds
+     */
+    private function revokeTokensForUserIds(array $userIds): void
+    {
+        if ($userIds === []) {
+            return;
+        }
+
+        \Laravel\Sanctum\PersonalAccessToken::query()
+            ->where('tokenable_type', (new User)->getMorphClass())
+            ->whereIn('tokenable_id', $userIds)
+            ->delete();
     }
 
     public function roles(): LengthAwarePaginator
