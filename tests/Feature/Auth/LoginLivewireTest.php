@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\ActivityLog;
 use App\Models\Estekhdam;
 use App\Models\Person;
 use App\Models\Radif;
@@ -117,7 +118,15 @@ class LoginLivewireTest extends TestCase
 
         $this->assertDatabaseHas('activity_logs', [
             'type' => 'login',
+            'description' => 'ورود به سیستم',
         ]);
+
+        $log = ActivityLog::where('type', 'login')->latest('id')->firstOrFail();
+
+        // #1812: the actor is identified by user_id; the national code must
+        // never be written into the free-text description (DENIED_KEYS).
+        $this->assertStringNotContainsString('1234567890', (string) $log->description);
+        $this->assertDoesNotMatchRegularExpression('/\d{10}/', (string) $log->description);
     }
 
     public function test_invalid_credentials_throws_validation_error(): void

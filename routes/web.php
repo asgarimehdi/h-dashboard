@@ -6,7 +6,6 @@ use App\Http\Controllers\Api\UnitsExportController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\TicketAttachmentController;
-use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -40,14 +39,11 @@ Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(functio
 // Route::livewire('/register', 'auth.register')->name('register');
 // Define the logout
 Route::post('/logout', function () {
-    /** @var User|null $user */
-    $user = Auth::user();
     $userId = Auth::id();
-    $userName = $user?->name ?? 'نامشخص';
 
     // ثبت فعالیت خروج
     if ($userId) {
-        ActivityLogService::logout('خروج از سیستم - کاربر: '.$userName);
+        ActivityLogService::logout();
         Session::forget("user_{$userId}_display_name");
     }
 
