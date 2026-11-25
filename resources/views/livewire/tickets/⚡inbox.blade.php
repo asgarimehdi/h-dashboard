@@ -914,7 +914,7 @@ new class extends Component
                 <x-button type="submit"
                     label="{{ $this->targetUnitId ? 'تایید و ارجاع' : 'تکمیل و بستن' }}"
                     class="{{ $this->targetUnitId ? 'btn-info' : 'btn-success' }} flex-1" spinner />
-                <x-button label="انصراف" @click="$wire.isCompletionModalOpen = false" class="btn-ghost flex-1" />
+                <x-button type="button" label="انصراف" wire:click="closeCompletionModal" class="btn-ghost flex-1" />
             </div>
         </x-form>
     </x-modal>

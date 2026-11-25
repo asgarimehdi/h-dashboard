@@ -238,7 +238,46 @@ trait TicketsInboxFlow
         // request; dropping it keeps the id and the re-render in lockstep.
         unset($this->showingTicket);
         $this->reset(['targetUnitId', 'targetUnitName', 'unitSearch', 'forwardNote']);
+        // #1768: the completion modal used to outlive the detail modal that
+        // opened it — closing detail must take it down and clear its form.
+        $this->closeCompletionModal();
         $this->showModal = false;
+    }
+
+    /**
+     * #1768: the completion/forward modal's own exit path.
+     *
+     * The cancel button and CspModal's client-side closes (✕/backdrop/Escape,
+     * which only `$wire.set('isCompletionModalOpen', false)` — see
+     * resources/js/mary-components.js) used to leave the note, the attachments
+     * and the picked destination behind, so the next open — or the next ticket
+     * — inherited them.
+     *
+     * `showingTicketId` is deliberately NOT reset: cancel returns to whatever
+     * the detail modal was showing, and nulling the id would blank an open
+     * detail modal (`@if($this->showingTicket)` in the view) while
+     * `showModal` is still true. The success paths in `submitAction()` reset
+     * the id because they close the whole flow.
+     */
+    public function closeCompletionModal(): void
+    {
+        $this->reset([
+            'isCompletionModalOpen', 'completionNote', 'completionFiles',
+            'targetUnitId', 'targetUnitName', 'unitSearch',
+        ]);
+    }
+
+    /**
+     * #1768: CspModal's ✕/backdrop/Escape only write the boolean through
+     * `$wire.set()`; this hook is the one server-side point every such close
+     * passes through, so the reset cannot be bypassed by dismissing the modal
+     * instead of pressing انصراف.
+     */
+    public function updatedIsCompletionModalOpen(bool $value): void
+    {
+        if (! $value) {
+            $this->closeCompletionModal();
+        }
     }
 
     public function selectTargetUnit($id): void
@@ -505,6 +544,11 @@ trait TicketsInboxFlow
             return;
         }
 
+        // #1768: a previous ticket's note/files/destination must never ride
+        // into this open. Reset only after the scope gate, so a refused open
+        // does not destroy an in-progress form.
+        $this->closeCompletionModal();
+
         // The scoped find above is still the gate (#1055); the completion
         // modal reads its data from the scoped `showingTicket` computed, so
         // only the id is remembered here (#1176).
@@ -521,6 +565,20 @@ trait TicketsInboxFlow
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
         $finalId = $id ?? $this->showingTicketId;
+
+        // #1768: closeDetail() nulls the id, and a submit from a stale form
+        // used to reach findOrFail(null) → 404. There is no field to attach
+        // this to, so use the flow's "cannot act" channel and close the
+        // stranded modal; the ticket itself must not be touched.
+        if (! $finalId) {
+            $this->dispatch('swal', [
+                'title' => 'تیکتی برای ثبت این عملیات انتخاب نشده است.',
+                'icon' => 'warning',
+            ]);
+            $this->closeCompletionModal();
+
+            return;
+        }
 
         $ticket = Ticket::whereIn('unit_id', $accessibleIds)->findOrFail($finalId);
 
