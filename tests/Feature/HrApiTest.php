@@ -237,6 +237,107 @@ class HrApiTest extends TestCase
         $response->assertStatus(401);
     }
 
+    // === Issue #1802: personnel PII allowlist ===
+
+    /**
+     * The factory sets no PII columns, so a test that relies on setUp's row
+     * would pass on the pre-fix code and pin nothing.
+     */
+    private function setPersonPii(): Person
+    {
+        $person = Person::first();
+        $person->update([
+            'phone' => '09123456789',
+            'birth_date' => '1990-01-01',
+            'hire_date' => '2015-04-01',
+        ]);
+
+        return $person->refresh();
+    }
+
+    public function test_personnel_list_strips_pii_for_dashboard_only_viewer(): void
+    {
+        $person = $this->setPersonPii();
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/personnel?status=active', $token);
+
+        $response->assertStatus(200)
+            ->assertJsonMissingPath('data.0.phone')
+            ->assertJsonMissingPath('data.0.birth_date')
+            ->assertJsonMissingPath('data.0.hire_date')
+            ->assertJsonMissingPath('data.0.f_name_folded')
+            ->assertJsonMissingPath('data.0.full_name_folded')
+            ->assertJsonPath('data.0.n_code', $person->n_code)
+            ->assertJsonPath('data.0.status', 'active')
+            ->assertJsonPath('data.0.unit.name', 'مرکز بهداشت');
+    }
+
+    public function test_personnel_detail_strips_pii_for_dashboard_only_viewer(): void
+    {
+        $person = $this->setPersonPii();
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/personnel/{$person->n_code}", $token);
+
+        $response->assertStatus(200)
+            ->assertJsonMissingPath('data.phone')
+            ->assertJsonMissingPath('data.birth_date')
+            ->assertJsonMissingPath('data.hire_date')
+            ->assertJsonMissingPath('data.f_name_folded')
+            ->assertJsonMissingPath('data.full_name_folded')
+            ->assertJsonPath('data.n_code', $person->n_code)
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.unit.name', 'مرکز بهداشت');
+    }
+
+    public function test_personnel_list_returns_pii_for_personnel_manager(): void
+    {
+        $person = $this->setPersonPii();
+        $this->user->givePermissionTo('kargozini');
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/personnel?status=active', $token);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.0.phone', '09123456789');
+
+        $this->assertSame($person->birth_date->toJSON(), $response->json('data.0.birth_date'));
+        $this->assertSame($person->hire_date->toJSON(), $response->json('data.0.hire_date'));
+        $this->assertSame($person->n_code, $response->json('data.0.n_code'));
+    }
+
+    public function test_personnel_detail_returns_pii_for_personnel_manager(): void
+    {
+        $person = $this->setPersonPii();
+        $this->user->givePermissionTo('kargozini');
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/personnel/{$person->n_code}", $token);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.phone', '09123456789');
+
+        $this->assertSame($person->birth_date->toJSON(), $response->json('data.birth_date'));
+        $this->assertSame($person->hire_date->toJSON(), $response->json('data.hire_date'));
+    }
+
+    public function test_personnel_list_and_detail_share_one_shape(): void
+    {
+        $person = $this->setPersonPii();
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $list = $this->apiGet('/api/hr/personnel?status=active', $token);
+        $detail = $this->apiGet("/api/hr/personnel/{$person->n_code}", $token);
+
+        $listKeys = array_keys($list->json('data.0'));
+        $detailKeys = array_keys($detail->json('data'));
+        sort($listKeys);
+        sort($detailKeys);
+
+        $this->assertSame($detailKeys, $listKeys);
+    }
+
     // === Issue #444: Expandable Org Chart ===
 
     public function test_org_chart_expandable_returns_root_units(): void

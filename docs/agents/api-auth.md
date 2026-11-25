@@ -43,7 +43,7 @@ Sanctum middleware semantics: **`ability:a,b` = ANY one of them**, **`abilities:
 | `/api/reports/*` | `ability:reports:read` + `role_or_permission:manage_personnel` | — |
 | `/api/persons/*` | `ability:persons:read` + `role_or_permission:kargozini\|manage_personnel` | `abilities:persons:write` + `role_or_permission:manage_personnel` |
 | `/api/todos*` | `ability:todos:read,todos:write` (any of the two) + `role_or_permission:calendar` | `abilities:todos:write` (nested inside the outer group, ALL) + `role_or_permission:calendar` (#837) |
-| `/api/hr/*` | `ability:hr:read` + `role_or_permission:view_hr_dashboard` | — (no write routes; the group is GET-only) |
+| `/api/hr/*` | `ability:hr:read` + `role_or_permission:view_hr_dashboard`; row-level PII in `/personnel*` requires `kargozini\|manage_personnel` | — (no write routes; the group is GET-only) |
 | `/api/notifications*` | `ability:notifications:read` | `abilities:notifications:write` (POST `{id}/read` and `read-all`, in their own group since #1002) |
 | `/api/gis/units`, `/api/gis/stats`, `/api/gis/clusters` | `ability:gis:read` + `role_or_permission:map\|bw` | — |
 | `/api/gis/hardware` (#1743) | same `gis` group **plus** `role_or_permission:manage_hardware` (nested = AND — `gis:read` + `map\|bw` still apply) | — |

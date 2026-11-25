@@ -225,7 +225,7 @@ filters on `completed_at IS NOT NULL`, and without it those queries full-scan.
 | GET | `/api/hr/stats` | Aggregated HR stats (total, by unit/semat/tahsil/estekhdam/radif) |
 | GET | `/api/hr/vacancies` | Units with zero personnel |
 | GET | `/api/hr/personnel` | Paginated personnel list; filters: `search`, `unit_id`, `semat_id`, `tahsil_id`, `estekhdam_id`, `radif_id`, `status` |
-| GET | `/api/hr/personnel/{n_code}` | Personnel detail with full HR profile (403 if out of scope) |
+| GET | `/api/hr/personnel/{n_code}` | Personnel detail (403 if out of scope); `phone`/`birth_date`/`hire_date` only for `kargozini\|manage_personnel` callers |
 
 All scoped via `AccessService::accessibleUnitIds()`. Web pages: `/hr-dashboard` + `/hr/org-chart` (permission `view_hr_dashboard`).
 
