@@ -113,6 +113,13 @@ class OrgChartController extends Controller
 
         $units = app(CacheInvalidationServiceInterface::class)->remember('hr_stats', $scopeHash, function () use ($accessibleIds, $initialLimit) {
             return Unit::whereIn('id', $accessibleIds)
+                ->where(function ($query) use ($accessibleIds) {
+                    // Scope-roots predicate — keep in sync with UnitTreeService::roots()
+                    // (the two clauses are deliberate: a bare whereNull() would drop a
+                    // legitimate root whose parent is outside the caller's scope).
+                    $query->whereNull('parent_id')
+                        ->orWhereNotIn('parent_id', $accessibleIds);
+                })
                 ->withCount(['person as personnel_count', 'children as has_children'])
                 ->with('unitType:id,name')
                 ->orderBy('name')

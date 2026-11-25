@@ -175,12 +175,18 @@ class PerPageValidationTest extends TestCase
 
     public function test_valid_initial_limit_is_unchanged(): void
     {
-        ['unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        ['user' => $user] = $this->createUserWithUnit(['view_hr_dashboard']);
 
-        Unit::create(['name' => 'واحد ۲', 'parent_id' => $unit->id]);
-        Unit::create(['name' => 'واحد ۳', 'parent_id' => $unit->id]);
+        // #1793: `initial_limit` counts scope-roots, and with current_unit_id
+        // set the scope holds a single root. Attach extra root units and forget
+        // the session unit so more than one root is in scope.
+        foreach (['واحد ۲', 'واحد ۳'] as $name) {
+            $extra = Unit::create(['name' => $name]);
+            $user->units()->attach($extra->id, ['role' => 'staff', 'is_primary' => false]);
+        }
+        Session::forget('current_unit_id');
 
-        $token = $this->createApiToken(User::first(), ['hr:read']);
+        $token = $this->createApiToken($user, ['hr:read']);
 
         $response = $this->apiGet('/api/hr/org-chart/expandable?initial_limit=2', $token);
 
