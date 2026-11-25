@@ -471,6 +471,15 @@ return new class extends Component
             return;
         }
 
+        // #1778: same ceiling as the API. `$selected` is public component
+        // state, so /livewire/update can carry an arbitrarily large array even
+        // though the UI has no select-all.
+        if (count($this->selected) > HardwareRules::MAX_BULK_IDS) {
+            $this->error('حداکثر '.HardwareRules::MAX_BULK_IDS.' دستگاه در یک عملیات گروهی مجاز است.', position: 'toast-bottom');
+
+            return;
+        }
+
         $accessibleIds = $this->accessibleUnitIds();
         // #1026/#1675: load the rows, not just the ids — the pre-update `mark`
         // is the audit diff's `old`, exactly like HardwareController::bulkMark().
@@ -589,6 +598,14 @@ return new class extends Component
         $this->authorize('manage_hardware');
 
         if (empty($this->selected)) {
+            return;
+        }
+
+        // #1778: same ceiling as the API (see bulkMark()) — the selection is
+        // public component state and is not bounded by the UI.
+        if (count($this->selected) > HardwareRules::MAX_BULK_IDS) {
+            $this->error('حداکثر '.HardwareRules::MAX_BULK_IDS.' دستگاه در یک عملیات گروهی مجاز است.', position: 'toast-bottom');
+
             return;
         }
 

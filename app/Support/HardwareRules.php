@@ -25,6 +25,13 @@ use Illuminate\Validation\Rule;
 class HardwareRules
 {
     /**
+     * #1778: ceiling on one bulk request's `ids` array. Shared by the API
+     * validators and the Livewire bulk mutators so the two paths cannot drift.
+     * 500 = 5x the largest UI page (100) and 5x the `item_ids` precedent.
+     */
+    public const MAX_BULK_IDS = 500;
+
+    /**
      * Rules for `Api\HardwareController` (unchanged behaviour).
      *
      * @param  bool  $required  true = store, false = update (sometimes|required)
