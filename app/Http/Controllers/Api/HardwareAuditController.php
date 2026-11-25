@@ -344,11 +344,26 @@ class HardwareAuditController extends Controller
             $query->where('source', $request->source);
         }
 
-        $format = $request->get('format', 'xlsx');
+        // #1766: format used to reach Excel::download unvalidated, which let a
+        // caller select any writer the library accepts (html/xls/ods download
+        // unexpected content; pdf/slk/xml/unknown typed 500). Only the two
+        // formats the UI offers are allowed, case-insensitively (the writer
+        // detector lowercases the extension too), and an array input is a
+        // validation failure rather than a TypeError.
+        $format = $request->query('format', 'xlsx');
+
+        if (! is_string($format) || ! in_array(strtolower($format), ['xlsx', 'csv'], true)) {
+            return response()->json([
+                'message' => 'The format field must be one of: xlsx, csv.',
+                'errors' => ['format' => ['The format field must be one of: xlsx, csv.']],
+            ], 422);
+        }
+
+        $format = strtolower($format);
         $filename = "hardware-{$hardware->pc_name}-audits-".now()->format('Ymd-His');
 
         return Excel::download(
-            new HardwareAuditsExport($query),
+            new HardwareAuditsExport($query, csv: $format === 'csv'),
             "{$filename}.{$format}"
         );
     }

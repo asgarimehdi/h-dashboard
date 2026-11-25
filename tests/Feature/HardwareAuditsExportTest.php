@@ -46,20 +46,27 @@ class HardwareAuditsExportTest extends TestCase
         return new HardwareAuditsExport(HardwareAudit::query()->orderBy('id'));
     }
 
+    private function csvExport(): HardwareAuditsExport
+    {
+        return new HardwareAuditsExport(HardwareAudit::query()->orderBy('id'), csv: true);
+    }
+
     /**
      * Write one audit row and read it back from the table, so the export sees
      * exactly what a later request would decode out of `changes`.
+     *
+     * @param  array<string, mixed>  $overrides
      */
-    private function storedAudit(string $action, mixed $changes, string $source = 'bulk'): HardwareAudit
+    private function storedAudit(string $action, mixed $changes, string $source = 'bulk', array $overrides = []): HardwareAudit
     {
-        $id = HardwareAudit::insertGetId([
+        $id = HardwareAudit::insertGetId(array_merge([
             'hardware_id' => 1,
             'action' => $action,
             'changes' => $changes === null ? null : json_encode($changes, JSON_UNESCAPED_UNICODE),
             'source' => $source,
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ], $overrides));
 
         return HardwareAudit::query()->findOrFail($id);
     }
@@ -370,6 +377,28 @@ class HardwareAuditsExportTest extends TestCase
         $this->assertStringStartsNotWith('=', $cell);
         $this->assertStringContainsString("'=SUM(A1:A2)", $cell);
         $this->assertSame("'=SUM(A1:A2)", $audit->fresh()->changes[0]['old']);
+    }
+
+    // ==================== CSV-only triggers (#1766) ====================
+
+    public function test_csv_mode_escapes_triggers_but_xlsx_mode_does_not(): void
+    {
+        // Column 5 is 'کاربر آژنت' (user_agent).
+        $audit = $this->storedAudit('updated', [
+            ['field' => 'cpu', 'old' => 'a', 'new' => 'b'],
+        ], 'web', ['user_agent' => '+2+2']);
+
+        $this->assertSame('+2+2', $this->export()->map($audit)[5]);
+        $this->assertSame("'+2+2", $this->csvExport()->map($audit)[5]);
+    }
+
+    public function test_csv_mode_escapes_a_bare_scalar_changes_list(): void
+    {
+        // The one summary shape whose first character is the stored value.
+        $audit = $this->storedAudit('bulk_delete', ['+2+2']);
+
+        $this->assertSame('+2+2', $this->export()->map($audit)[self::CHANGES_COLUMN]);
+        $this->assertSame("'+2+2", $this->csvExport()->map($audit)[self::CHANGES_COLUMN]);
     }
 
     public function test_mapping_does_not_mutate_the_stored_payload(): void

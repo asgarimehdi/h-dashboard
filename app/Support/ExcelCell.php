@@ -3,13 +3,21 @@
 namespace App\Support;
 
 /**
- * Excel formula-injection guard (issue #886, CWE-1236).
+ * Excel formula-injection guard (issue #886, CWE-1236; #1766 for CSV).
  *
- * PhpSpreadsheet binds any string starting with '=' as TYPE_FORMULA, and
- * the audits CSV route (?format=csv) carries no cell-type metadata at all —
- * so escaping must happen in map(), not in a binder. Scope is '=' only:
- * '+-@' bind as strings on this stack, and escaping them would corrupt
- * legitimate values like '-1+2' or '@mention'.
+ * PhpSpreadsheet's xlsx binder types a string starting with '=' as
+ * TYPE_FORMULA and every other trigger ('+', '-', '@') as TYPE_STRING — so
+ * for .xlsx, escaping '=' at map() time is sufficient, and prefixing '+-@'
+ * there would corrupt legitimate values like '-1+2' or '@mention'.
+ *
+ * A CSV file carries no cell-type metadata at all: Excel/LibreOffice re-parse
+ * every field, so a leading '=', '+', '-', '@' (or a leading tab/CR that some
+ * parsers strip) starts a formula. The CSV export path therefore additionally
+ * runs {@see self::escapeForCsv()} at export time. Nothing is ever persisted
+ * in that escaped form.
+ *
+ * Escaping happens in map(), not in a value binder: the binder runs for every
+ * writer and never sees the chosen format.
  */
 final class ExcelCell
 {
@@ -25,6 +33,32 @@ final class ExcelCell
         }
 
         return "'".$value;
+    }
+
+    /**
+     * First characters that start a formula once CSV drops cell types.
+     *
+     * '|' and '%' are deliberately absent: neither is a leading-formula
+     * trigger in Excel/LibreOffice, and escaping them would rewrite
+     * legitimate values such as '%CPU' or '|summary'.
+     *
+     * @var list<string>
+     */
+    private const CSV_TRIGGERS = ['=', '+', '-', '@', "\t", "\r"];
+
+    /**
+     * CSV-only guard for the trigger characters that xlsx binds as strings.
+     *
+     * Export-time only: never persist this form. Call it after
+     * {@see self::escape()} so an '='-leading value is prefixed exactly once.
+     */
+    public static function escapeForCsv(mixed $value): mixed
+    {
+        if (! is_string($value) || $value === '') {
+            return $value;
+        }
+
+        return in_array($value[0], self::CSV_TRIGGERS, true) ? "'".$value : $value;
     }
 
     /**
