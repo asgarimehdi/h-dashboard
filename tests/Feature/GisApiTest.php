@@ -421,6 +421,80 @@ class GisApiTest extends TestCase
         $this->assertGreaterThan(0, count($response->json('features')));
     }
 
+    /**
+     * #1805: a zoom the grid maths cannot survive. `-2000` underflows pow() to
+     * 0.0, so `0.5 / 0.0` throws DivisionByZeroError; `-1023` overflows the
+     * quotient to INF, which `sprintf('%f')` writes into the raw SQL. `-5`
+     * returns 200 today — this pins the 0..22 contract instead. `23` pins
+     * `max:22` exactly, and `abc` proves validation runs before the
+     * controller's `(int)` cast.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function invalidZoomSamples(): array
+    {
+        return [
+            'division-by-zero band' => ['-2000'],
+            'INF-in-SQL band' => ['-1023'],
+            'ordinary negative' => ['-5'],
+            'above the Leaflet max' => ['23'],
+            'not an integer' => ['abc'],
+        ];
+    }
+
+    /** @test */
+    #[DataProvider('invalidZoomSamples')]
+    public function test_gis_clusters_rejects_invalid_zoom(string $zoom): void
+    {
+        ['user' => $user] = $this->createBBoxUser();
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        $this->apiGet("/api/gis/clusters?zoom={$zoom}&bbox=48,36,49,37", $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('zoom');
+    }
+
+    /** @test */
+    public function test_gis_clusters_accepts_the_zoom_boundaries(): void
+    {
+        ['user' => $user] = $this->createBBoxUser();
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        foreach ([0, 22] as $zoom) {
+            $this->apiGet("/api/gis/clusters?zoom={$zoom}&bbox=48,36,49,37", $token)
+                ->assertStatus(200)
+                ->assertJsonPath('type', 'FeatureCollection');
+        }
+    }
+
+    /** @test */
+    public function test_gis_clusters_defaults_to_zoom_ten(): void
+    {
+        ['user' => $user] = $this->createBBoxUser();
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        $this->apiGet('/api/gis/clusters?bbox=48,36,49,37', $token)
+            ->assertStatus(200)
+            ->assertJsonPath('type', 'FeatureCollection');
+    }
+
+    /**
+     * #1721 precedent: a rejected request must never reach the cache.
+     *
+     * @test
+     */
+    public function test_invalid_zoom_never_touches_the_cache(): void
+    {
+        ['user' => $user] = $this->createBBoxUser();
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        Cache::spy();
+        Cache::shouldReceive('remember')->never();
+
+        $this->apiGet('/api/gis/clusters?zoom=-2000&bbox=48,36,49,37', $token)
+            ->assertStatus(422);
+    }
+
     /** @test */
     public function test_gis_apis_respect_accessible_units(): void
     {

@@ -20,6 +20,9 @@ class GisRequest extends UnitScopedRequest
     public function rules(): array
     {
         return [
+            // #1805 — same 0..22 contract as DiseaseMapRequest; out-of-range
+            // must be a 422, not a 500 from pow()/raw SQL.
+            'zoom' => ['nullable', 'integer', 'min:0', 'max:22'],
             'bbox' => [
                 'nullable',
                 'string',
