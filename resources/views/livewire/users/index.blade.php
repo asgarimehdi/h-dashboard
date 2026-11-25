@@ -406,6 +406,14 @@ return new class extends Component
                 $user->syncPermissions($this->user_permissions);
                 $user->units()->sync($this->unit_ids);
 
+                // #1803: `sync()` writes bare ids, so a fresh user (or one
+                // whose primary unit was just removed) would have none. The
+                // first submitted unit becomes primary; an empty list leaves
+                // the user with no primary — never invent a unit.
+                if ($this->unit_ids !== [] && $user->primaryUnit() === null) {
+                    $user->setPrimaryUnit((int) array_values($this->unit_ids)[0]);
+                }
+
                 return $user;
             });
 
@@ -510,6 +518,14 @@ return new class extends Component
                 $user->roles()->sync($this->role_ids);
                 $user->syncPermissions($this->user_permissions);
                 $user->units()->sync($this->unit_ids);
+
+                // #1803: `sync()` writes bare ids, so a fresh user (or one
+                // whose primary unit was just removed) would have none. The
+                // first submitted unit becomes primary; an empty list leaves
+                // the user with no primary — never invent a unit.
+                if ($this->unit_ids !== [] && $user->primaryUnit() === null) {
+                    $user->setPrimaryUnit((int) array_values($this->unit_ids)[0]);
+                }
 
                 return $user;
             });

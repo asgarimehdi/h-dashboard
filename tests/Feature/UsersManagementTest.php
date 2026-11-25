@@ -1272,3 +1272,127 @@ test('#1663: the deactivation guard refuses to leave zero active admins', functi
 
     expect($this->admin->fresh()->trashed())->toBeFalse();
 });
+
+/*
+|--------------------------------------------------------------------------
+| #1803 — exactly one is_primary per user via the users form
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Create an in-scope person + a child unit, so `unit_ids` can hold two
+ * distinct visible units.
+ *
+ * @return array{person: Person, unit: Unit}
+ */
+function users1803Fixture(Unit $parentUnit): array
+{
+    $person = Person::create([
+        'n_code' => fake()->unique()->numerify('##########'),
+        'f_name' => 'کاربر',
+        'l_name' => 'واحد',
+        'u_id' => $parentUnit->id,
+        's_id' => 1, 't_id' => 1, 'e_id' => 1, 'r_id' => 1,
+    ]);
+
+    $child = Unit::create(['name' => 'واحد فرزند', 'parent_id' => $parentUnit->id]);
+
+    return ['person' => $person, 'unit' => $child];
+}
+
+test('#1803: createUser defaults the primary to the first submitted unit', function () {
+    ['person' => $person, 'unit' => $child] = users1803Fixture($this->unit);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', $person->n_code)
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$this->unit->id, $child->id])
+        ->call('createUser');
+
+    $user = User::where('n_code', $person->n_code)->firstOrFail();
+
+    expect(DB::table('user_units')->where('user_id', $user->id)->where('is_primary', true)
+        ->pluck('unit_id')->all())->toBe([$this->unit->id]);
+});
+
+test('#1803: updateUser promotes the first submitted unit when the old primary was removed', function () {
+    ['person' => $person, 'unit' => $child] = users1803Fixture($this->unit);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    $component = Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', $person->n_code)
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$this->unit->id, $child->id])
+        ->call('createUser');
+
+    $user = User::where('n_code', $person->n_code)->firstOrFail();
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('edit', $user->id)
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$child->id])
+        ->call('updateUser');
+
+    expect(DB::table('user_units')->where('user_id', $user->id)->where('is_primary', true)
+        ->pluck('unit_id')->all())->toBe([$child->id]);
+});
+
+test('#1803: updateUser leaves an existing primary alone when it is still submitted', function () {
+    ['person' => $person, 'unit' => $child] = users1803Fixture($this->unit);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', $person->n_code)
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$this->unit->id, $child->id])
+        ->call('createUser');
+
+    $user = User::where('n_code', $person->n_code)->firstOrFail();
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('edit', $user->id)
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$child->id, $this->unit->id]) // reversed order
+        ->call('updateUser');
+
+    expect(DB::table('user_units')->where('user_id', $user->id)->where('is_primary', true)
+        ->pluck('unit_id')->all())->toBe([$this->unit->id]);
+});
+
+test('#1803: updateUser invents no primary when the submitted unit list is empty', function () {
+    ['person' => $person] = users1803Fixture($this->unit);
+    $role = Role::create(['name' => 'operator', 'label' => 'اپراتور']);
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('openFormForCreate')
+        ->set('n_code', $person->n_code)
+        ->set('password', 'password123')
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [$this->unit->id])
+        ->call('createUser');
+
+    $user = User::where('n_code', $person->n_code)->firstOrFail();
+
+    Livewire::actingAs($this->admin)
+        ->test('users.index')
+        ->call('edit', $user->id)
+        ->set('role_ids', [$role->id])
+        ->set('unit_ids', [])
+        ->call('updateUser');
+
+    expect(DB::table('user_units')->where('user_id', $user->id)->count())->toBe(0)
+        ->and($user->fresh()->primaryUnit())->toBeNull();
+});
