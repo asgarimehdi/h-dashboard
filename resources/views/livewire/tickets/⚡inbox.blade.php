@@ -1,66 +1,83 @@
 <?php
 
+use App\Models\TaskActivity;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
-use App\Models\TaskActivity;
 use App\Rules\TicketTargetUnit;
 use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Support\JalaliDateRange;
-use Livewire\Component;
-use Livewire\WithPagination;
-use Livewire\WithFileUploads;
+use App\Traits\PersianNormalizer;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
-use Livewire\Attributes\Computed;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
-use App\Services\CacheInvalidationServiceInterface;
-use Illuminate\Support\Facades\Auth;
+use Livewire\Component;
+use Livewire\WithFileUploads;
+use Livewire\WithPagination;
 
 new class extends Component
 {
-    use WithPagination;
-    use WithFileUploads;
+    use \App\Traits\TicketsInboxFlow;
     // Fully qualified: a top-of-file import would shift the anonymous class's
     // identity line and break every line-keyed PHPStan-baseline entry for it.
     // The top `JalaliDateRange` import is now unused (this trait owns the date
     // parse) but stays in place so the identity line keeps its beta position.
     use \App\Traits\TicketsQueryScopes;
-    use \App\Traits\TicketsInboxFlow;
+    use PersianNormalizer;
+
+    use WithFileUploads;
+    use WithPagination;
 
     #[Url]
     public string $search = '';
+
     #[Url]
     public string $unitSearch = '';
+
     // The single-ticket flow's state (the ticket being shown, the target unit,
     // the completion modal and its attachments) lives in TicketsInboxFlow below.
     #[Url]
     public string $forwardNote = '';
+
     #[Url]
     public string $dateFrom = '';
+
     #[Url]
     public string $dateTo = '';
+
     #[Url]
     public string $currentTab = 'pending';
+
     #[Url]
     public string $viewMode = 'received';
+
     #[Url]
     public string $statusFilter = 'pending';
 
     // Bulk Actions
     public array $selectedTickets = [];
+
     public bool $selectAll = false;
+
     public bool $showBulkModal = false;
+
     public string $bulkAction = '';
+
     public string $bulkNote = '';
+
     // #1690: dedicated bulk-modal destination state. It is deliberately NOT
     // the single-ticket flow's `targetUnitId`: `openCompletionModal()` never
     // resets that property (and the cancel button only flips the boolean), so
     // sharing it would leak a cancelled single-forward destination into the
     // bulk modal and vice versa.
     public ?int $bulkTargetUnitId = null;
+
     public string $bulkTargetUnitName = '';
+
     public string $bulkUnitSearch = '';
 
     // Data properties
@@ -81,7 +98,7 @@ new class extends Component
         if (mb_strlen($this->unitSearch) > 1) {
             // Issue #818: same eligibility as App\Rules\TicketTargetUnit —
             // a hidden filter here was never re-checked server-side.
-            $units = Unit::where('name', 'like', '%' . $this->unitSearch . '%')
+            $units = Unit::where('name', 'like', '%'.self::escapeLikeWildcards($this->unitSearch).'%')
                 ->where('can_receive_tickets', true)
                 ->where('is_active', true)
                 ->where('id', '!=', auth()->user()->person?->u_id)
@@ -122,7 +139,7 @@ new class extends Component
             return [];
         }
 
-        return Unit::where('name', 'like', '%' . $this->bulkUnitSearch . '%')
+        return Unit::where('name', 'like', '%'.self::escapeLikeWildcards($this->bulkUnitSearch).'%')
             ->where('can_receive_tickets', true)
             ->where('is_active', true)
             ->where('id', '!=', auth()->user()->person?->u_id)
@@ -139,7 +156,7 @@ new class extends Component
      * #1040's select-all expansion and count see EXACTLY the rows the
      * operator sees, instead of a copy that could drift.
      *
-     * @param \Illuminate\Database\Eloquent\Builder<\App\Models\Ticket> $query
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\Ticket>  $query
      */
     private function applyInboxFilters(\Illuminate\Database\Eloquent\Builder $query): void
     {
@@ -315,11 +332,13 @@ new class extends Component
         // server has to reject anyway.
         if (! in_array($action, ['complete', 'forward'], true)) {
             $this->dispatch('swal', ['title' => 'عملیات دسته‌ای نامعتبر است', 'icon' => 'warning']);
+
             return;
         }
 
         if ($this->selectedTicketsCount() === 0) {
             $this->dispatch('swal', ['title' => 'هیچ تیکتی انتخاب نشده', 'icon' => 'warning']);
+
             return;
         }
 
@@ -364,6 +383,7 @@ new class extends Component
         // un-gated no-op that still dispatched a success toast.
         if (! in_array($this->bulkAction, ['complete', 'forward'], true)) {
             $this->dispatch('swal', ['title' => 'عملیات دسته‌ای نامعتبر است', 'icon' => 'warning']);
+
             return;
         }
 
@@ -492,11 +512,11 @@ new class extends Component
                 $cache->increment('dashboard');
 
                 // ۳. یک batch INSERT برای فعالیت‌ها
-                $activityRows = $ticketIds->map(fn($id) => [
+                $activityRows = $ticketIds->map(fn ($id) => [
                     'ticket_id' => $id,
                     'user_id' => $userId,
                     'action' => 'completed',
-                    'description' => 'تکمیل دسته‌ای تیکت' . ($bulkNote ? ": {$bulkNote}" : ''),
+                    'description' => 'تکمیل دسته‌ای تیکت'.($bulkNote ? ": {$bulkNote}" : ''),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ])->toArray();
@@ -509,7 +529,7 @@ new class extends Component
                         'type' => 'updated',
                         'subject_type' => 'App\Models\Ticket',
                         'subject_id' => $id,
-                        'description' => 'تکمیل دسته‌ای تیکت ' . ($ticketCodeMap->get($id) ?? ''),
+                        'description' => 'تکمیل دسته‌ای تیکت '.($ticketCodeMap->get($id) ?? ''),
                         'old_values' => json_encode(['status' => $oldStatuses->get($id)]),
                         'new_values' => json_encode(['status' => 'completed']),
                         'ip_address' => request()->ip(),
@@ -553,12 +573,12 @@ new class extends Component
                 $cache->increment('calendar');
                 $cache->increment('dashboard');
 
-                $activityRows = $ticketIds->map(fn($id) => [
+                $activityRows = $ticketIds->map(fn ($id) => [
                     'ticket_id' => $id,
                     'user_id' => $userId,
                     'action' => 'forwarded',
                     'to_unit_id' => $destinationId,
-                    'description' => "ارجاع دسته‌ای تیکت به واحد: {$destinationName}" . ($bulkNote ? " - توضیحات: {$bulkNote}" : ''),
+                    'description' => "ارجاع دسته‌ای تیکت به واحد: {$destinationName}".($bulkNote ? " - توضیحات: {$bulkNote}" : ''),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ])->toArray();
@@ -571,7 +591,7 @@ new class extends Component
                         'type' => 'updated',
                         'subject_type' => 'App\Models\Ticket',
                         'subject_id' => $id,
-                        'description' => 'ارجاع دسته‌ای تیکت ' . ($ticketCodeMap->get($id) ?? ''),
+                        'description' => 'ارجاع دسته‌ای تیکت '.($ticketCodeMap->get($id) ?? ''),
                         'old_values' => json_encode(['status' => $oldStatuses->get($id), 'unit_id' => $unitIdMap->get($id)]),
                         'new_values' => json_encode(['status' => 'forwarded', 'unit_id' => $destinationId]),
                         'ip_address' => request()->ip(),
@@ -607,6 +627,7 @@ new class extends Component
                 'icon' => 'warning',
             ]);
             $this->closeAllModals();
+
             return;
         }
 

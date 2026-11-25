@@ -2,6 +2,7 @@
 
 use App\Models\Radif;
 use App\Traits\ClampsPageSize;
+use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -10,6 +11,7 @@ use Mary\Traits\Toast;
 return new class extends Component
 {
     use ClampsPageSize;
+    use PersianNormalizer;
     use Toast;
     use WithPagination;
 
@@ -133,7 +135,7 @@ return new class extends Component
         $query = Radif::query();
 
         if (! empty($this->search)) {
-            $query->where('name', 'LIKE', '%'.$this->search.'%');
+            $query->where('name', 'LIKE', '%'.self::escapeLikeWildcards($this->search).'%');
         }
 
         $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)

@@ -8,6 +8,7 @@ use App\Services\AccessService;
 use App\Services\UnitDeletionImpact;
 use App\Services\UnitDeletionService;
 use App\Traits\ClampsPageSize;
+use App\Traits\PersianNormalizer;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -17,6 +18,7 @@ use Mary\Traits\Toast;
 return new class extends Component
 {
     use ClampsPageSize;
+    use PersianNormalizer;
     use Toast;
     use WithPagination;
 
@@ -138,7 +140,7 @@ return new class extends Component
         }
 
         if (! empty($this->search)) {
-            $query->where('name', 'LIKE', '%'.$this->search.'%');
+            $query->where('name', 'LIKE', '%'.self::escapeLikeWildcards($this->search).'%');
         }
 
         $column = in_array($this->sortBy['column'] ?? '', self::SORTABLE_COLUMNS, true)
