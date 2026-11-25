@@ -210,6 +210,47 @@ class HrApiTest extends TestCase
         $this->assertEquals(1, $response->json('meta.total'));
     }
 
+    // === Issue #1811: malformed list/filter params are 422, not 500 ===
+
+    public function test_personnel_list_rejects_array_search(): void
+    {
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/personnel?search[]=x', $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('search');
+    }
+
+    public function test_personnel_list_rejects_non_integer_unit_id(): void
+    {
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/personnel?unit_id=abc', $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('unit_id');
+    }
+
+    public function test_personnel_list_rejects_unknown_status(): void
+    {
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/personnel?status=foo', $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+    }
+
+    public function test_personnel_list_accepts_valid_search_and_unit_filter(): void
+    {
+        $person = Person::first();
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet("/api/hr/personnel?search={$person->n_code}&unit_id={$this->unit->id}", $token);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['data', 'meta' => ['total']]);
+        $this->assertEquals(1, $response->json('meta.total'));
+        $this->assertSame($person->n_code, $response->json('data.0.n_code'));
+    }
+
     public function test_personnel_detail_returns_profile(): void
     {
         $token = $this->createApiToken($this->user, ['hr:read']);

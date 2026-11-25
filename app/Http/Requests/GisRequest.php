@@ -23,6 +23,12 @@ class GisRequest extends UnitScopedRequest
             // #1805 — same 0..22 contract as DiseaseMapRequest; out-of-range
             // must be a 422, not a 500 from pow()/raw SQL.
             'zoom' => ['nullable', 'integer', 'min:0', 'max:22'],
+            // #1811: `type` (hardware) and `priority`/`status` (tickets) are
+            // passed to a `string` normaliser or a typed `where()`. An array
+            // value must be a 422 instead of a TypeError/coerced 200.
+            'type' => ['sometimes', 'nullable', 'string'],
+            'priority' => ['sometimes', 'nullable', 'string'],
+            'status' => ['sometimes', 'nullable', 'string'],
             'bbox' => [
                 'nullable',
                 'string',

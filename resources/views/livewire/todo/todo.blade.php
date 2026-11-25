@@ -84,7 +84,7 @@ return new class extends Component
         return [$start->toIso8601String(), $end->toIso8601String()];
     }
 
-    public function fetchEvents(string $start, string $end): void
+    public function fetchEvents(mixed $start, mixed $end): void
     {
         // Issue #892/#975/#978: the route gate (`role_or_permission:calendar`)
         // does not run on `/livewire/update`, so this mutator re-checks it here.
@@ -92,8 +92,37 @@ return new class extends Component
         // check could undo.
         $this->authorize('calendar');
 
-        $this->calendarStart = $start;
-        $this->calendarEnd = $end;
+        // Issue #1811: Livewire methods are callable with arbitrary arguments
+        // over `/livewire/update`. A non-string or unparseable bound must be a
+        // friendly error, never a Postgres invalid-timestamp 500 from
+        // `getEvents()`. `''` still means "no bound". The parsed value is
+        // normalised because `Carbon::parse('2026-02-30')` overflows to
+        // 2026-03-02 instead of throwing, while Postgres rejects it.
+        // `toIso8601String()` (not the naive `format()`) keeps the seeded
+        // `calendarWindowFor()` value byte-identical, so the first-paint cache
+        // entry survives the first navigation (#1169/#982).
+        $bounds = [];
+        foreach ([$start, $end] as $value) {
+            if (! is_string($value)) {
+                $this->dispatch('swal', ['title' => 'تاریخ واردشده معتبر نیست.', 'icon' => 'error']);
+
+                return;
+            }
+            if (trim($value) === '') {
+                $bounds[] = '';
+
+                continue;
+            }
+            try {
+                $bounds[] = Carbon::parse($value)->toIso8601String();
+            } catch (\Throwable) {
+                $this->dispatch('swal', ['title' => 'تاریخ واردشده معتبر نیست.', 'icon' => 'error']);
+
+                return;
+            }
+        }
+
+        [$this->calendarStart, $this->calendarEnd] = $bounds;
         $this->dispatch('calendar-updated', events: $this->getEvents());
     }
 
@@ -212,20 +241,37 @@ return new class extends Component
         // check could undo.
         $this->authorize('calendar');
 
+        // Issue #1811: Livewire methods are callable with arbitrary arguments
+        // over `/livewire/update`, so the dates are untrusted. Validate BEFORE
+        // any assignment: the old order wrote `start_at`/`end_at` first, which
+        // would leave garbage in state even with a try/catch around the parse.
+        if (($start !== null && ! is_string($start)) || ($end !== null && ! is_string($end))) {
+            $this->dispatch('swal', ['title' => 'تاریخ واردشده معتبر نیست.', 'icon' => 'error']);
+
+            return;
+        }
+
+        try {
+            $startCarbon = ($start !== null && trim($start) !== '') ? Carbon::parse($start) : null;
+            $endCarbon = ($end !== null && trim($end) !== '') ? Carbon::parse($end) : null;
+        } catch (\Throwable) {
+            $this->dispatch('swal', ['title' => 'تاریخ واردشده معتبر نیست.', 'icon' => 'error']);
+
+            return;
+        }
+
         $this->reset(['title', 'editingId', 'is_completed', 'start_date_picker', 'start_time_picker', 'end_date_picker', 'end_time_picker']);
         $this->unit_id = session('current_unit_id', auth()->user()->person?->u_id);
         $this->start_at = $start;
         $this->end_at = $end;
 
-        if ($start) {
-            $carbon = Carbon::parse($start);
-            $this->start_date_picker = Jalalian::fromCarbon($carbon)->format('Y/m/d');
-            $this->start_time_picker = $carbon->format('H:i');
+        if ($startCarbon) {
+            $this->start_date_picker = Jalalian::fromCarbon($startCarbon)->format('Y/m/d');
+            $this->start_time_picker = $startCarbon->format('H:i');
         }
-        if ($end) {
-            $carbon = Carbon::parse($end);
-            $this->end_date_picker = Jalalian::fromCarbon($carbon)->format('Y/m/d');
-            $this->end_time_picker = $carbon->format('H:i');
+        if ($endCarbon) {
+            $this->end_date_picker = Jalalian::fromCarbon($endCarbon)->format('Y/m/d');
+            $this->end_time_picker = $endCarbon->format('H:i');
         }
 
         $this->modal = true;

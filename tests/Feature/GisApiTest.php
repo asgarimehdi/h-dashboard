@@ -164,6 +164,46 @@ class GisApiTest extends TestCase
         $this->assertEquals('laptop', $response->json('features.0.properties.type'));
     }
 
+    // === Issue #1811: array params are 422, not a TypeError 500 ===
+
+    /** @test */
+    public function test_gis_hardware_rejects_array_type(): void
+    {
+        ['user' => $user] = $this->createBBoxUserWith(['map', 'manage_hardware']);
+
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/hardware?bbox=48,36,49,37&type[]=x', $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('type');
+    }
+
+    /** @test */
+    public function test_gis_hardware_type_filter_keeps_the_raw_like_semantics(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'manage_hardware']);
+        $person = Person::where('u_id', $unit->id)->first();
+
+        Hardware::create([
+            'n_code' => $person->n_code,
+            'pc_name' => 'Laptop-001',
+            'type' => 'laptop',
+        ]);
+        Hardware::create([
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-001',
+            'type' => 'desktop',
+        ]);
+
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/hardware?bbox=48,36,49,37&type=desktop', $token);
+
+        // #1811: the inline LIKE is kept (no HardwareFilters alias mapping),
+        // so `desktop` matches the stored `desktop` row verbatim.
+        $this->assertCount(1, $response->json('features'));
+        $this->assertEquals('desktop', $response->json('features.0.properties.type'));
+    }
+
     /** @test */
     public function test_gis_tickets_returns_geojson_feature_collection(): void
     {
@@ -236,6 +276,32 @@ class GisApiTest extends TestCase
 
         $this->assertCount(1, $response->json('features'));
         $this->assertEquals('completed', $response->json('features.0.properties.status'));
+    }
+
+    // === Issue #1811: array params are 422, not a silently coerced 200 ===
+
+    /** @test */
+    public function test_gis_tickets_rejects_array_priority(): void
+    {
+        ['user' => $user] = $this->createBBoxUserWith(['map', 'view_all_tickets']);
+
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/tickets?bbox=48,36,49,37&priority[]=x', $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('priority');
+    }
+
+    /** @test */
+    public function test_gis_tickets_rejects_array_status(): void
+    {
+        ['user' => $user] = $this->createBBoxUserWith(['map', 'view_all_tickets']);
+
+        $token = $this->createApiToken($user, ['gis:read']);
+        $response = $this->apiGet('/api/gis/tickets?bbox=48,36,49,37&status[]=x', $token);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('status');
     }
 
     /**

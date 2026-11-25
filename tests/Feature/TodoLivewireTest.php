@@ -156,6 +156,50 @@ test('open create modal sets start and end dates', function () {
         ->assertSet('end_at', '2026-10-05');
 });
 
+// ==================== Issue #1811: untrusted calendar dates ====================
+
+test('open create modal rejects an unparseable date without storing it', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('openCreateModal', 'not-a-date', null)
+        ->assertDispatched('swal', function ($name, $params) {
+            return ($params[0]['icon'] ?? '') === 'error';
+        })
+        ->assertSet('modal', false)
+        ->assertSet('start_at', null)
+        ->assertSet('end_at', null);
+});
+
+test('fetch events rejects unparseable dates without storing them', function () {
+    $this->actingAs($this->user);
+
+    $component = Livewire::test('todo.todo')
+        ->call('fetchEvents', 'not-a-date', 'not-a-date')
+        ->assertDispatched('swal', function ($name, $params) {
+            return ($params[0]['icon'] ?? '') === 'error';
+        });
+
+    // If the garbage bound had been stored, getEvents() would hit a Postgres
+    // invalid-timestamp error (SQLSTATE 22007) instead of returning an array.
+    expect($component->instance()->getEvents())->toBeArray();
+
+    // A well-formed call still loads events.
+    $component
+        ->call('fetchEvents', '2026-10-01 00:00:00', '2026-10-31 23:59:59')
+        ->assertDispatched('calendar-updated');
+});
+
+test('fetch events rejects array arguments without a type error', function () {
+    $this->actingAs($this->user);
+
+    Livewire::test('todo.todo')
+        ->call('fetchEvents', ['2026-10-01'], ['2026-10-31'])
+        ->assertDispatched('swal', function ($name, $params) {
+            return ($params[0]['icon'] ?? '') === 'error';
+        });
+});
+
 test('close modal resets form', function () {
     $this->actingAs($this->user);
 
