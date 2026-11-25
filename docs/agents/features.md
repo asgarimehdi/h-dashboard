@@ -251,17 +251,22 @@ The two retention jobs accept a `$unitIds` array; **empty resolves `AccessServic
 
 ## Scheduler & Console Commands
 
-**Four commands plus one queued job** are scheduled in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864, landed by PR #896). The previous home, `app/Console/Kernel.php`, was never bound (`withKernels()` binds the framework's base console kernel), so the schedule silently never ran; that file is deleted — do not recreate it. The commands all take `--dry-run`, except `cache:prune-stale` — since #981 it is an audit-only report and takes no options:
+**Seven commands plus one queued job** are scheduled in `bootstrap/app.php` via `->withSchedule(...)` — the Laravel 11+ skeleton style (#864, landed by PR #896). The previous home, `app/Console/Kernel.php`, was never bound (`withKernels()` binds the framework's base console kernel), so the schedule silently never ran; that file is deleted — do not recreate it. The commands all take `--dry-run`, except `cache:prune-stale` — since #981 it is an audit-only report and takes no options:
 
 | Scheduled item | Schedule |
 |---|---|
 | `cache:prune-stale` | hourly |
 | `maintenance:generate-due` | daily 03:00, `->withoutOverlapping(60)` |
 | `data:archive` | weekly (Mon 04:00), `->withoutOverlapping(120)` + in-command lock |
+| `activity:prune-null-actor` | weekly (Tue 04:00), `->withoutOverlapping(120)` |
+| `backup:prune-archives` | daily 05:00, `->withoutOverlapping(60)` |
+| `imports:prune-sheets` | daily 05:15, `->withoutOverlapping(60)` |
 | `reports:generate-daily` | daily 06:00, `->withoutOverlapping()` |
 | `SyncZabbixJob` (queued, **not** the `zabbix:sync` command) | `everyFiveMinutes()`, `->withoutOverlapping()` |
 
-**Lock expiry is explicit on the two writers (#1305)** — the `withoutOverlapping()` default of 1440 minutes is the entire interval of a daily run, so a crashed run would hold the lock right up to the next start. `data:archive` also takes `Cache::lock('command:data:archive', 6h)` inside `ArchiveOldRecords`, because the schedule lock is only read on the `Schedule::run()` path and a manual `php artisan data:archive` would otherwise race it. There is no `--force` flag: an emergency manual run releases the lock with `Cache::lock('command:data:archive', 1)->forceRelease()`.
+**`activity:prune-null-actor` (#1809) deletes only `user_id IS NULL` rows older than 90 days** — the rows queue/scheduler paths, `logAs(null, …)` on restore and `ON DELETE SET NULL` write. `whereIn('user_id', …)` can never match NULL, so the archive job's window skipped them; scheduling that job org-wide instead would also delete user-owned logs older than 90 days and bypass the policy below. User-owned rows and `data:archive` are untouched, and null-actor rows past 90 days therefore no longer reach `activity_log_archives`. The delete is chunked and idempotent, so the command holds no in-command lock of its own; `withoutOverlapping(120)` is the execution guard.
+
+**Lock expiry is explicit on the mutating commands (#1305)** — the `withoutOverlapping()` default of 1440 minutes is the entire interval of a daily run, so a crashed run would hold the lock right up to the next start. `data:archive` also takes `Cache::lock('command:data:archive', 6h)` inside `ArchiveOldRecords`, because the schedule lock is only read on the `Schedule::run()` path and a manual `php artisan data:archive` would otherwise race it. There is no `--force` flag: an emergency manual run releases the lock with `Cache::lock('command:data:archive', 1)->forceRelease()`.
 
 `zabbix:sync` (plan 018) is **no longer scheduled** — the schedule dispatches `SyncZabbixJob` instead, so a slow Zabbix API can never block the scheduler. Run `php artisan zabbix:sync` manually when you need the command.
 

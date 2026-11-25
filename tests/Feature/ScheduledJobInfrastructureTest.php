@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Console\Commands\PruneStaleCache;
+use App\Jobs\ArchiveActivityLogsJob;
 use App\Jobs\SyncZabbixJob;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
@@ -63,10 +64,17 @@ class ScheduledJobInfrastructureTest extends TestCase
         $this->assertContains('backup:prune-archives', $commands);
         $this->assertContains('imports:prune-sheets', $commands);
         $this->assertContains('reports:generate-daily', $commands);
+        $this->assertContains('activity:prune-null-actor', $commands);
 
         // zabbix:sync is now dispatched as SyncZabbixJob, not an artisan command
         $descriptions = array_map(fn ($event) => $event->description ?? '', $events);
         $this->assertContains(SyncZabbixJob::class, $descriptions);
+
+        // #1809 STOP condition: the archive job must never be scheduled
+        // org-wide — that would delete user-owned logs older than 90 days and
+        // bypass the 12-month `data:archive` policy. Only the NULL-only sweep
+        // command is scheduled.
+        $this->assertNotContains(ArchiveActivityLogsJob::class, $descriptions);
     }
 
     /**
@@ -81,9 +89,9 @@ class ScheduledJobInfrastructureTest extends TestCase
         $events = $this->app->make(Schedule::class)->events();
 
         $this->assertCount(
-            7,
+            8,
             $events,
-            'the schedule must keep exactly the seven registered items — zero means the wiring was dropped'
+            'the schedule must keep exactly the eight registered items — zero means the wiring was dropped'
         );
     }
 
@@ -101,6 +109,7 @@ class ScheduledJobInfrastructureTest extends TestCase
         $expected = [
             'maintenance:generate-due' => 60,
             'data:archive' => 120,
+            'activity:prune-null-actor' => 120,
         ];
 
         foreach ($expected as $command => $minutes) {
