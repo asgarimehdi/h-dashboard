@@ -70,11 +70,13 @@ class ReportsAdvancedLivewireTest extends TestCase
         Todo::factory()->completed()->create([
             'title' => 'کار تکمیل‌شده گزارش پیشرفته',
             'unit_id' => $unit->id,
+            'start_at' => now()->subDay(),
         ]);
         Todo::factory()->create([
             'title' => 'کار ناتمام گزارش پیشرفته',
             'unit_id' => $unit->id,
             'is_completed' => false,
+            'start_at' => now()->subDay(),
         ]);
 
         $component = Livewire::test('reports.advanced')
@@ -103,10 +105,12 @@ class ReportsAdvancedLivewireTest extends TestCase
             'unit_id' => $unit->id,
             'is_completed' => false,
             'end_at' => null,
+            'start_at' => now()->subDay(),
         ]);
         Todo::factory()->completed()->create([
             'title' => 'کار تکمیل‌شده گزارش پیشرفته',
             'unit_id' => $unit->id,
+            'start_at' => now()->subDay(),
         ]);
 
         $component = Livewire::test('reports.advanced')
@@ -132,6 +136,7 @@ class ReportsAdvancedLivewireTest extends TestCase
             'unit_id' => $unit->id,
             'is_completed' => false,
             'end_at' => now()->addDays(5),
+            'start_at' => now()->subDay(),
         ]);
 
         $component = Livewire::test('reports.advanced')

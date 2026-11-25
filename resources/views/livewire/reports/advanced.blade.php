@@ -272,6 +272,10 @@ return new class extends Component
                 'unit' => $unitId,
                 'status' => $this->statusFilter,
                 'hierarchy' => $cache->getVersion('unit_hierarchy'),
+                // Issue #1794 — a todo's report date changed from created_at to
+                // start_at, and nothing bumps the version on deploy, so the key
+                // must change to keep the pre-fix payload out of the 10-minute TTL.
+                'date_column' => $this->reportType === 'todos' ? 'start_at' : 'created_at',
             ],
         );
 
@@ -291,12 +295,17 @@ return new class extends Component
             ? Todo::whereIn('unit_id', $accessibleIds)
             : Ticket::whereIn('unit_id', $accessibleIds);
 
+        // Issue #1794 — a todo's report date is its start date, not its creation date.
+        // buildReport() only serves tickets/todos (persons goes to buildPersonsReport()),
+        // so this branch is exhaustive here.
+        $dateColumn = $this->reportType === 'todos' ? 'start_at' : 'created_at';
+
         // فیلتر تاریخ (ورودی شمسی)
         if ($from) {
-            $query->where('created_at', '>=', $from);
+            $query->where($dateColumn, '>=', $from);
         }
         if ($to) {
-            $query->where('created_at', '<=', $to);
+            $query->where($dateColumn, '<=', $to);
         }
 
         // فیلتر واحد (سلسله‌مراتبی)
@@ -320,7 +329,7 @@ return new class extends Component
                     'day' => Jalalian::fromCarbon(Carbon::parse($row['day']))->format('Y/m/d'),
                     'count' => $row['count'],
                 ],
-                DailySeries::between($range[0], $range[1])->counts($query->clone(), 'created_at')
+                DailySeries::between($range[0], $range[1])->counts($query->clone(), $dateColumn)
             )
             : [];
 

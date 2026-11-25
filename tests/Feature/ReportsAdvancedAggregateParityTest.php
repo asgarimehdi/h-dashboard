@@ -599,6 +599,7 @@ class ReportsAdvancedAggregateParityTest extends TestCase
             'unit_id' => $this->root->id,
             'is_completed' => false,
             'end_at' => null,
+            'start_at' => now(),
         ]));
 
         $afterCreate = $this->reportDataWith('todos');
