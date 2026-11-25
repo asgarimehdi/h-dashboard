@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -119,6 +120,34 @@ class User extends Authenticatable
     public function primaryUnit(): ?Unit
     {
         return $this->units()->wherePivot('is_primary', true)->first();
+    }
+
+    /**
+     * Make the given unit the user's one primary unit (#1803).
+     *
+     * This is the only sanctioned writer of `user_units.is_primary`:
+     * the partial unique index `user_units_one_primary_per_user` allows
+     * at most one primary row per user, so the old primary MUST be cleared
+     * before the new one is set. The existing pivot `role` is preserved and
+     * a missing pivot row is attached as `staff`.
+     */
+    public function setPrimaryUnit(Unit|int $unit): void
+    {
+        $unitId = $unit instanceof Unit ? (int) $unit->getKey() : $unit;
+
+        DB::transaction(function () use ($unitId): void {
+            $current = $this->units()->wherePivot('is_primary', true)->pluck('units.id')->all();
+
+            if ($current !== []) {
+                $this->units()->updateExistingPivot($current, ['is_primary' => false]);
+            }
+
+            if (! $this->units()->where('units.id', $unitId)->exists()) {
+                $this->units()->attach($unitId, ['role' => 'staff', 'is_primary' => false]);
+            }
+
+            $this->units()->updateExistingPivot($unitId, ['is_primary' => true]);
+        });
     }
 
     protected $hidden = ['password',

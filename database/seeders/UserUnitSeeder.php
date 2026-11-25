@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -16,10 +17,17 @@ class UserUnitSeeder extends Seeder
             ->get();
 
         foreach ($users as $user) {
+            // #1803: never write `is_primary => true` here — a user may
+            // already have a primary on another unit, and the partial unique
+            // index `user_units_one_primary_per_user` rejects a second one.
+            // Attach/refresh the row unprimed, then let the single sanctioned
+            // write path promote it.
             DB::table('user_units')->updateOrInsert(
                 ['user_id' => $user->user_id, 'unit_id' => $user->unit_id],
-                ['role' => 'staff', 'is_primary' => true, 'created_at' => now(), 'updated_at' => now()]
+                ['role' => 'staff', 'is_primary' => false, 'created_at' => now(), 'updated_at' => now()]
             );
+
+            User::find($user->user_id)?->setPrimaryUnit((int) $user->unit_id);
         }
     }
 }
