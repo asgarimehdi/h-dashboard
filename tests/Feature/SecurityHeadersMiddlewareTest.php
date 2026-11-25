@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\SecurityHeaders;
+use App\Support\CspPolicy;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Features\SupportScriptsAndAssets\SupportScriptsAndAssets;
@@ -94,7 +95,14 @@ test('Reporting-Endpoints header points at the report endpoint (#742)', function
     $this->get('/login')->assertHeader('Reporting-Endpoints', 'csp-endpoint="/csp-report"');
 });
 
-test('POST /csp-report accepts a browser violation report and logs it', function () {
+// ── #1767: /csp-report shape + size caps + log-injection hardening ────────
+//
+// The policy only emits `report-to csp-endpoint`, so real browsers use the
+// Reporting API (`application/reports+json`, a JSON array of `csp-violation`
+// envelopes). The legacy `{"csp-report": {…}}` shape is still accepted for
+// compatibility. Every request answers 204; junk is dropped without a log.
+
+test('POST /csp-report logs a valid legacy report and preserves its key order', function () {
     Log::spy();
 
     $payload = [
@@ -105,7 +113,6 @@ test('POST /csp-report accepts a browser violation report and logs it', function
         ],
     ];
 
-    // Browsers send application/csp-report with a raw JSON body.
     $this->call(
         'POST',
         '/csp-report',
@@ -114,18 +121,269 @@ test('POST /csp-report accepts a browser violation report and logs it', function
         [],
         ['CONTENT_TYPE' => 'application/csp-report'],
         json_encode($payload, JSON_UNESCAPED_UNICODE)
-    )->assertSuccessful();
+    )->assertNoContent();
 
-    Log::shouldHaveReceived('warning')->withArgs(
+    Log::shouldHaveReceived('warning')->once()->withArgs(
         fn ($message, $context) => $message === 'csp-report'
+            && ($context['shape'] ?? null) === 'legacy'
             && ($context['report'] ?? null) === $payload
     );
 });
 
-test('POST /csp-report answers 2xx for JSON and for garbage bodies', function () {
-    $this->postJson('/csp-report', ['csp-report' => ['blocked-uri' => 'inline']])->assertSuccessful();
+test('POST /csp-report logs a valid Reporting API batch (the shape the policy actually requests)', function () {
+    Log::spy();
 
-    // Unparseable body must not 500 — the route only ever logs and acks.
+    $policy = CspPolicy::for(base64_encode(random_bytes(16))); // real ~455-byte policy
+    $payload = [[
+        'age' => '53531',
+        'type' => 'csp-violation',
+        'url' => 'https://dashboard.test/',
+        'user_agent' => 'Mozilla/5.0',
+        'body' => [
+            'documentURL' => 'https://dashboard.test/',
+            'referrer' => '',
+            'blockedURL' => 'https://evil.example/x.js',
+            'effectiveDirective' => 'script-src-elem',
+            'originalPolicy' => $policy,
+            'disposition' => 'reporting',
+            'sourceFile' => 'https://dashboard.test/app.js',
+            'sample' => '',
+            'statusCode' => 200,
+            'lineNumber' => 1,
+            'columnNumber' => 2,
+        ],
+    ]];
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/reports+json'],
+        json_encode($payload),
+    )->assertNoContent();
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(
+        fn ($message, $context) => $message === 'csp-report'
+            && ($context['shape'] ?? null) === 'reporting-api'
+            && count($context['reports'] ?? []) === 1
+            && ($context['reports'][0]['type'] ?? null) === 'csp-violation'
+            && ($context['reports'][0]['age'] ?? null) === 53531
+            && ($context['reports'][0]['body']['originalPolicy'] ?? null) === $policy
+            && ($context['reports'][0]['body']['effectiveDirective'] ?? null) === 'script-src-elem'
+    );
+});
+
+test('POST /csp-report does not gate on Content-Type: a legacy report sent as application/json is logged', function () {
+    Log::spy();
+
+    $this->postJson('/csp-report', ['csp-report' => ['blocked-uri' => 'inline']])->assertNoContent();
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(
+        fn ($message, $context) => ($context['shape'] ?? null) === 'legacy'
+    );
+});
+
+test('POST /csp-report filters unknown fields but keeps the known ones', function () {
+    Log::spy();
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/csp-report'],
+        json_encode(['csp-report' => [
+            'blocked-uri' => 'inline',
+            'unknown-key' => 'junk',
+            'line-number' => '12',
+        ]]),
+    )->assertNoContent();
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(
+        fn ($message, $context) => ($context['report'] ?? null) === [
+            'csp-report' => ['blocked-uri' => 'inline', 'line-number' => 12],
+        ]
+    );
+});
+
+test('POST /csp-report drops an unknown shape without logging', function () {
+    Log::spy();
+
+    $this->postJson('/csp-report', ['hello' => 'world'])->assertNoContent();
+
+    Log::shouldNotHaveReceived('warning');
+});
+
+test('POST /csp-report drops a legacy report with an extra top-level key without logging', function () {
+    Log::spy();
+
+    $this->postJson('/csp-report', [
+        'csp-report' => ['blocked-uri' => 'inline'],
+        'extra' => 'nope',
+    ])->assertNoContent();
+
+    Log::shouldNotHaveReceived('warning');
+});
+
+test('POST /csp-report drops a single Reporting API object (the spec always sends an array)', function () {
+    Log::spy();
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/reports+json'],
+        json_encode(['type' => 'csp-violation', 'body' => ['blockedURL' => 'inline']]),
+    )->assertNoContent();
+
+    Log::shouldNotHaveReceived('warning');
+});
+
+test('POST /csp-report drops non-csp-violation reports without logging', function () {
+    Log::spy();
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/reports+json'],
+        json_encode([['type' => 'deprecation', 'body' => ['id' => 'x']]]),
+    )->assertNoContent();
+
+    Log::shouldNotHaveReceived('warning');
+});
+
+test('POST /csp-report drops an oversized raw body without logging', function () {
+    Log::spy();
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/reports+json'],
+        json_encode([['type' => 'csp-violation', 'body' => ['blockedURL' => str_repeat('a', 20000)]]]),
+    )->assertNoContent();
+
+    Log::shouldNotHaveReceived('warning');
+});
+
+test('POST /csp-report drops a report with too many fields without logging', function () {
+    Log::spy();
+
+    $body = array_merge(
+        ['blockedURL' => 'inline'],
+        array_fill_keys(array_map(fn (int $i) => "field-{$i}", range(0, 99)), 'x'),
+    );
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/reports+json'],
+        json_encode([['type' => 'csp-violation', 'body' => $body]]),
+    )->assertNoContent();
+
+    Log::shouldNotHaveReceived('warning');
+});
+
+test('POST /csp-report drops an oversized string field without logging', function () {
+    Log::spy();
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/csp-report'],
+        json_encode(['csp-report' => ['blocked-uri' => str_repeat('a', 5000)]]),
+    )->assertNoContent();
+
+    Log::shouldNotHaveReceived('warning');
+});
+
+test('POST /csp-report drops a batch with too many reports without logging', function () {
+    Log::spy();
+
+    $reports = array_fill(0, 21, ['type' => 'csp-violation', 'body' => ['blockedURL' => 'x']]);
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/reports+json'],
+        json_encode($reports),
+    )->assertNoContent();
+
+    Log::shouldNotHaveReceived('warning');
+});
+
+test('POST /csp-report logs only the valid entry of a mixed Reporting API batch', function () {
+    Log::spy();
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/reports+json'],
+        json_encode([
+            ['type' => 'csp-violation', 'body' => ['blockedURL' => 'inline']],
+            ['type' => 'deprecation', 'body' => ['id' => 'x']],
+        ]),
+    )->assertNoContent();
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(
+        fn ($message, $context) => ($context['shape'] ?? null) === 'reporting-api'
+            && count($context['reports'] ?? []) === 1
+    );
+});
+
+test('POST /csp-report neutralises newlines so a report cannot forge a log line', function () {
+    Log::spy();
+
+    $this->call(
+        'POST',
+        '/csp-report',
+        [],
+        [],
+        [],
+        ['CONTENT_TYPE' => 'application/csp-report'],
+        json_encode([
+            'csp-report' => [
+                'document-uri' => "https://dashboard.test/\n2026-01-01 00:00:00 production.WARNING: forged",
+                'blocked-uri' => "inline\r\nx",
+            ],
+        ]),
+    )->assertNoContent();
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(
+        fn ($message, $context) => $message === 'csp-report'
+            && ! str_contains((string) ($context['report']['csp-report']['document-uri'] ?? ''), "\n")
+            && ! str_contains((string) ($context['report']['csp-report']['document-uri'] ?? ''), "\r")
+            && ! str_contains((string) ($context['report']['csp-report']['blocked-uri'] ?? ''), "\n")
+            && ! str_contains((string) ($context['report']['csp-report']['blocked-uri'] ?? ''), "\r")
+    );
+});
+
+test('POST /csp-report answers 204 for a garbage body without logging', function () {
+    Log::spy();
+
+    // Unparseable body must not 500 — the route only ever validates and acks.
     $this->call(
         'POST',
         '/csp-report',
@@ -134,7 +392,9 @@ test('POST /csp-report answers 2xx for JSON and for garbage bodies', function ()
         [],
         ['CONTENT_TYPE' => 'application/csp-report'],
         'not json at all'
-    )->assertSuccessful();
+    )->assertNoContent();
+
+    Log::shouldNotHaveReceived('warning');
 });
 
 test('Strict-Transport-Security header has correct value', function () {

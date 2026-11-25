@@ -4,31 +4,26 @@ use App\Http\Controllers\Api\HardwareExportController;
 use App\Http\Controllers\Api\PersonsExportController;
 use App\Http\Controllers\Api\UnitsExportController;
 use App\Http\Controllers\BackupController;
+use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\TicketAttachmentController;
 use App\Models\User;
 use App\Services\ActivityLogService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Session;
 
 Route::livewire('/login', 'auth.login')->name('login');
 
 // CSP violation reports (#742) — public, unauthenticated, throttled: the
-// Reporting-Endpoints header (SecurityHeaders) points browsers here.
-// Same-app destination is a temporary decision (recorded on #742); the
-// final target is a separate-domain endpoint once that infra exists.
-Route::post('/csp-report', function (Request $request) {
-    // Browsers post `application/csp-report` (Chrome) or `application/json`;
-    // json() decodes whatever the body holds, [] for garbage.
-    Log::warning('csp-report', [
-        'content_type' => $request->header('Content-Type'),
-        'report' => $request->json()->all(),
-    ]);
-
-    return response()->noContent();
-})->middleware('throttle:60,1')->name('csp.report');
+// Reporting-Endpoints header (SecurityHeaders) points browsers here. The
+// Reporting API sends application/reports+json (an array of csp-violation
+// envelopes); the legacy application/csp-report {"csp-report":{…}} shape is
+// also accepted for compatibility. CspReportController validates shape/size
+// and drops junk without logging (#1767). Same-app destination is temporary
+// (#742); the final target is a separate-domain endpoint.
+Route::post('/csp-report', CspReportController::class)
+    ->middleware('throttle:60,1')
+    ->name('csp.report');
 
 // Hardware routes — require authentication and manage_hardware permission
 // (Issue #216: guests must NOT see sensitive hardware data)
