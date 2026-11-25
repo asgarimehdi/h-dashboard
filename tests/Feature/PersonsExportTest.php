@@ -553,6 +553,28 @@ class PersonsExportTest extends TestCase
         );
     }
 
+    public function test_export_rejects_non_integer_lookup_filters(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        $this->actingAs($user);
+
+        foreach (['filter_u_id', 'filter_s_id', 'filter_t_id', 'filter_e_id', 'filter_r_id'] as $parameter) {
+            $this->getJson(route('kargozini.persons.export', [$parameter => 'abc']))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors($parameter);
+        }
+    }
+
+    public function test_export_rejects_array_search(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['kargozini']);
+        $this->actingAs($user);
+
+        $this->getJson(route('kargozini.persons.export', ['search' => ['x']]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('search');
+    }
+
     public function test_export_unit_filter_cannot_escape_the_callers_scope(): void
     {
         // The unit filter narrows the scope; it must never widen it. A unit id

@@ -373,4 +373,59 @@ class PersonApiTest extends TestCase
 
         $this->assertNull($person->fresh()->phone);
     }
+
+    public function test_list_rejects_non_integer_unit_id(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user, ['persons:read']);
+
+        $this->apiGet('/api/persons?unit_id=abc', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('unit_id');
+    }
+
+    public function test_list_rejects_non_integer_semat_id(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user, ['persons:read']);
+
+        $this->apiGet('/api/persons?semat_id=abc', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('semat_id');
+    }
+
+    public function test_list_rejects_array_search(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user, ['persons:read']);
+
+        $this->apiGet('/api/persons?search[]=x', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('search');
+    }
+
+    public function test_list_rejects_array_sort_dir(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user, ['persons:read']);
+
+        $this->apiGet('/api/persons?sort_dir[]=x', $token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('sort_dir');
+    }
+
+    public function test_list_filters_by_unit_id(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user, ['persons:read']);
+
+        $response = $this->apiGet("/api/persons?unit_id={$unit->id}", $token);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertNotEmpty($data);
+        foreach ($data as $person) {
+            $this->assertSame($unit->id, (int) $person['u_id']);
+        }
+    }
 }

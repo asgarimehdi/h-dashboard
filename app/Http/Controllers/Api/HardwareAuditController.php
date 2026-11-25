@@ -13,6 +13,7 @@ use App\Rules\PerPage;
 use App\Services\HardwareAuditScope;
 use App\Support\ExcelCell;
 use App\Support\HardwareAuditChange;
+use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -29,28 +30,43 @@ class HardwareAuditController extends Controller
     {
         $this->assertAccessible($request, $hardware);
 
+        // Issue #1777: these filters used to reach the query builder raw, so
+        // `user_id=abc` raised 22P02 and `date_from=garbage` raised 22007 (both
+        // 500). The `date` rule alone is not enough either: it accepts
+        // `26-07-15` while Postgres rejects that literal with 22008, so dates
+        // are bound as normalized `Y-m-d H:i:s` strings (same shape as
+        // TodoController::index()).
+        $validated = $request->validate([
+            'field' => ['sometimes', 'nullable', 'string'],
+            'user_id' => ['sometimes', 'nullable', 'integer'],
+            'date_from' => ['sometimes', 'nullable', 'date'],
+            'date_to' => ['sometimes', 'nullable', 'date'],
+            'action' => ['sometimes', 'nullable', 'string'],
+            'source' => ['sometimes', 'nullable', 'string'],
+        ]);
+
         $query = HardwareAudit::where('hardware_id', $hardware->id)
             ->with('user.person:id,n_code,f_name,l_name')
             ->latest('created_at');
 
         // Filters
         if ($request->filled('field')) {
-            $query->whereJsonContains('changes', ['field' => $request->field]);
+            $query->whereJsonContains('changes', ['field' => $validated['field']]);
         }
         if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+            $query->where('user_id', $validated['user_id']);
         }
         if ($request->filled('date_from')) {
-            $query->where('created_at', '>=', $request->date_from);
+            $query->where('created_at', '>=', Carbon::parse((string) $validated['date_from'])->toDateTimeString());
         }
         if ($request->filled('date_to')) {
-            $query->where('created_at', '<=', $request->date_to);
+            $query->where('created_at', '<=', Carbon::parse((string) $validated['date_to'])->toDateTimeString());
         }
         if ($request->filled('action')) {
-            $query->where('action', $request->action);
+            $query->where('action', $validated['action']);
         }
         if ($request->filled('source')) {
-            $query->where('source', $request->source);
+            $query->where('source', $validated['source']);
         }
 
         // Issue #894: see UnitController::index(). `min(...)` bounds only the upper
@@ -320,28 +336,39 @@ class HardwareAuditController extends Controller
     {
         $this->assertAccessible($request, $hardware);
 
+        // Issue #1777: same raw filters as index() — validate before they
+        // reach the typed columns, and bind dates as normalized literals.
+        $validated = $request->validate([
+            'field' => ['sometimes', 'nullable', 'string'],
+            'user_id' => ['sometimes', 'nullable', 'integer'],
+            'date_from' => ['sometimes', 'nullable', 'date'],
+            'date_to' => ['sometimes', 'nullable', 'date'],
+            'action' => ['sometimes', 'nullable', 'string'],
+            'source' => ['sometimes', 'nullable', 'string'],
+        ]);
+
         $query = HardwareAudit::where('hardware_id', $hardware->id)
             ->with('user.person:id,n_code,f_name,l_name')
             ->latest('created_at');
 
         // Apply same filters as index
         if ($request->filled('field')) {
-            $query->whereJsonContains('changes', ['field' => $request->field]);
+            $query->whereJsonContains('changes', ['field' => $validated['field']]);
         }
         if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+            $query->where('user_id', $validated['user_id']);
         }
         if ($request->filled('date_from')) {
-            $query->where('created_at', '>=', $request->date_from);
+            $query->where('created_at', '>=', Carbon::parse((string) $validated['date_from'])->toDateTimeString());
         }
         if ($request->filled('date_to')) {
-            $query->where('created_at', '<=', $request->date_to);
+            $query->where('created_at', '<=', Carbon::parse((string) $validated['date_to'])->toDateTimeString());
         }
         if ($request->filled('action')) {
-            $query->where('action', $request->action);
+            $query->where('action', $validated['action']);
         }
         if ($request->filled('source')) {
-            $query->where('source', $request->source);
+            $query->where('source', $validated['source']);
         }
 
         // #1766: format used to reach Excel::download unvalidated, which let a
