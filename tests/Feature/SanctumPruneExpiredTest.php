@@ -2,7 +2,6 @@
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Laravel\Sanctum\Console\Commands\PruneExpired;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -13,9 +12,11 @@ use Tests\TestCase;
  * `sanctum:prune-expired` is what stops `personal_access_tokens` growing
  * forever; these tests pin the shapes production actually writes, including
  * Sanctum's default 24-hour grace.
+ *
+ * No `covers()` here: the command under test is Sanctum's vendor class, which
+ * PHPUnit reports as "not a valid target for code coverage" (a warning fails
+ * the CI suite). The command's behaviour is pinned by the assertions instead.
  */
-covers(PruneExpired::class);
-
 uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
 
 test('a production-shape token past expiration plus grace is pruned and a live token survives', function () {
