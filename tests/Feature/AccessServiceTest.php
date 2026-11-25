@@ -69,17 +69,29 @@ class AccessServiceTest extends TestCase
         $this->assertEmpty($ids);
     }
 
-    public function test_accessible_unit_ids_falls_back_to_person_unit_when_no_session(): void
+    public function test_accessible_unit_ids_uses_membership_when_no_session(): void
     {
         $unit = Unit::create(['name' => 'Only Unit']);
         $user = $this->makeUserInUnit($unit);
         $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
-        // No current_unit_id set in session -> should fall back to user's person unit.
+        // No current_unit_id set in session -> the user's memberships are the base.
         $this->actingAs($user);
 
         $ids = app(AccessService::class)->accessibleUnitIds($user);
 
         $this->assertContains($unit->id, $ids);
+    }
+
+    public function test_accessible_unit_ids_ignores_person_unit_without_membership(): void
+    {
+        $unit = Unit::create(['name' => 'Person-only Unit']);
+        $user = $this->makeUserInUnit($unit);
+        // Deliberately no user_units row: the HR `u_id` is not an access grant (#1830).
+        $this->actingAs($user);
+
+        $ids = app(AccessService::class)->accessibleUnitIds($user);
+
+        $this->assertSame([], $ids);
     }
 
     public function test_clear_cache_bumps_version(): void

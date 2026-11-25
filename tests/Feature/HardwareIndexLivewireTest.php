@@ -7,6 +7,7 @@ use App\Models\HardwareAudit;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +59,77 @@ class HardwareIndexLivewireTest extends TestCase
         $data = $this->createUserWithUnit(['manage_users']); // different permission
         $this->actingAs($data['user']);
         $this->get('/hardware')->assertStatus(403);
+    }
+
+    // ==================== #1830: unit_context re-validation ====================
+
+    public function test_revoked_session_unit_redirects_to_select_context(): void
+    {
+        $stale = Unit::factory()->create();
+        $a = Unit::factory()->create();
+        $b = Unit::factory()->create();
+
+        // person.u_id stays null so the removed person fallback cannot mask the result.
+        $person = Person::factory()->create(['u_id' => null]);
+        $user = User::factory()->create(['n_code' => $person->n_code]);
+        $user->givePermissionTo('manage_hardware');
+        foreach ([$stale, $a, $b] as $i => $unit) {
+            $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => $i === 0]);
+        }
+
+        Session::put('current_unit_id', $stale->id);
+        $this->actingAs($user);
+
+        // Control: before the revoke both routes are reachable.
+        $this->get('/hardware')->assertOk();
+        $this->get('/hardware/import')->assertOk();
+
+        // Revoke — the same membership removal users.index does with sync().
+        $user->units()->detach($stale->id);
+        app(AccessService::class)->clearCache($user->fresh());
+
+        $this->get('/hardware')->assertRedirect('/select-context');
+        $this->get('/hardware/import')->assertRedirect('/select-context');
+        $this->assertNull(session('current_unit_id'));
+    }
+
+    public function test_revoked_session_unit_falls_back_to_the_single_remaining_unit(): void
+    {
+        $stale = Unit::factory()->create();
+        $remaining = Unit::factory()->create();
+
+        $person = Person::factory()->create(['u_id' => null]);
+        $user = User::factory()->create(['n_code' => $person->n_code]);
+        $user->givePermissionTo('manage_hardware');
+        $user->units()->attach($stale->id, ['role' => 'staff', 'is_primary' => true]);
+        $user->units()->attach($remaining->id, ['role' => 'staff', 'is_primary' => false]);
+
+        Session::put('current_unit_id', $stale->id);
+        $this->actingAs($user);
+
+        $user->units()->detach($stale->id);
+        app(AccessService::class)->clearCache($user->fresh());
+
+        $this->get('/hardware')->assertOk();
+        $this->assertSame($remaining->id, session('current_unit_id'));
+        $this->assertSame($remaining->name, session('current_unit_name'));
+    }
+
+    public function test_revoked_own_unit_is_not_resurrected_from_person_u_id(): void
+    {
+        // The helper parks person.u_id AND the user_units pivot on the same unit.
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+
+        // Revoke membership only — the HR field still points at the unit.
+        $data['user']->units()->detach($data['unit']->id);
+        $this->assertSame($data['unit']->id, $data['user']->person->fresh()->u_id);
+
+        // D1=B: membership is the sole source of scope, so a pivot-less user
+        // has an empty scope instead of getting the person's unit back.
+        $this->get('/hardware')->assertRedirect('/select-context');
+        $this->assertNull(session('current_unit_id'));
+        $this->assertSame([], app(AccessService::class)->accessibleUnitIds($data['user']->fresh()));
     }
 
     public function test_authorized_user_renders(): void

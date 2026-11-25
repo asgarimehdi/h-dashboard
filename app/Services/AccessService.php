@@ -68,14 +68,10 @@ class AccessService
         if ($currentUnitId) {
             $baseUnitIds = [$currentUnitId];
         } else {
+            // Membership (`user_units`) is the sole source of scope. A person's
+            // `u_id` is an HR field, not an access grant: falling back to it
+            // resurrected a unit whose membership had been revoked (#1830).
             $baseUnitIds = $user->units()->pluck('units.id')->toArray();
-
-            if (empty($baseUnitIds)) {
-                $personUnitId = $user->person?->u_id;
-                if ($personUnitId) {
-                    $baseUnitIds = [$personUnitId];
-                }
-            }
         }
 
         if (empty($baseUnitIds)) {

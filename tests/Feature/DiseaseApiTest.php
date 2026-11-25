@@ -64,7 +64,8 @@ class DiseaseApiTest extends TestCase
     private function tokenForUnit(Unit $unit, array $permissions = ['map']): string
     {
         $user = User::factory()->create();
-        $user->person()->update(['u_id' => $unit->id]);
+        // #1830: scope comes from membership, not the person's HR unit.
+        $user->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
         $user->givePermissionTo($permissions);
 
         return $this->createApiToken($user, ['gis:read']);

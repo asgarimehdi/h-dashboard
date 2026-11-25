@@ -30,18 +30,11 @@ class ValidateUnitContext
             $currentUnitId = null;
         }
 
-        // Only load units relationship when current_unit_id is not set
+        // Only load units relationship when current_unit_id is not set.
+        // Membership (`user_units`) is the sole source of scope: a person's
+        // `u_id` must never resurrect a revoked unit (#1830), so a user with
+        // zero units falls through to the `/select-context` redirect below.
         $userUnits = $user->units;
-
-        if ($userUnits->isEmpty()) {
-            $person = $user->person;
-            if ($person?->u_id) {
-                session(['current_unit_id' => $person->u_id]);
-                session(['current_unit_name' => $person->unit?->name ?? '-']);
-            }
-
-            return $next($request);
-        }
 
         if ($userUnits->count() === 1) {
             $unit = $userUnits->first();

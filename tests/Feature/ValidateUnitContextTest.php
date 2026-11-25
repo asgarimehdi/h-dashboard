@@ -10,6 +10,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Session;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -24,9 +25,9 @@ beforeEach(function () {
     $this->seedLookupTables();
 });
 
-test('validate unit context sets unit from person when missing', function () {
+test('validate unit context does not resurrect a revoked unit from person', function () {
     $unit = Unit::create(['name' => 'واحد تست']);
-    $person = Person::create([
+    Person::create([
         'n_code' => '1234567890',
         'f_name' => 'تست',
         'l_name' => 'کاربر',
@@ -40,11 +41,27 @@ test('validate unit context sets unit from person when missing', function () {
 
     $request = Request::create('/dashboard', 'GET');
     $request->setUserResolver(fn () => $user);
+    Session::forget('current_unit_id');
+    Session::forget('current_unit_name');
 
     $middleware = new ValidateUnitContext;
     $response = $middleware->handle($request, fn ($req) => redirect('/dashboard'));
 
+    // Membership is the sole source of scope (#1830): the person's HR unit is
+    // NOT written to the session and the user goes to the picker instead.
     expect($response)->toBeInstanceOf(RedirectResponse::class);
+    expect($response->getTargetUrl())->toContain('/select-context');
+    expect(Session::get('current_unit_id'))->toBeNull();
+});
+
+test('hardware and maintenance routes carry unit_context', function () {
+    foreach (['/hardware', '/hardware/import', '/hardware/export', '/maintenance'] as $uri) {
+        $route = collect(Route::getRoutes()->getRoutes())
+            ->first(fn ($r) => $r->uri() === ltrim($uri, '/') && in_array('GET', $r->methods(), true));
+
+        expect($route)->not->toBeNull("route {$uri} is not registered");
+        expect($route->gatherMiddleware())->toContain('unit_context');
+    }
 });
 
 test('validate unit context redirects to select context when multiple units and none selected', function () {
