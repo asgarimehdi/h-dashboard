@@ -5,27 +5,17 @@ namespace App\Imports;
 use App\Exports\Concerns\FormatsJalaliDates;
 use App\Models\Hardware;
 use App\Models\Person;
-use App\Services\AccessService;
-use App\Services\CacheInvalidationServiceInterface;
 use App\Services\HardwareBulkAuditWriter;
 use App\Support\HardwareAuditChange;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeadingRow
+class HardwareImport extends AbstractImportPipeline implements ToCollection, WithCustomCsvSettings, WithHeadingRow
 {
     use FormatsJalaliDates;
-
-    /**
-     * Writes are grouped per chunk. 500 keeps each statement well inside
-     * PostgreSQL's 65535 bind-parameter ceiling (19 columns × 500 = 9500)
-     * while collapsing a 5,000-row sheet from 5,000 commits to 10.
-     */
-    private const CHUNK_SIZE = 500;
 
     /**
      * Fields the model's `saving` hook folds (Hardware::boot()).
@@ -50,43 +40,9 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         'cpu', 'ram', 'hdd', 'comments', 'mark', 'clean_at',
     ];
 
-    private array $accessibleUnitIds = [];
-
-    private array $existingRecords = [];
-
     private array $existingPersons = [];
 
     private string $compareKey = 'both'; // 'pc_name', 'mac', 'both'
-
-    private array $selectedActions = [];
-
-    /**
-     * #1209: sheet rows the preview rejected, keyed by spreadsheet row number
-     * with the preview's own error message. The confirm pass uses this to
-     * carry every rejected row — with the same message — into the published
-     * result instead of dropping it.
-     *
-     * @var array<int, string>
-     */
-    private array $previewErrorMessages = [];
-
-    /**
-     * #1704: `clean_at` cells that are non-empty but unparseable, keyed by
-     * sheet row. The date parser collapses "blank" and "invalid" to null, so
-     * the raw cell is captured where it is still readable (`collection()`) and
-     * the UPDATE path refuses the row instead of writing that null over a
-     * stored date. The raw text must never ride inside `$data`: those keys go
-     * straight into `Hardware::insert()`.
-     *
-     * @var array<int, string>
-     */
-    private array $unparseableCleanAt = [];
-
-    /** @var list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}> */
-    private array $pendingCreates = [];
-
-    /** @var list<array{id: int, data: array<string, mixed>, changes: array<string, mixed>}> */
-    private array $pendingUpdates = [];
 
     private ?int $auditUserId = null;
 
@@ -98,33 +54,9 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
 
     private bool $auditContextExplicit = false;
 
-    private array $importResults = [
-        'created' => 0,
-        'updated' => 0,
-        'skipped' => 0,
-        'errors' => [],
-        'changes' => [],
-        'preview' => [],
-    ];
-
-    public function __construct()
-    {
-        $this->accessibleUnitIds = app(AccessService::class)->accessibleUnitIds();
-    }
-
     public function setCompareKey(string $key): void
     {
         $this->compareKey = $key;
-    }
-
-    public function setAccessibleUnitIds(array $ids): void
-    {
-        $this->accessibleUnitIds = $ids;
-    }
-
-    public function setSelectedActions(array $actions): void
-    {
-        $this->selectedActions = $actions;
     }
 
     /**
@@ -144,60 +76,6 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         $this->auditContextExplicit = true;
     }
 
-    public function collection(Collection $rows): void
-    {
-        // Map once, then use the mapped rows for both the lookup-key window and
-        // both passes. `rowNumber` is the spreadsheet line (header + 1-indexed),
-        // which is also the `row_{n}` key the preview sends back.
-        $dataByRow = [];
-        $this->unparseableCleanAt = [];
-
-        foreach ($rows as $index => $row) {
-            $rowNumber = $index + 2;
-            $rowData = $row->toArray();
-            $dataByRow[$rowNumber] = $this->mapRowToData($rowData);
-
-            // #1704: the raw cell is still readable here; `mapRowToData()`
-            // has already collapsed a bad date to null. Remember the text so
-            // `buildPreview()` can refuse an update row instead of writing
-            // that null over the date the record already stores.
-            if (($invalidCleanAt = $this->invalidCleanAtCell($rowData['clean_at'] ?? null)) !== null) {
-                $this->unparseableCleanAt[$rowNumber] = $invalidCleanAt;
-            }
-        }
-
-        // #1167: the four hardware cache namespaces must bump at most once per
-        // import, not four times per row. The batch scope collects every
-        // increment and flushes one per namespace at the end.
-        app(CacheInvalidationServiceInterface::class)->batch(function () use ($dataByRow) {
-            $this->loadExistingRecords(array_values($dataByRow));
-
-            // First pass: build preview data
-            foreach ($dataByRow as $rowNumber => $data) {
-                $this->buildPreview($data, $rowNumber);
-            }
-
-            // Second pass: apply selected actions if provided
-            if (! empty($this->selectedActions)) {
-                // Reset counters since they were incremented during preview pass.
-                // #1209: `errors` is reset too — the confirm pass re-derives
-                // every preview-rejected row below (with the preview's own
-                // message), instead of letting the buckets double up.
-                $this->importResults['created'] = 0;
-                $this->importResults['updated'] = 0;
-                $this->importResults['skipped'] = 0;
-                $this->importResults['changes'] = [];
-                $this->importResults['errors'] = [];
-
-                foreach ($dataByRow as $rowNumber => $data) {
-                    $this->applySelectedAction($data, $rowNumber);
-                }
-
-                $this->flushPendingWrites();
-            }
-        });
-    }
-
     /**
      * #1167: load only the rows this sheet can possibly match.
      *
@@ -207,15 +85,16 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      * is unconditional and an empty scope compiles to `0 = 1` — while turning
      * a full-table hydration into an index-range lookup.
      *
-     * @param  array<int, array<string, mixed>>  $rowsData
+     * @param  array<int, array{data: array<string, mixed>, invalid: array<string, string>}>  $dataByRow
      */
-    private function loadExistingRecords(array $rowsData): void
+    protected function loadExistingRecords(array $dataByRow): void
     {
         $pcNames = [];
         $macs = [];
         $nCodes = [];
 
-        foreach ($rowsData as $data) {
+        foreach ($dataByRow as $mapped) {
+            $data = $mapped['data'];
             if (! empty($data['pc_name'])) {
                 $pcNames[$data['pc_name']] = true;
             }
@@ -288,69 +167,9 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  array<string, string>  $invalid
      */
-    private function applySelectedAction(array $data, int $rowNumber): void
-    {
-        // #1209: a row the preview rejected is never written, and the
-        // operator's action map cannot resurrect it. Count it as skipped and
-        // carry the preview's own error message into the confirm result, so
-        // the published error list matches what the operator approved.
-        $previewMessage = $this->previewErrorMessages[$rowNumber] ?? null;
-        if (is_string($previewMessage)) {
-            $this->importResults['skipped']++;
-            $this->importResults['errors'][] = [
-                'row' => $rowNumber,
-                'error' => $previewMessage,
-                'data' => $data,
-            ];
-
-            return;
-        }
-
-        // Check if this row has a selected action. #1209: a row the operator
-        // skipped — or that never received an action — must still be counted,
-        // not dropped silently.
-        $actionKey = "row_{$rowNumber}";
-        if (! isset($this->selectedActions[$actionKey]) || $this->selectedActions[$actionKey] === 'skip') {
-            $this->importResults['skipped']++;
-
-            return;
-        }
-
-        $this->processRow($data, $rowNumber, $this->selectedActions[$actionKey], true);
-    }
-
-    /**
-     * #1209: record one sheet row the preview rejected.
-     *
-     * The row is written twice on purpose: the `preview` entry drives the
-     * operator-facing preview table, the `errors` entry publishes the same
-     * rejection in the result (both passes read the same counter buckets),
-     * and the message is remembered so the confirm pass can re-publish it
-     * verbatim.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private function recordRejectedRow(int $rowNumber, string $message, array $data): void
-    {
-        $this->importResults['preview'][] = [
-            'row' => $rowNumber,
-            'status' => 'error',
-            'message' => $message,
-            'data' => $data,
-        ];
-        $this->importResults['errors'][] = [
-            'row' => $rowNumber,
-            'error' => $message,
-            'data' => $data,
-        ];
-        $this->previewErrorMessages[$rowNumber] = $message;
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function buildPreview(array $data, int $rowNumber): void
+    protected function buildPreview(array $data, int $rowNumber, array $invalid = []): void
     {
         // Validate required fields
         if (empty($data['n_code']) || empty($data['pc_name'])) {
@@ -370,7 +189,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         // UNCONDITIONAL membership test (issue #839): the `! empty(...)` conjunct
         // made this `! empty([]) && ...` = false, i.e. ACCEPT the row. Under an
         // empty scope `$this->existingPersons` is empty, so the "person not
-        // found" check above already rejected it — defence in depth.
+        // found" check above already rejected the row — defence in depth.
         if (! in_array($person->u_id, $this->accessibleUnitIds)) {
             $this->recordRejectedRow($rowNumber, "پرسنل {$data['n_code']} در واحدهای قابل دسترس شما نیست", $data);
 
@@ -387,7 +206,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
             // it, so the row is rejected instead — the same row-rejection
             // contract as #1697. Create rows are untouched: there is no stored
             // value to lose there, so #890 semantics (store NULL) still apply.
-            if (($invalidCleanAt = $this->unparseableCleanAt[$rowNumber] ?? null) !== null) {
+            if (($invalidCleanAt = $invalid['clean_at'] ?? null) !== null) {
                 $this->recordRejectedRow(
                     $rowNumber,
                     "تاریخ clean_at نامعتبر است: «{$invalidCleanAt}»؛ ردیف رد شد تا تاریخ ذخیره‌شده پاک نشود",
@@ -436,7 +255,11 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         }
     }
 
-    private function findExistingRecord(array $data): ?array
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{record: Hardware, key: string|null}|null
+     */
+    protected function findExistingRecord(array $data): ?array
     {
         $existing = null;
         $matchKey = null;
@@ -486,35 +309,52 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         return $keys;
     }
 
-    private function mapRowToData(array $row): array
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array{data: array<string, mixed>, invalid: array<string, string>}
+     */
+    protected function mapRowToData(array $row): array
     {
+        // #1704: the raw cell is still readable here; the date parser collapses
+        // "blank" and "invalid" to null. Remember the text so `buildPreview()`
+        // can refuse an update row instead of writing that null over the date
+        // the record already stores. The raw text must never ride inside
+        // `data`: those keys go straight into `Hardware::insert()`.
+        $invalid = [];
+        if (($invalidCleanAt = $this->invalidCleanAtCell($row['clean_at'] ?? null)) !== null) {
+            $invalid['clean_at'] = $invalidCleanAt;
+        }
+
         return [
-            'n_code' => $this->clean($row['n_code'] ?? null),
-            'pc_name' => $this->clean($row['pc_name'] ?? null),
-            'type' => $this->clean($row['type'] ?? null),
-            'os' => $this->clean($row['os'] ?? null),
-            'ip_valid' => $this->clean($row['ip_valid'] ?? null),
-            'ip_local' => $this->clean($row['ip_local'] ?? null),
-            'mac' => $this->clean($row['mac'] ?? null),
-            'net_type' => $this->clean($row['net_type'] ?? null),
-            'switch' => $this->clean($row['switch'] ?? null),
-            'port' => $this->clean($row['port'] ?? null),
-            'shutdown' => $this->parseBoolean($row['shutdown'] ?? null) ?? false,
-            'vlan' => $this->clean($row['vlan'] ?? null),
-            'motherboard' => $this->clean($row['motherboard'] ?? null),
-            'cpu' => $this->clean($row['cpu'] ?? null),
-            'ram' => $this->clean($row['ram'] ?? null),
-            'hdd' => $this->clean($row['hdd'] ?? null),
-            'comments' => $this->clean($row['comments'] ?? null),
-            'mark' => $this->parseBoolean($row['mark'] ?? null) ?? false,
-            'clean_at' => $this->parseDate($row['clean_at'] ?? null),
+            'data' => [
+                'n_code' => $this->clean($row['n_code'] ?? null),
+                'pc_name' => $this->clean($row['pc_name'] ?? null),
+                'type' => $this->clean($row['type'] ?? null),
+                'os' => $this->clean($row['os'] ?? null),
+                'ip_valid' => $this->clean($row['ip_valid'] ?? null),
+                'ip_local' => $this->clean($row['ip_local'] ?? null),
+                'mac' => $this->clean($row['mac'] ?? null),
+                'net_type' => $this->clean($row['net_type'] ?? null),
+                'switch' => $this->clean($row['switch'] ?? null),
+                'port' => $this->clean($row['port'] ?? null),
+                'shutdown' => $this->parseBoolean($row['shutdown'] ?? null) ?? false,
+                'vlan' => $this->clean($row['vlan'] ?? null),
+                'motherboard' => $this->clean($row['motherboard'] ?? null),
+                'cpu' => $this->clean($row['cpu'] ?? null),
+                'ram' => $this->clean($row['ram'] ?? null),
+                'hdd' => $this->clean($row['hdd'] ?? null),
+                'comments' => $this->clean($row['comments'] ?? null),
+                'mark' => $this->parseBoolean($row['mark'] ?? null) ?? false,
+                'clean_at' => $this->parseDate($row['clean_at'] ?? null),
+            ],
+            'invalid' => $invalid,
         ];
     }
 
     /**
      * @param  array<string, mixed>  $data
      */
-    private function processRow(array $data, int $rowNumber, string $action = 'auto', bool $isConfirmation = false): void
+    protected function processRow(array $data, int $rowNumber, string $action = 'auto', bool $isConfirmation = false): void
     {
         // Validate required fields
         if (empty($data['n_code']) || empty($data['pc_name'])) {
@@ -619,24 +459,24 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     }
 
     /**
-     * Apply the model's `saving` normalization to every written value.
-     *
-     * A bulk INSERT/UPDATE never dispatches `saving`, so skipping this would
-     * persist Arabic Yeh/Kaf and Persian digits exactly as typed — a regression
-     * against every other write path in the app (#1167).
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
+     * @return list<string>
      */
-    private function normalizeWriteData(array $data): array
+    protected function compareFields(): array
     {
-        foreach (self::NORMALIZED_FIELDS as $field) {
-            if (isset($data[$field]) && is_string($data[$field]) && $data[$field] !== '') {
-                $data[$field] = Hardware::normalizeForSearch($data[$field]);
-            }
-        }
+        return self::WRITE_FIELDS;
+    }
 
-        return $data;
+    /**
+     * @return list<string>
+     */
+    protected function normalizedFields(): array
+    {
+        return self::NORMALIZED_FIELDS;
+    }
+
+    protected function normalizeSearchValue(string $value): string
+    {
+        return Hardware::normalizeForSearch($value);
     }
 
     /**
@@ -721,45 +561,43 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     }
 
     /**
-     * Write the queued rows, then their audit trail, in chunks.
+     * #1667: a sheet can carry the same NEW device twice (copy-paste, a
+     * re-exported range). `hardwares` has no unique constraint on the
+     * compare key (see ImportHardwareJob), so both rows would be inserted
+     * and a later import could match either one. Collapse queued creates
+     * like PersonImport does for n_code (#1194) — last write wins — but
+     * keyed on the compare key, because a match is what makes two rows the
+     * same device.
      *
-     * `insert()` and `upsert()` go through the query builder: no model events,
-     * no per-row audit INSERT and no per-row cache increment. The audit rows
-     * the observer would have produced are built per row above and inserted by
-     * the shared {@see HardwareBulkAuditWriter}; the four cache namespaces are
-     * bumped once by the surrounding `CacheInvalidationServiceInterface::batch()`.
+     * Under `both` a row collides when EITHER field matches the current
+     * survivor: that is what the row-by-row matcher did
+     * (findExistingRecord() tries pc_name, then mac). Replacing a survivor
+     * also RELEASES its old keys, because the surviving row has been
+     * renamed by the later sheet row: A=(p1,m1), B=(p2,m1), C=(p1,m2)
+     * yields TWO rows (B renames A to p2, so C matches nothing), while
+     * A=(p1,m1), B=(p1,m2), C=(p2,m2) yields ONE.
+     *
+     * The replaced row's `changes` are dropped: the audit trail records one
+     * `created` row with the surviving (last) values, exactly as the update
+     * dedupe below and PersonImport already do. Every dropped row is also
+     * reported in `errors`, naming its sheet row, the key it collided on
+     * and the surviving row, so a swapped/mistyped pc_name or mac is
+     * visible instead of vanishing silently.
      */
-    private function flushPendingWrites(): void
+    protected function dedupePendingCreates(): void
     {
-        // #1667: a sheet can carry the same NEW device twice (copy-paste, a
-        // re-exported range). `hardwares` has no unique constraint on the
-        // compare key (see ImportHardwareJob), so both rows would be inserted
-        // and a later import could match either one. Collapse queued creates
-        // like PersonImport does for n_code (#1194) — last write wins — but
-        // keyed on the compare key, because a match is what makes two rows the
-        // same device.
-        //
-        // Under `both` a row collides when EITHER field matches the current
-        // survivor: that is what the row-by-row matcher did
-        // (findExistingRecord() tries pc_name, then mac). Replacing a survivor
-        // also RELEASES its old keys, because the surviving row has been
-        // renamed by the later sheet row: A=(p1,m1), B=(p2,m1), C=(p1,m2)
-        // yields TWO rows (B renames A to p2, so C matches nothing), while
-        // A=(p1,m1), B=(p1,m2), C=(p2,m2) yields ONE.
-        //
-        // The replaced row's `changes` are dropped: the audit trail records one
-        // `created` row with the surviving (last) values, exactly as the update
-        // dedupe below and PersonImport already do. Every dropped row is also
-        // reported in `errors`, naming its sheet row, the key it collided on
-        // and the surviving row, so a swapped/mistyped pc_name or mac is
-        // visible instead of vanishing silently.
-        /** @var list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}> $kept */
+        /** @var list<array<string, mixed>> $kept */
         $kept = [];
         /** @var array<string, int> $keyIndex */
         $keyIndex = [];
 
         foreach ($this->pendingCreates as $item) {
-            $keys = $this->createDedupeKeys($item['data']);
+            /** @var array<string, mixed> $itemData */
+            $itemData = $item['data'];
+            /** @var int $itemRow */
+            $itemRow = $item['row'];
+
+            $keys = $this->createDedupeKeys($itemData);
 
             // Collect every survivor this row collides with (pc_name may hit
             // one row while mac hits another), keeping the first key that
@@ -774,8 +612,10 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
 
             foreach ($victims as $index => $collidingKey) {
                 $victim = $kept[$index];
+                /** @var array<string, mixed> $victimData */
+                $victimData = $victim['data'];
 
-                foreach ($this->createDedupeKeys($victim['data']) as $victimKey) {
+                foreach ($this->createDedupeKeys($victimData) as $victimKey) {
                     unset($keyIndex[$victimKey]);
                 }
 
@@ -785,11 +625,11 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
 
                 $this->importResults['errors'][] = [
                     'row' => $victim['row'],
-                    'error' => "دستگاه تکراری؛ با ردیف {$item['row']} روی {$field} «{$value}» یکسان است و نادیده گرفته شد.",
-                    'data' => $victim['data'],
+                    'error' => "دستگاه تکراری؛ با ردیف {$itemRow} روی {$field} «{$value}» یکسان است و نادیده گرفته شد.",
+                    'data' => $victimData,
                     'key' => $field,
                     'value' => $value,
-                    'duplicate_of' => $item['row'],
+                    'duplicate_of' => $itemRow,
                 ];
             }
 
@@ -808,42 +648,12 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         }
 
         $this->pendingCreates = array_values($kept);
-
-        $wrote = ! empty($this->pendingCreates) || ! empty($this->pendingUpdates);
-
-        foreach (array_chunk($this->pendingCreates, self::CHUNK_SIZE) as $chunk) {
-            $this->insertCreates($chunk);
-        }
-
-        // #1194: two sheet rows can resolve to the same existing hardware id
-        // (pc_name / mac are not unique). PostgreSQL rejects an upsert whose
-        // VALUES list contains the same conflict target twice, so collapse
-        // duplicate ids here — last write wins, matching row-by-row semantics.
-        $dedupedUpdates = [];
-        foreach ($this->pendingUpdates as $item) {
-            $dedupedUpdates[$item['id']] = $item;
-        }
-        $this->pendingUpdates = array_values($dedupedUpdates);
-
-        foreach (array_chunk($this->pendingUpdates, self::CHUNK_SIZE) as $chunk) {
-            $this->updateRows($chunk);
-        }
-
-        $this->pendingCreates = [];
-        $this->pendingUpdates = [];
-
-        if ($wrote) {
-            // Bulk writes bypass `saved`, so the model's flush must be invoked
-            // explicitly — inside the batch scope it lands as one increment per
-            // namespace (#376 / #1167).
-            Hardware::flushStatsCache();
-        }
     }
 
     /**
-     * @param  list<array{row: int, data: array<string, mixed>, changes: array<string, mixed>}>  $chunk
+     * @param  list<array<string, mixed>>  $chunk
      */
-    private function insertCreates(array $chunk): void
+    protected function insertCreateChunk(array $chunk): void
     {
         $now = now();
         $ids = $this->reserveHardwareIds(count($chunk));
@@ -851,13 +661,17 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         $auditChanges = [];
 
         foreach ($chunk as $index => $item) {
+            /** @var array<string, mixed> $data */
+            $data = $item['data'];
+            /** @var array<string, mixed> $changes */
+            $changes = $item['changes'];
             $id = $ids[$index];
-            $rows[] = array_merge($item['data'], [
+            $rows[] = array_merge($data, [
                 'id' => $id,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
-            $auditChanges[$id] = $item['changes'];
+            $auditChanges[$id] = $changes;
         }
 
         Hardware::query()->insert($rows);
@@ -880,15 +694,17 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     }
 
     /**
-     * @param  list<array{id: int, data: array<string, mixed>, changes: array<string, mixed>}>  $chunk
+     * @param  list<array<string, mixed>>  $chunk
      */
-    private function updateRows(array $chunk): void
+    protected function updateChunk(array $chunk): void
     {
         $now = now();
         $rows = [];
 
         foreach ($chunk as $item) {
-            $rows[] = array_merge($item['data'], [
+            /** @var array<string, mixed> $data */
+            $data = $item['data'];
+            $rows[] = array_merge($data, [
                 'id' => $item['id'],
                 'updated_at' => $now,
             ]);
@@ -914,7 +730,9 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
 
         $auditChanges = [];
         foreach ($auditable as $item) {
-            $auditChanges[$item['id']] = $item['changes'];
+            /** @var int $id */
+            $id = $item['id'];
+            $auditChanges[$id] = $item['changes'];
         }
 
         $items = array_map(fn (array $item) => (object) ['id' => $item['id']], $auditable);
@@ -936,7 +754,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     /**
      * @return list<string>
      */
-    private function updateColumns(): array
+    protected function updateColumns(): array
     {
         return self::WRITE_FIELDS;
     }
@@ -975,36 +793,21 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         ];
     }
 
-    private function detectChanges(Hardware $existing, array $newData): array
+    /**
+     * Hardware computes "wrote anything" AFTER dedupe on purpose (Person does
+     * the opposite); see AbstractImportPipeline.
+     */
+    protected function shouldBumpCaches(bool $hadQueued, bool $hasAfterDedupe): bool
     {
-        // #1758: compare what will actually be WRITTEN. `normalizeWriteData()`
-        // applies the same folding the model's `saving` hook applies, so a
-        // sheet cell that only differs in Persian variants (or digits) is not
-        // reported as a rename the write would then not perform. It also puts
-        // `pc_name` in the compared set: a mac-match that renames the device is
-        // a real write, so it has to appear in the preview the operator
-        // approves.
-        $newData = $this->normalizeWriteData($newData);
+        return $hasAfterDedupe;
+    }
 
-        $changes = [];
-
-        foreach (self::WRITE_FIELDS as $field) {
-            $oldValue = $existing->$field;
-            $newValue = $newData[$field] ?? null;
-
-            // Normalize for comparison
-            $oldNormalized = $this->normalizeForComparison($oldValue);
-            $newNormalized = $this->normalizeForComparison($newValue);
-
-            if ($oldNormalized !== $newNormalized) {
-                $changes[$field] = [
-                    'old' => $oldValue,
-                    'new' => $newValue,
-                ];
-            }
-        }
-
-        return $changes;
+    protected function afterFlush(): void
+    {
+        // Bulk writes bypass `saved`, so the model's flush must be invoked
+        // explicitly — inside the batch scope it lands as one increment per
+        // namespace (#376 / #1167).
+        Hardware::flushStatsCache();
     }
 
     /**
@@ -1016,7 +819,7 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
      * reported a change that was not one and every re-import wrote a bogus
      * diff. Normalising both sides to the same shape is what removes it.
      */
-    private function normalizeForComparison($value): string
+    protected function normalizeForComparison($value): string
     {
         if ($value instanceof \DateTimeInterface) {
             return $value->format('Y-m-d');
@@ -1125,15 +928,6 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
         return trim((string) $value);
     }
 
-    private function clean($value): ?string
-    {
-        if ($value === null || $value === '' || $value === '\\N' || trim((string) $value) === '') {
-            return null;
-        }
-
-        return trim((string) $value);
-    }
-
     // #890: `rules()` was REMOVED, not activated.
     //
     // This class declares ToCollection, WithCustomCsvSettings and
@@ -1148,20 +942,4 @@ class HardwareImport implements ToCollection, WithCustomCsvSettings, WithHeading
     // processRow() is the designed preview/confirm path. Turning on framework
     // validation here would change import behaviour well beyond this bug and
     // deserves its own issue if it is ever wanted.
-
-    public function getImportResults(): array
-    {
-        return $this->importResults;
-    }
-
-    public function getCsvSettings(): array
-    {
-        return [
-            'delimiter' => "\t",
-            'enclosure' => '"',
-            'escape_character' => '\\',
-            'contiguous' => false,
-            'input_encoding' => 'UTF-8',
-        ];
-    }
 }
