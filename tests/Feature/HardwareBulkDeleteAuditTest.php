@@ -7,6 +7,7 @@ use App\Models\HardwareAudit;
 use App\Models\Unit;
 use App\Models\User;
 use App\Support\HardwareAuditChange;
+use App\Support\HardwareRules;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
@@ -246,5 +247,21 @@ class HardwareBulkDeleteAuditTest extends TestCase
             array_keys(collect($apiAudit->changes)->keyBy('field')->all()),
             array_keys(collect($webAudit->changes)->keyBy('field')->all())
         );
+    }
+
+    // ==================== #1778: ids cap ====================
+
+    public function test_web_bulk_delete_rejects_a_selection_over_the_cap(): void
+    {
+        $data = $this->createUserWithHardware(1);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $id = $data['hardware'][0]->id;
+
+        $this->webBulkDelete(array_fill(0, HardwareRules::MAX_BULK_IDS + 1, $id));
+
+        $this->assertDatabaseHas('hardwares', ['id' => $id]);
+        $this->assertSame(0, HardwareAudit::query()->where('action', 'bulk_delete')->count());
     }
 }

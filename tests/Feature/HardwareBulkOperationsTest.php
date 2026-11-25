@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\HardwareController;
 use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Support\HardwareAuditChange;
+use App\Support\HardwareRules;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -35,6 +36,37 @@ class HardwareBulkOperationsTest extends TestCase
         $hardware3 = Hardware::create(['n_code' => $nCode, 'pc_name' => 'PC-3', 'type' => 'server']);
 
         return ['user' => $user, 'unit' => $unit, 'hardware' => [$hardware1, $hardware2, $hardware3]];
+    }
+
+    /**
+     * #1778: seed exactly one full page of bulk ids.
+     *
+     * @return list<int>
+     */
+    protected function seedHardwareAtCap(string $nCode, int $count = HardwareRules::MAX_BULK_IDS): array
+    {
+        $now = now();
+        $rows = [];
+
+        for ($i = 1; $i <= $count; $i++) {
+            $rows[] = [
+                'n_code' => $nCode,
+                'pc_name' => 'CAP-'.$i,
+                'type' => 'pc',
+                'mark' => false,
+                'shutdown' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        Hardware::insert($rows);
+
+        return Hardware::query()
+            ->where('pc_name', 'like', 'CAP-%')
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
     }
 
     // ==================== Bulk Mark ====================
@@ -278,6 +310,86 @@ class HardwareBulkOperationsTest extends TestCase
             ->where('hardware_id', $alreadyMarked->id)
             ->where('action', 'bulk_mark')
             ->count(), 'the row already at the target value must not be audited');
+    }
+
+    // ==================== #1778: ids cap ====================
+
+    public function test_bulk_mark_rejects_ids_over_the_cap_before_expanding_element_rules(): void
+    {
+        $data = $this->createUserWithHardware();
+        $this->actingAs($data['user']);
+
+        // 501 elements, the first one not an integer: a single-stage `max` would
+        // also report `ids.0`, i.e. it had already expanded the wildcard and run
+        // the per-element rules. Only the `ids` key proves the size check ran first.
+        $ids = array_merge(
+            ['not-an-int'],
+            array_fill(0, HardwareRules::MAX_BULK_IDS, $data['hardware'][0]->id),
+        );
+
+        $response = $this->postJson('/api/hardware/bulk-mark', ['ids' => $ids, 'mark' => true]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('ids');
+        $this->assertArrayNotHasKey('ids.0', $response->json('errors'), 'the cap must reject before ids.* expands');
+        $this->assertDatabaseHas('hardwares', ['id' => $data['hardware'][0]->id, 'mark' => false]);
+    }
+
+    public function test_bulk_delete_rejects_ids_over_the_cap_before_expanding_element_rules(): void
+    {
+        $data = $this->createUserWithHardware();
+        $this->actingAs($data['user']);
+
+        $ids = array_merge(
+            ['not-an-int'],
+            array_fill(0, HardwareRules::MAX_BULK_IDS, $data['hardware'][0]->id),
+        );
+
+        $response = $this->postJson('/api/hardware/bulk-delete', ['ids' => $ids]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('ids');
+        $this->assertArrayNotHasKey('ids.0', $response->json('errors'), 'the cap must reject before ids.* expands');
+        $this->assertDatabaseHas('hardwares', ['id' => $data['hardware'][0]->id]);
+    }
+
+    public function test_bulk_mark_accepts_exactly_the_cap_and_audits_every_row(): void
+    {
+        $data = $this->createUserWithHardware();
+        $this->actingAs($data['user']);
+
+        $ids = $this->seedHardwareAtCap($data['user']->n_code);
+        $this->assertCount(HardwareRules::MAX_BULK_IDS, $ids);
+
+        $this->postJson('/api/hardware/bulk-mark', ['ids' => $ids, 'mark' => true])
+            ->assertOk()
+            ->assertJsonPath('count', HardwareRules::MAX_BULK_IDS);
+
+        $this->assertSame(
+            HardwareRules::MAX_BULK_IDS,
+            Hardware::query()->whereIn('id', $ids)->where('mark', true)->count(),
+        );
+        $this->assertSame(
+            HardwareRules::MAX_BULK_IDS,
+            HardwareAudit::query()->where('action', 'bulk_mark')->count(),
+        );
+    }
+
+    public function test_bulk_delete_accepts_exactly_the_cap_and_audits_every_row(): void
+    {
+        $data = $this->createUserWithHardware();
+        $this->actingAs($data['user']);
+
+        $ids = $this->seedHardwareAtCap($data['user']->n_code);
+        $this->assertCount(HardwareRules::MAX_BULK_IDS, $ids);
+
+        $this->postJson('/api/hardware/bulk-delete', ['ids' => $ids])
+            ->assertOk()
+            ->assertJsonPath('count', HardwareRules::MAX_BULK_IDS);
+
+        $this->assertSame(0, Hardware::query()->whereIn('id', $ids)->count());
+        $this->assertSame(
+            HardwareRules::MAX_BULK_IDS,
+            HardwareAudit::query()->where('action', 'bulk_delete')->count(),
+        );
     }
 
     // ==================== Auth ====================

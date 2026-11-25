@@ -257,6 +257,16 @@ class HardwareController extends Controller
 
     public function bulkMark(UnitScopedRequest $request): JsonResponse
     {
+        // #1778: bound the array BEFORE the per-element rules exist. Laravel
+        // expands `ids.*` into one rule set per element when the validator is
+        // built (ValidationRuleParser::explode -> explodeWildcardRules), so a
+        // lone `max` on `ids` still runs one `exists` query per submitted id
+        // before rejecting the request. Two stages keep an oversized payload
+        // O(1) in queries.
+        $request->validate([
+            'ids' => 'required|array|max:'.HardwareRules::MAX_BULK_IDS,
+        ]);
+
         $validated = $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',
@@ -334,6 +344,11 @@ class HardwareController extends Controller
 
     public function bulkDelete(UnitScopedRequest $request): JsonResponse
     {
+        // #1778: see bulkMark() — size first, element rules second.
+        $request->validate([
+            'ids' => 'required|array|max:'.HardwareRules::MAX_BULK_IDS,
+        ]);
+
         $validated = $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer|exists:hardwares,id',

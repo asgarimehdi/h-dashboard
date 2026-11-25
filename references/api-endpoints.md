@@ -50,8 +50,8 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability*
 | GET | `/api/hardware/{id}` | Show details |
 | PUT/PATCH | `/api/hardware/{id}` | Update (partial updates allowed — only sends changed fields) |
 | DELETE | `/api/hardware/{id}` | Delete |
-| POST | `/api/hardware/bulk-mark` | `{ids: [...], mark: true/false}` |
-| POST | `/api/hardware/bulk-delete` | `{ids: [...]}` |
+| POST | `/api/hardware/bulk-mark` | `{ids: [...], mark: true/false}` — at most 500 ids; more → 422 (#1778) |
+| POST | `/api/hardware/bulk-delete` | `{ids: [...]}` — at most 500 ids; more → 422 (#1778) |
 | GET | `/api/hardware/{hardware}/audits` | Paginated audit trail — filters: `field`, `user_id`, `date_from`, `date_to`, `action`, `source`, `per_page` (max 50) |
 | GET | `/api/hardware/{hardware}/audits/export` | Export audit trail as Excel/CSV (compliance report, Jalali dates) |
 | GET | `/api/hardware/{hardware}/audits/{audit}` | Single audit record with full field diff + Persian labels |
