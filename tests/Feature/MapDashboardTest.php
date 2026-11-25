@@ -281,7 +281,9 @@ class MapDashboardTest extends TestCase
      */
     public function test_gis_endpoints_accept_the_session_cookie_without_a_bearer_token(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['map']);
+        // #1743: `/gis/hardware` and `/gis/tickets` are nested behind their
+        // own data permissions, so this session-cookie pin needs all three.
+        ['user' => $user] = $this->createUserWithUnit(['map', 'manage_hardware', 'view_all_tickets']);
         $disease = Disease::factory()->create();
 
         Livewire::test('auth.login')

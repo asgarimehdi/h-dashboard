@@ -268,10 +268,22 @@ Route::middleware(['auth:sanctum', 'throttle:api-user'])->group(function () {
     // and the gate had been edited in different places. This matches the
     // traffic group above (`routes/api.php` `map|bw`) and the `AGENTS.md`
     // web-route precedent for `/it/networks` + `/it/wireless`.
+    //
+    // #1743: this group is no longer a uniform gate — the two DATA endpoints
+    // also require the permission that already guards the same data elsewhere.
     Route::prefix('gis')->middleware(['ability:gis:read', 'role_or_permission:map|bw'])->group(function () {
         Route::get('/units', [GisController::class, 'units'])->name('api.gis.units');
-        Route::get('/hardware', [GisController::class, 'hardware'])->name('api.gis.hardware');
-        Route::get('/tickets', [GisController::class, 'tickets'])->name('api.gis.tickets');
+
+        // #1743: the two DATA endpoints carry the same permission the app
+        // already enforces for the identical data everywhere else
+        // (`/api/hardware` and `/api/tickets`). Nested middleware is AND, so
+        // `gis:read` + `map|bw` still apply on top.
+        Route::get('/hardware', [GisController::class, 'hardware'])
+            ->middleware('role_or_permission:manage_hardware')
+            ->name('api.gis.hardware');
+        Route::get('/tickets', [GisController::class, 'tickets'])
+            ->middleware('role_or_permission:view_assigned_tickets|view_all_tickets')
+            ->name('api.gis.tickets');
         Route::get('/stats', [GisController::class, 'stats'])->name('api.gis.stats');
         Route::get('/clusters', [GisController::class, 'clusters'])->name('api.gis.clusters');
 

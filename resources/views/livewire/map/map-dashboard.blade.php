@@ -188,18 +188,28 @@ return new class extends Component
                    @click="toggleLayer('units')">
                 <i class="fa fa-map-marker-alt"></i> واحدها
             </button>
+            {{-- #1743: this layer's endpoint requires `manage_hardware`; a
+                 `map`-only viewer would get a 403, and `apiFetch()`'s 403
+                 latch (#1532) is page-terminal — the whole map would stop
+                 loading. So the button is not rendered at all. --}}
+            @can('manage_hardware')
             <button type="button"
                    class="btn btn-xs btn-ghost gap-1"
                    :class="{ 'btn-primary': activeLayers.includes('hardware') }"
                    @click="toggleLayer('hardware')">
                 <i class="fa fa-desktop"></i> سخت‌افزار
             </button>
+            @endcan
+            {{-- #1743: same reasoning — `/api/gis/tickets` now mirrors the
+                 `/api/tickets` gate. --}}
+            @canany(['view_assigned_tickets', 'view_all_tickets'])
             <button type="button"
                    class="btn btn-xs btn-ghost gap-1"
                    :class="{ 'btn-primary': activeLayers.includes('tickets') }"
                    @click="toggleLayer('tickets')">
                 <i class="fa fa-ticket"></i> تیکت‌ها
             </button>
+            @endcanany
             {{-- #1246: aggregate-only disease layer. Same `map` gate as the rest
                  of this page — `/api/gis/disease*` carries counts/rates, never
                  patient data (decision 18). --}}

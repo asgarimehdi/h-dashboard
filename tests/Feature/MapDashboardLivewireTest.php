@@ -179,6 +179,33 @@ class MapDashboardLivewireTest extends TestCase
         $this->assertSame(['', ...Ticket::PRIORITIES], $matches[1]);
     }
 
+    // ==================== Data layer buttons (#1743) ====================
+
+    /**
+     * #1743: `/api/gis/hardware` and `/api/gis/tickets` now carry their own
+     * data permission, and `apiFetch()`'s 403 latch is page-terminal — so a
+     * viewer without the permission must not be given the button at all.
+     *
+     * `toggleLayer(...)` is asserted instead of the Persian label because
+     * «سخت‌افزار» also appears in the stats badge, and the unescaped form is
+     * needed: htmlspecialchars would turn `'` into `&#039;`.
+     */
+    public function test_data_layer_buttons_follow_the_data_permissions(): void
+    {
+        ['user' => $mapOnly] = $this->createUserWithUnit(['map']);
+        $this->actingAs($mapOnly);
+        Livewire::test('map.map-dashboard')
+            ->assertSee("toggleLayer('units')", false)
+            ->assertDontSee("toggleLayer('hardware')", false)
+            ->assertDontSee("toggleLayer('tickets')", false);
+
+        ['user' => $full] = $this->createUserWithUnit(['map', 'manage_hardware', 'view_all_tickets']);
+        $this->actingAs($full);
+        Livewire::test('map.map-dashboard')
+            ->assertSee("toggleLayer('hardware')", false)
+            ->assertSee("toggleLayer('tickets')", false);
+    }
+
     // ==================== Disease layer (#1246) ====================
 
     /**
