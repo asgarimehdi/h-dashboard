@@ -18,13 +18,25 @@ class PersonController extends Controller
 
     public function index(UnitScopedRequest $request): JsonResponse
     {
+        // Issue #1777: `search[]=x` used to blow up inside normalizeForQuery()
+        // and `sort_dir[]=x` inside strtolower() (TypeError), while `unit_id=abc`
+        // and `semat_id=abc` raised 22P02 — all 500s. `sort_by` stays unvalidated
+        // on purpose: an unknown value already falls back to `n_code` and never
+        // reaches orderBy(), so rejecting it would be a contract change.
+        $validated = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string'],
+            'unit_id' => ['sometimes', 'nullable', 'integer'],
+            'semat_id' => ['sometimes', 'nullable', 'integer'],
+            'sort_dir' => ['sometimes', 'nullable', 'string'],
+        ]);
+
         $accessibleIds = $request->accessibleIds();
 
         $query = Person::whereIn('u_id', $accessibleIds)
             ->with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name']);
 
         if ($request->filled('search')) {
-            $s = self::normalizeForQuery($request->search);
+            $s = self::normalizeForQuery((string) $validated['search']);
             $query->where(function ($q) use ($s) {
                 $q->where('n_code', 'LIKE', "%{$s}%")
                     ->orWhere('f_name', 'LIKE', "%{$s}%")
@@ -36,11 +48,11 @@ class PersonController extends Controller
         }
 
         if ($request->filled('unit_id')) {
-            $query->where('u_id', $request->unit_id);
+            $query->where('u_id', $validated['unit_id']);
         }
 
         if ($request->filled('semat_id')) {
-            $query->where('s_id', $request->semat_id);
+            $query->where('s_id', $validated['semat_id']);
         }
 
         $allowedSortColumns = ['n_code', 'f_name', 'l_name', 'created_at', 'u_id', 's_id', 't_id', 'e_id', 'r_id'];
@@ -49,7 +61,7 @@ class PersonController extends Controller
             $sortBy = 'n_code';
         }
 
-        $sortDir = strtolower($request->get('sort_dir', 'asc'));
+        $sortDir = strtolower((string) ($validated['sort_dir'] ?? 'asc'));
         if (! in_array($sortDir, ['asc', 'desc'])) {
             $sortDir = 'asc';
         }

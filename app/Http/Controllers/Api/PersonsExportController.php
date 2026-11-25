@@ -22,6 +22,20 @@ class PersonsExportController extends Controller
      */
     public function export(UnitScopedRequest $request)
     {
+        // Issue #1777: the five `filter_*_id` values reached bigint columns raw
+        // (22P02 → 500) and an array `search` broke the string cast inside
+        // applySearch(). validate() leaves the request untouched, and because it
+        // runs before both helpers, the `input()` reads inside them are now
+        // guaranteed to be well-formed.
+        $request->validate([
+            'search' => ['sometimes', 'nullable', 'string'],
+            'filter_u_id' => ['sometimes', 'nullable', 'integer'],
+            'filter_s_id' => ['sometimes', 'nullable', 'integer'],
+            'filter_t_id' => ['sometimes', 'nullable', 'integer'],
+            'filter_e_id' => ['sometimes', 'nullable', 'integer'],
+            'filter_r_id' => ['sometimes', 'nullable', 'integer'],
+        ]);
+
         $accessibleIds = $request->accessibleIds();
 
         $query = Person::query()
