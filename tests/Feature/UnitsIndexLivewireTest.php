@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\DiseaseCase;
 use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
+use App\Models\UnitPopulation;
 use App\Models\User;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
@@ -1147,6 +1149,35 @@ class UnitsIndexLivewireTest extends TestCase
         $this->assertDatabaseHas('units', ['id' => $target->id]);
         // The connection is still usable — a refused delete must not abort it.
         $this->assertDatabaseHas('tickets', ['ticket_code' => 'T-949']);
+    }
+
+    /**
+     * #1791: `disease_cases` and `unit_populations` are plain RESTRICT FKs.
+     * Before they were counted, the delete reached the database and the catch
+     * blamed a concurrent change. The refusal must name both tables.
+     */
+    public function test_delete_unit_refusal_names_disease_cases_and_populations(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $target = Unit::create([
+            'name' => 'واحد دارای پرونده بیماری', 'unit_type_id' => 5,
+            'region_id' => 2, 'parent_id' => $unit->id,
+        ]);
+        DiseaseCase::factory()->create(['unit_id' => $target->id]);
+        UnitPopulation::create([
+            'unit_id' => $target->id,
+            'year' => now()->year,
+            'population' => 100,
+        ]);
+
+        $component = Livewire::test('units.index')->call('deleteUnit', $target->id);
+
+        $title = $this->toastContaining($component, 'پرونده بیماری');
+        $this->assertStringContainsString('1', $title);
+        $this->assertStringContainsString('ردیف جمعیت', $title);
+        $this->assertDatabaseHas('units', ['id' => $target->id]);
     }
 
     // ==================== #1040: parentUnits is computed, the snapshot stays light ====================

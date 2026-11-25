@@ -5,14 +5,16 @@ namespace App\Services;
 /**
  * #949 — what deleting one unit would actually destroy.
  *
- * `units` has eight inbound foreign keys. Two are `RESTRICT`
- * (`units_parent_fk`, `tickets_unit_fk`) and stop a delete by themselves. Six
- * are not: `persons.u_id`, `todos.unit_id`, `task_activities.unit_id`,
- * `maintenance_schedules.unit_id` and `daily_reports.unit_id` go NULL, and
- * `user_units` rows are CASCADEd away. The old code guarded the two the
- * database could see and reported that as though the rest were protected.
+ * `units` has eleven inbound foreign keys. Five are `RESTRICT` and stop a
+ * delete by themselves (`units_parent_fk`, `tickets_unit_fk`,
+ * `disease_cases.unit_id`, `disease_cases.subject_unit_id`,
+ * `unit_populations.unit_id`). Six are not: `persons.u_id`, `todos.unit_id`,
+ * `task_activities.to_unit_id`, `maintenance_schedules.unit_id` and
+ * `daily_reports.unit_id` go NULL, and `user_units` rows are CASCADEd away.
+ * The old code guarded the two the database could see and reported that as
+ * though the rest were protected.
  *
- * Only five of the six non-RESTRICT tables are counted here. `task_activities`,
+ * Only three of the six non-RESTRICT tables are counted here. `task_activities`,
  * `daily_reports` and `maintenance_schedules` are omitted on purpose: the last
  * is issue #876's approved contract and the first two are audit and reporting
  * history rather than live operational data. `UnitDeletionService` is where
@@ -27,6 +29,8 @@ namespace App\Services;
  *
  * @property-read int $children  child units (`units_parent_fk`, RESTRICT)
  * @property-read int $tickets   tickets (`tickets_unit_fk`, RESTRICT)
+ * @property-read int $diseaseCases  disease cases recorded on or subject to the unit (`disease_cases.unit_id` / `subject_unit_id`, RESTRICT)
+ * @property-read int $populations   yearly population rows (`unit_populations.unit_id`, RESTRICT)
  * @property-read int $persons   staff rows (`persons.u_id`, SET NULL)
  * @property-read int $hardware  assets reachable only through those staff
  * @property-read int $todos     todos (`todos.unit_id`, SET NULL)
@@ -37,6 +41,8 @@ final readonly class UnitDeletionImpact
     public function __construct(
         public int $children,
         public int $tickets,
+        public int $diseaseCases,
+        public int $populations,
         public int $persons,
         public int $hardware,
         public int $todos,
@@ -63,6 +69,8 @@ final readonly class UnitDeletionImpact
         return array_filter([
             'children' => $this->children,
             'tickets' => $this->tickets,
+            'disease_cases' => $this->diseaseCases,
+            'populations' => $this->populations,
             'persons' => $this->persons,
             'hardware' => $this->hardware,
             'todos' => $this->todos,

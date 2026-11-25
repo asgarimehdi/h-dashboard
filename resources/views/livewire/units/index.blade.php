@@ -595,7 +595,7 @@ return new class extends Component
         }
 
         // #949 steps 2–4: refuse, and say what is actually in the way.
-        // Six of the eight inbound FKs on `units` are not RESTRICT, so a delete
+        // Six of the eleven inbound FKs on `units` are not RESTRICT, so a delete
         // here used to silently NULL `persons.u_id`, NULL `todos.unit_id` and
         // CASCADE away `user_units` rows — orphaning 155 of 318 accounts from
         // the org tree while reporting a green toast. The counts, not this
@@ -613,15 +613,17 @@ return new class extends Component
             $unit->delete();
             $this->warning("$unit->name حذف شد ", 'با موفقیت', position: 'toast-bottom');
         } catch (\Exception $e) {
-            // Honest scope of this catch: it covers the two RESTRICT FKs only —
-            // `units_parent_fk` and `tickets_unit_fk` — in the window between
-            // the count above and this delete. The four non-RESTRICT tables do
-            // NOT raise here: a `persons` / `todos` / `user_units` row landing
-            // in that same window still produces a successful delete with the
-            // green toast above. READ COMMITTED does not close that race, and
-            // this issue does not claim it does. Closing it needs a decision
-            // about serialising unit deletes; until then the counts narrow the
-            // window, they do not remove it.
+            // Honest scope of this catch: the counts above cover all five
+            // RESTRICT FKs — `units_parent_fk`, `tickets_unit_fk`,
+            // `disease_cases.unit_id` / `subject_unit_id` and
+            // `unit_populations.unit_id` — so this catch only covers the window
+            // between the count and this delete for those five. The six
+            // non-RESTRICT tables do NOT raise here: a `persons` / `todos` /
+            // `user_units` row landing in that same window still produces a
+            // successful delete with the green toast above. READ COMMITTED does
+            // not close that race, and this issue does not claim it does.
+            // Closing it needs a decision about serialising unit deletes;
+            // until then the counts narrow the window, they do not remove it.
             $this->error('حذف واحد انجام نشد؛ هم‌زمان تغییری در اطلاعات آن رخ داد. دوباره تلاش کنید.', position: 'toast-bottom');
         }
 
@@ -640,6 +642,8 @@ return new class extends Component
         $labels = [
             'children' => 'زیرمجموعه',
             'tickets' => 'تیکت',
+            'disease_cases' => 'پرونده بیماری',
+            'populations' => 'ردیف جمعیت',
             'persons' => 'پرسنل',
             'hardware' => 'سخت‌افزار',
             'todos' => 'وظیفه',
