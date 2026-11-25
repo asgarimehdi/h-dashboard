@@ -21,10 +21,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property int|null $user_id
- * @property string $recurrence_rule
- * @property int $recurrence_interval
- * @property Carbon|null $last_generated_at
- * @property int|null $template_id
  * @property-read Unit $unit
  * @property-read User $user
  * @property-read Collection<int, Ticket> $tickets
@@ -44,18 +40,12 @@ class Todo extends Model
         'is_completed',
         'unit_id',
         'user_id',
-        'recurrence_rule',
-        'recurrence_interval',
-        'last_generated_at',
-        'template_id',
     ];
 
     protected $casts = [
         'start_at' => 'datetime',
         'end_at' => 'datetime',
         'is_completed' => 'boolean',
-        'recurrence_interval' => 'integer',
-        'last_generated_at' => 'datetime',
     ];
 
     public function unit(): BelongsTo
@@ -95,52 +85,5 @@ class Todo extends Model
                 $q->orWhere(fn ($qq) => $qq->whereNull('unit_id')->where('user_id', $userId));
             }
         });
-    }
-
-    /**
-     * آیا این وظیفه تکرارشونده است؟
-     */
-    public function isRecurring(): bool
-    {
-        return $this->recurrence_rule !== null && $this->recurrence_rule !== 'none';
-    }
-
-    /**
-     * تاریخ سررسید بعدی برای تولید نمونه تکرارشونده.
-     */
-    public function nextOccurrence(): ?Carbon
-    {
-        if (! $this->isRecurring()) {
-            return null;
-        }
-
-        $base = $this->last_generated_at ?? $this->start_at ?? now();
-        $interval = max(1, (int) $this->recurrence_interval);
-
-        return match ($this->recurrence_rule) {
-            'daily' => $base->copy()->addDays($interval),
-            'weekly' => $base->copy()->addWeeks($interval),
-            'monthly' => $this->addMonthsAnchored(
-                $base,
-                $interval,
-                $this->start_at === null ? $base->day : $this->start_at->day,
-            ),
-            default => $base->copy()->addDays($interval),
-        };
-    }
-
-    /**
-     * گام ماهانهٔ بدون سرریز، لنگرشده روی روزِ اصلیِ تکرار (ایشو #1623).
-     *
-     * `addMonths` سرریز می‌کند (۳۱ ژانویه + ۱ ماه = ۳ مارس) و فوریه را
-     * جا می‌اندازد. اینجا روزِ `start_at` لنگر می‌ماند و فقط در ماه‌های
-     * کوتاه به آخرین روز clamp می‌شود، پس ۳۱ ژانویه → ۲۸ فوریه → ۳۱ مارس.
-     */
-    private function addMonthsAnchored(Carbon $base, int $months, int $anchorDay): Carbon
-    {
-        $next = $base->copy()->addMonthsNoOverflow($months);
-        $next->setDate($next->year, $next->month, min($anchorDay, $next->daysInMonth));
-
-        return $next;
     }
 }

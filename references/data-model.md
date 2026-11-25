@@ -59,8 +59,6 @@
 
 **Todo** (`todos` table)
 - `id`, `title`, `start_at`, `end_at` (nullable), `is_completed`, `unit_id`, `user_id`
-- `recurrence_rule` (`none`/`daily`/`weekly`/`monthly`, default `none`), `recurrence_interval` (default 1), `last_generated_at` (nullable) — drive `todos:generate-recurring`
-- Helpers: `isRecurring()`, `nextOccurrence()` (Carbon based on `last_generated_at ?? start_at`)
 - `tickets()` → `Ticket` (`task_id`)
 
 **ActivityLog** (`activity_logs` table)
