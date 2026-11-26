@@ -261,11 +261,36 @@ return new class extends Component
         $this->authorize('manage_zabbix');
 
         $device = ZabbixDevice::query()->findOrFail($id);
-        $device->is_active = ! $device->is_active;
-        $device->save();
+
+        // #1849: read-invert-save loses concurrent toggles. Lock the row, derive
+        // the new value from the LOCKED read, write inside the same transaction.
+        // The write goes through the model so `saved` still flushes the device
+        // cache (ZabbixDevice::booted()). FQCN on purpose: no new `use` here.
+        $isActive = \Illuminate\Support\Facades\DB::transaction(function () use ($device): ?bool {
+            $rows = \Illuminate\Support\Facades\DB::select(
+                'SELECT id, is_active FROM zabbix_devices WHERE id = ? FOR UPDATE',
+                [$device->id],
+            );
+
+            if ($rows === []) {
+                return null;
+            }
+
+            $new = ! (bool) $rows[0]->is_active;
+            $device->is_active = $new;
+            $device->save();
+
+            return $new;
+        });
+
+        if ($isActive === null) {
+            $this->error('این دستگاه دیگر وجود ندارد.', position: 'toast-bottom');
+
+            return;
+        }
 
         $this->success(
-            $device->is_active ? "«{$device->name}» فعال شد" : "«{$device->name}» غیرفعال شد",
+            $isActive ? "«{$device->name}» فعال شد" : "«{$device->name}» غیرفعال شد",
             'با موفقیت',
             position: 'toast-bottom'
         );

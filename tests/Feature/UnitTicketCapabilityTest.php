@@ -4,17 +4,19 @@ use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Tests\Support\Concerns\InteractsWithAtomicToggles;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
 covers(Ticket::class);
 
-uses(InteractsWithTestSetup::class);
+uses(InteractsWithTestSetup::class, InteractsWithAtomicToggles::class);
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
@@ -126,4 +128,81 @@ it('ticket create only shows units with can_receive_tickets true', function () {
     $receivers = Unit::where('can_receive_tickets', true)->where('is_active', true)->get();
     expect($receivers)->toHaveCount(1);
     expect($receivers->first()->name)->toBe('Receiver Unit');
+});
+
+// ==================== #1849 — atomic toggleTicketCapability ====================
+
+/**
+ * @return array{0: User, 1: Unit}
+ */
+function makeToggleCapabilityFixture(): array
+{
+    $user = makeTicketManager();
+    $parent = Unit::where('id', session('current_unit_id'))->firstOrFail();
+
+    $toggle = Unit::create([
+        'name' => 'Atomic Toggle Unit',
+        'can_receive_tickets' => false,
+        'parent_id' => $parent->id,
+    ]);
+
+    return [$user, $toggle];
+}
+
+it('toggleTicketCapability uses the locked row, not the stale model', function () {
+    // Another writer enabled the row before our lock. Deriving the new value from
+    // the stale model (false) writes `true` and loses our toggle.
+    [$user, $toggle] = makeToggleCapabilityFixture();
+
+    $this->fakeLockedRow((object) ['id' => $toggle->id, 'can_receive_tickets' => true]);
+
+    $component = Livewire::actingAs($user)
+        ->test('units.index')
+        ->call('toggleTicketCapability', $toggle->id);
+
+    expect((bool) Unit::find($toggle->id)->can_receive_tickets)->toBeFalse()
+        ->and($this->toastTitle($component))->toBe('واحد «Atomic Toggle Unit» برای پذیرش تیکت غیرفعال شد.');
+});
+
+it('toggleTicketCapability reports a vanished unit without writing or bumping caches', function () {
+    [$user, $toggle] = makeToggleCapabilityFixture();
+
+    $cache = app(CacheInvalidationServiceInterface::class);
+    $component = Livewire::actingAs($user)->test('units.index');
+    $before = $cache->getVersion('unit_hierarchy');
+
+    $this->fakeLockedRow(null);
+
+    $component->call('toggleTicketCapability', $toggle->id);
+
+    expect((bool) Unit::find($toggle->id)->can_receive_tickets)->toBeFalse()
+        ->and($cache->getVersion('unit_hierarchy'))->toBe($before)
+        ->and($this->toastType($component))->toBe('error')
+        ->and($this->toastTitle($component))->toBe('واحد یافت نشد.');
+});
+
+it('double toggleTicketCapability returns to the starting value', function () {
+    // Sanity only: two sequential flips also return to the starting value on the
+    // buggy read-then-write code, so this is NOT the race guard — the
+    // locked-row test above is.
+    [$user, $toggle] = makeToggleCapabilityFixture();
+
+    Livewire::actingAs($user)->test('units.index')->call('toggleTicketCapability', $toggle->id);
+    expect((bool) Unit::find($toggle->id)->can_receive_tickets)->toBeTrue();
+
+    Livewire::actingAs($user)->test('units.index')->call('toggleTicketCapability', $toggle->id);
+    expect((bool) Unit::find($toggle->id)->can_receive_tickets)->toBeFalse();
+});
+
+it('toggleTicketCapability clears access caches after the write', function () {
+    [$user, $toggle] = makeToggleCapabilityFixture();
+
+    $cache = app(CacheInvalidationServiceInterface::class);
+    $component = Livewire::actingAs($user)->test('units.index');
+    $before = $cache->getVersion('unit_hierarchy');
+
+    $component->call('toggleTicketCapability', $toggle->id);
+
+    expect((bool) Unit::find($toggle->id)->can_receive_tickets)->toBeTrue()
+        ->and($cache->getVersion('unit_hierarchy'))->toBeGreaterThan($before);
 });

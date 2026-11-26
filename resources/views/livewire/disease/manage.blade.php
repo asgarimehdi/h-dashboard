@@ -159,11 +159,38 @@ return new class extends Component
         $this->authorize('manage_diseases');
 
         $disease = Disease::query()->findOrFail($id);
-        $disease->is_active = ! $disease->is_active;
-        $disease->save();
+
+        // #1849: read-invert-save loses concurrent toggles — two toggles read the
+        // same value and both write its inverse, so one toggle vanishes. Lock the
+        // row, derive the new value from the LOCKED read, write inside the same
+        // transaction. The write goes through the model so `Disease::updated`
+        // still invalidates disease_maps + disease_catalog (AppServiceProvider).
+        // FQCN on purpose: no new `use` here.
+        $isActive = \Illuminate\Support\Facades\DB::transaction(function () use ($disease): ?bool {
+            $rows = \Illuminate\Support\Facades\DB::select(
+                'SELECT id, is_active FROM diseases WHERE id = ? FOR UPDATE',
+                [$disease->id],
+            );
+
+            if ($rows === []) {
+                return null;
+            }
+
+            $new = ! (bool) $rows[0]->is_active;
+            $disease->is_active = $new;
+            $disease->save();
+
+            return $new;
+        });
+
+        if ($isActive === null) {
+            $this->error('این بیماری دیگر وجود ندارد.', position: 'toast-bottom');
+
+            return;
+        }
 
         $this->success(
-            $disease->is_active ? "«{$disease->name_fa}» فعال شد" : "«{$disease->name_fa}» غیرفعال شد",
+            $isActive ? "«{$disease->name_fa}» فعال شد" : "«{$disease->name_fa}» غیرفعال شد",
             'با موفقیت',
             position: 'toast-bottom'
         );
