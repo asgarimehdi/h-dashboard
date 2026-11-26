@@ -9,10 +9,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
+use Tests\Support\Concerns\InteractsWithAtomicToggles;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class);
+uses(TestCase::class, RefreshDatabase::class, InteractsWithTestSetup::class, InteractsWithAtomicToggles::class);
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
@@ -541,4 +542,80 @@ test('zabbix devices search folds persian digits in stored name', function () {
         ->viewData('devices');
 
     expect($devices->count())->toBe(1);
+});
+
+// ── #1849 — atomic toggle ────────────────────────────────────────────────
+
+test('toggle uses the locked row, not the stale model', function () {
+    // Another writer deactivated the row before our lock. Deriving the new value
+    // from the stale model (true) writes `false` and loses our toggle.
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $device = ZabbixDevice::factory()->create(['is_active' => true]);
+
+    $this->fakeLockedRow((object) ['id' => $device->id, 'is_active' => false]);
+
+    Livewire::test('it.zabbix-devices')->call('toggle', $device->id);
+
+    expect((bool) $device->fresh()->is_active)->toBeTrue();
+});
+
+test('toggle reports a vanished device without writing', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $device = ZabbixDevice::factory()->create(['is_active' => true]);
+
+    $this->fakeLockedRow(null);
+
+    $component = Livewire::test('it.zabbix-devices')->call('toggle', $device->id);
+
+    expect((bool) $device->fresh()->is_active)->toBeTrue()
+        ->and($this->toastType($component))->toBe('error')
+        ->and($this->toastTitle($component))->toBe('این دستگاه دیگر وجود ندارد.');
+});
+
+test('double toggle returns to the starting value', function () {
+    // Sanity only: two sequential flips also return to the starting value on the
+    // buggy read-then-write code, so this is NOT the race guard — the
+    // locked-row test above is.
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $device = ZabbixDevice::factory()->create(['is_active' => true]);
+
+    Livewire::test('it.zabbix-devices')->call('toggle', $device->id);
+    expect((bool) $device->fresh()->is_active)->toBeFalse();
+
+    Livewire::test('it.zabbix-devices')->call('toggle', $device->id);
+    expect((bool) $device->fresh()->is_active)->toBeTrue();
+});
+
+test('toggle toast describes the stored value', function () {
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $device = ZabbixDevice::factory()->create(['is_active' => true, 'name' => 'دستگاه تست']);
+
+    $component = Livewire::test('it.zabbix-devices')->call('toggle', $device->id);
+
+    expect((bool) $device->fresh()->is_active)->toBeFalse()
+        ->and($this->toastTitle($component))->toBe('«دستگاه تست» غیرفعال شد');
+});
+
+test('toggle bumps the zabbix_devices cache namespace', function () {
+    // The write must go through the model: a query-builder mass update fires no
+    // `saved`, so the device cache would silently go stale.
+    ['user' => $user] = $this->createUserWithUnit(['manage_zabbix']);
+    $this->actingAs($user);
+
+    $device = ZabbixDevice::factory()->create(['is_active' => true]);
+
+    $cache = app(CacheInvalidationServiceInterface::class);
+    $before = $cache->getVersion('zabbix_devices');
+
+    Livewire::test('it.zabbix-devices')->call('toggle', $device->id);
+
+    expect($cache->getVersion('zabbix_devices'))->toBeGreaterThan($before);
 });

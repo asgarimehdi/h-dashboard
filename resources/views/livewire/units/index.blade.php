@@ -779,12 +779,38 @@ return new class extends Component
             return;
         }
 
-        $unit->can_receive_tickets = ! $unit->can_receive_tickets;
-        $unit->saveQuietly();
+        // #1849: read-invert-save loses concurrent toggles. Lock the row, derive
+        // the new value from the LOCKED read, write inside the same transaction.
+        // FQCN on purpose: no new `use` here (a shifted anonymous-class line
+        // would unmatch every phpstan-baseline entry for this file).
+        $toggled = \Illuminate\Support\Facades\DB::transaction(function () use ($unit): ?bool {
+            $rows = \Illuminate\Support\Facades\DB::select(
+                'SELECT id, can_receive_tickets FROM units WHERE id = ? FOR UPDATE',
+                [$unit->id],
+            );
 
-        $status = $unit->can_receive_tickets ? 'فعال شد' : 'غیرفعال شد';
+            if ($rows === []) {
+                return null;
+            }
+
+            $new = ! (bool) $rows[0]->can_receive_tickets;
+            $unit->can_receive_tickets = $new;
+            $unit->saveQuietly(); // deliberate: skips Unit::updated, see the is_active comment above
+
+            return $new;
+        });
+
+        if ($toggled === null) {
+            $this->error('واحد یافت نشد.', position: 'toast-bottom');
+
+            return;
+        }
+
+        $status = $toggled ? 'فعال شد' : 'غیرفعال شد';
         $this->success("واحد «{$unit->name}» برای پذیرش تیکت {$status}.", position: 'toast-bottom');
 
+        // After the transaction commits: bumping before commit lets a concurrent
+        // reader cache the pre-commit row under the NEW version.
         app(\App\Services\AccessService::class)->clearAllCaches();
     }
 
