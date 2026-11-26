@@ -27,6 +27,17 @@ return new class extends Component
 
     public int $directUserCount = 0;
 
+    /** سقف roster پنل جزئیات — هم‌تراز چارت سازمانی (#1746/#1753). */
+    private const ROSTER_LIMIT = 20;
+
+    /**
+     * ردیف‌های سقف‌دار roster برای پنل جزئیات.
+     * آرایهٔ ساده (نه مدل) تا در round-tripهای بعدی هیچ کوئری users/person نزند.
+     *
+     * @var array<int, array{id: int, name: string}>
+     */
+    public array $assignedUserRows = [];
+
     // Issue #1632: the route gate (`role_or_permission:organization`) runs only
     // on the full page load, never on `/livewire/update`, so it is re-checked here.
     public function boot(): void
@@ -138,10 +149,30 @@ return new class extends Component
             return;
         }
 
-        $this->selectedUnit = Unit::with(['parent', 'unitType', 'assignedUsers.person', 'person'])->find($id);
+        // شمارش با subquery — roster دیگر برای count() بارگذاری نمی‌شود.
+        $this->selectedUnit = Unit::with(['parent', 'unitType'])
+            ->withCount('assignedUsers')
+            ->find($id);
+
         $descendantIds = Unit::descendantIds($id)->filter(fn ($did) => $did != $id)->values();
         $this->descendantUserCount = User::whereHas('units', fn ($q) => $q->whereIn('unit_id', $descendantIds))->count();
-        $this->directUserCount = $this->selectedUnit->assignedUsers->count();
+
+        // سقف در SQL؛ فقط ۲۰ ردیف + personهایشان hydrate می‌شود (۲ کوئری).
+        // orderBy('users.id') ترتیب ردیف‌ها را قطعی می‌کند. از User::query()
+        // استفاده می‌شود تا نوع Collection<int, User> برای map مشخص باشد.
+        $this->assignedUserRows = User::query()
+            ->whereHas('units', fn ($q) => $q->where('unit_id', $id))
+            ->with('person')
+            ->orderBy('users.id')
+            ->limit(self::ROSTER_LIMIT)
+            ->get()
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => trim($u->person->f_name.' '.$u->person->l_name),
+            ])
+            ->all();
+
+        $this->directUserCount = (int) $this->selectedUnit->assigned_users_count;
     }
 }; ?>
 
@@ -184,14 +215,17 @@ return new class extends Component
                 </div>
                 <div class="mt-4">
                     <h4 class="font-bold text-xs mb-2">کاربران این واحد:</h4>
-                    @forelse($selectedUnit->assignedUsers as $u)
+                    @forelse($assignedUserRows as $row)
                     <div class="flex items-center gap-2 p-2 bg-base-200/50 rounded mb-1">
                         <x-icon name="o-user" class="w-4 h-4" />
-                        <span class="text-xs">{{ $u->person?->f_name }} {{ $u->person?->l_name }}</span>
+                        <span class="text-xs">{{ $row['name'] }}</span>
                     </div>
                     @empty
                     <p class="text-xs opacity-50">کاربری ندارد</p>
                     @endforelse
+                    @if($directUserCount > count($assignedUserRows))
+                    <p class="text-xs opacity-60 mt-1">و {{ $directUserCount - count($assignedUserRows) }} کاربر دیگر در این واحد</p>
+                    @endif
                 </div>
             </x-card>
             @else

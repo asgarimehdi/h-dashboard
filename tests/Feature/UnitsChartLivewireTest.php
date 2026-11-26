@@ -7,6 +7,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
@@ -185,6 +186,76 @@ class UnitsChartLivewireTest extends TestCase
         $descendantCount = $component->get('descendantUserCount');
         $this->assertEquals(1, $directCount);
         $this->assertEquals(0, $descendantCount); // No deeper descendants
+
+        // Issue #1850: the capped roster still shows the only user, and the
+        // "and N more" indicator must not render when nothing is hidden.
+        $this->assertCount(1, $component->get('assignedUserRows'));
+        $component->assertDontSee('کاربر دیگر در این واحد');
+    }
+
+    /**
+     * Issue #1850: the detail roster is capped at 20 in SQL, while the direct
+     * user count still reflects the whole unit.
+     */
+    public function test_select_unit_caps_roster_but_counts_all_direct_users(): void
+    {
+        ['user' => $user, 'unit' => $root] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $child = Unit::create(['name' => 'زیرمجموعه', 'parent_id' => $root->id]);
+
+        foreach (User::factory()->count(25)->create() as $extra) {
+            $extra->units()->attach($child->id, ['role' => 'staff', 'is_primary' => false]);
+        }
+
+        $component = Livewire::test('units.chart')->call('selectUnit', $child->id);
+
+        /** @var array<int, array{id: int, name: string}> $rows */
+        $rows = $component->get('assignedUserRows');
+
+        $this->assertCount(20, $rows);
+        $this->assertSame(25, $component->get('directUserCount'));
+        $this->assertSame(
+            $child->assignedUsers()->orderBy('users.id')->limit(20)->pluck('users.id')->all(),
+            array_column($rows, 'id'),
+        );
+        $component->assertSee('و 5 کاربر دیگر در این واحد');
+    }
+
+    /**
+     * Issue #1850: a round-trip (search keystroke) must not re-query the roster
+     * or its persons — the plain-array state survives hydration.
+     */
+    public function test_round_trip_does_not_requery_roster(): void
+    {
+        ['user' => $user, 'unit' => $root] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $child = Unit::create(['name' => 'زیرمجموعه', 'parent_id' => $root->id]);
+
+        foreach (User::factory()->count(25)->create() as $extra) {
+            $extra->units()->attach($child->id, ['role' => 'staff', 'is_primary' => false]);
+        }
+
+        $component = Livewire::test('units.chart')->call('selectUnit', $child->id);
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query->sql;
+        });
+
+        // round-trip معادل یک keystroke جعبهٔ جستجو؛ ۲ کاراکتر تا updatedSearch کوئری نزند.
+        $component->set('search', 'مر');
+
+        $rosterQueries = array_values(array_filter(
+            $queries,
+            fn (string $sql): bool => str_contains($sql, 'from "persons"')
+                || (str_contains($sql, 'from "users"') && str_contains($sql, 'user_units')),
+        ));
+
+        $this->assertSame([], $rosterQueries, 'round-trip نباید roster یا personها را دوباره بپرسد');
+        $this->assertCount(20, $component->get('assignedUserRows'));
+        $this->assertSame(25, $component->get('directUserCount'));
     }
 
     public function test_select_unauthorized(): void
