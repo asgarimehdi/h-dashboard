@@ -981,3 +981,57 @@ test('edit stores valid Jalali diagnosed and recorded dates as Gregorian', funct
         'recorded_at' => '2025-05-05',
     ]);
 });
+
+test('creating a case ignores a deactivated required definition', function () {
+    $disease = dc_disease('inactive-def-create');
+    dc_required_defs($disease);
+
+    DiseaseFieldDef::query()->create([
+        'disease_id' => $disease->id,
+        'field_key' => 'legacy',
+        'label_fa' => 'فیلد قدیمی',
+        'type' => 'number',
+        'required' => true,
+        'is_active' => false,
+        'sort' => 6,
+    ]);
+
+    $patient = dc_patient();
+
+    dc_form($patient, $disease, ['sys' => '120', 'dia' => '80'])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $case = DiseaseCase::query()->where('patient_id', $patient->id)->firstOrFail();
+
+    expect($case->fields)->toMatchArray(['sys' => 120, 'dia' => 80])
+        ->and($case->fields)->not->toHaveKey('legacy');
+});
+
+test('editing succeeds and preserves a stored value whose definition was deactivated', function () {
+    $disease = dc_disease('inactive-def-edit');
+    dc_required_defs($disease);
+    $patient = dc_patient();
+
+    $case = dc_case($this->actorUnit, [
+        'patient_id' => $patient->id,
+        'disease_id' => $disease->id,
+        'fields' => ['sys' => 120, 'dia' => 80],
+    ]);
+
+    DiseaseFieldDef::query()
+        ->where('disease_id', $disease->id)
+        ->where('field_key', 'dia')
+        ->update(['is_active' => false]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('fields.sys', 125)
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    $case->refresh();
+
+    expect($case->fields['sys'])->toBe(125)
+        ->and($case->fields['dia'])->toBe(80);
+});
