@@ -879,6 +879,36 @@ class TicketApiTest extends TestCase
             ->assertJson(['data' => ['status' => 'forwarded', 'current_assignee_id' => $user2->id]]);
     }
 
+    public function test_cannot_assign_ticket_to_soft_deleted_user(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(
+            ['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'],
+            'admin'
+        );
+        $ticket = Ticket::create([
+            'ticket_code' => 'T-1857', 'user_id' => $user->id, 'unit_id' => $unit->id,
+            'subject' => 'Assign to deactivated', 'content' => 'Body',
+            'priority' => 'normal', 'status' => 'created',
+        ]);
+
+        // Same unit on purpose: the ONLY reason to reject is the soft delete,
+        // not the #205 scope check.
+        $deactivated = $this->createSecondUserInUnit($unit);
+        $deactivated->delete();
+        $this->assertSoftDeleted('users', ['id' => $deactivated->id]);
+
+        $token = $this->createApiToken($user, ['tickets:write']);
+        $response = $this->apiPost("/api/tickets/{$ticket->id}/assign", [
+            'assignee_id' => $deactivated->id,
+        ], $token);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('assignee_id');
+
+        $fresh = $ticket->fresh();
+        $this->assertSame('created', $fresh->status);
+        $this->assertNull($fresh->current_assignee_id);
+    }
+
     public function test_index_rejects_invalid_status_filter(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');

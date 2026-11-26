@@ -195,10 +195,17 @@ class TicketController extends Controller
         }
 
         $validated = $request->validate([
-            'assignee_id' => 'required|exists:users,id',
+            'assignee_id' => ['required', Rule::exists('users', 'id')->whereNull('deleted_at')],
         ]);
 
         $assignee = User::find($validated['assignee_id']);
+
+        // #1857: defense in depth. Step 1 already rejects a deactivated id, but a
+        // soft delete landing between the validation query and this lookup would
+        // leave $assignee null and turn the #205 scope check below into a 500.
+        if ($assignee === null) {
+            return response()->json(['message' => 'Assignee is deactivated or does not exist.'], 422);
+        }
 
         // Issue #205: the assignee must belong to the ticket's organizational scope
         $assigneeUnitIds = $assignee->units()->pluck('units.id')->toArray();
