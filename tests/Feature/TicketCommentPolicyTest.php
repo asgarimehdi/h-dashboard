@@ -48,6 +48,7 @@ beforeEach(function () {
 
 test('comment policy allows author when accessible unit check passes', function () {
     $author = User::factory()->create();
+    $author->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
     $ticket = Ticket::create([
         'user_id' => $author->id,
         'unit_id' => $this->unit->id,

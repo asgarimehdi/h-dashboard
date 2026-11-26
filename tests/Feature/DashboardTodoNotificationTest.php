@@ -118,6 +118,7 @@ test('activity log page renders and respects manage_users permission', function 
 
 test('route protection for todo and activity-log pages', function () {
     $noPermUser = User::factory()->create();
+    $noPermUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
     // Todo page requires 'calendar'
     $this->actingAs($noPermUser)

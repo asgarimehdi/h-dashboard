@@ -141,6 +141,7 @@ test('persons page allows CRUD and respects organizational scope', function () {
 
 test('kargozini pages are protected by RBAC', function () {
     $noPermUser = User::factory()->create();
+    $noPermUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
     $pages = [
         '/kargozini/estekhdams',

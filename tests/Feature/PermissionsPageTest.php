@@ -35,6 +35,7 @@ beforeEach(function () {
         'n_code' => '1234567890',
         'password' => Hash::make('password'),
     ]);
+    $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 });
 
 test('guest is redirected from permissions page', function () {

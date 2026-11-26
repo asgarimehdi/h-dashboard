@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Unit;
 use App\Models\User;
 use App\Services\ZabbixService;
 use Database\Seeders\PermissionSeeder;
@@ -16,6 +17,7 @@ uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(PermissionSeeder::class);
+    $this->unit = Unit::create(['name' => 'واحد تست']);
     $this->user = User::factory()->create();
     $this->user->givePermissionTo('bw');
 });
@@ -44,6 +46,7 @@ test('it monitoring pages render and check permissions', function () {
 
     // Test RBAC: user without 'bw'
     $noPermUser = User::factory()->create();
+    $noPermUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
     $this->actingAs($noPermUser)
         ->get('/it/wireless')
         ->assertStatus(403);

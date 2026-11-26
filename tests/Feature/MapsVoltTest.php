@@ -48,6 +48,7 @@ test('map pages are protected by map permission', function () {
 
     // Authenticated without 'map' permission -> 403
     $noPermUser = User::factory()->create();
+    $noPermUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
     $this->actingAs($noPermUser);
     foreach ($urls as $url) {
         $this->get($url)->assertStatus(403);
