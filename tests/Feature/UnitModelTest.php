@@ -165,6 +165,51 @@ class UnitModelTest extends TestCase
         $this->assertCount(0, $cteQueries, 'No new CTE query should run for different input order');
     }
 
+    // --- ancestorChainIds ---
+
+    public function test_ancestor_chain_ids_returns_all_levels(): void
+    {
+        $root = Unit::create(['name' => 'ریشه']);
+        $a = Unit::create(['name' => 'سطح ۱', 'parent_id' => $root->id]);
+        $b = Unit::create(['name' => 'سطح ۲', 'parent_id' => $a->id]);
+        $c = Unit::create(['name' => 'سطح ۳', 'parent_id' => $b->id]);
+
+        $ancestors = Unit::ancestorChainIds([$c->id]);
+
+        $this->assertEqualsCanonicalizing([$root->id, $a->id, $b->id], $ancestors->all());
+        $this->assertNotContains($c->id, $ancestors);
+    }
+
+    public function test_ancestor_chain_ids_keeps_input_that_is_ancestor_of_another_input(): void
+    {
+        $root = Unit::create(['name' => 'ریشه']);
+        $a = Unit::create(['name' => 'والد', 'parent_id' => $root->id]);
+        $b = Unit::create(['name' => 'فرزند', 'parent_id' => $a->id]);
+
+        // a خودش match است و جدِ b هم — باید در نتیجه بماند (رفتار امروز expandParents)
+        $ancestors = Unit::ancestorChainIds([$a->id, $b->id]);
+
+        $this->assertEqualsCanonicalizing([$root->id, $a->id], $ancestors->all());
+    }
+
+    public function test_ancestor_chain_ids_returns_empty_for_empty_input(): void
+    {
+        $this->assertTrue(Unit::ancestorChainIds([])->isEmpty());
+    }
+
+    public function test_ancestor_chain_ids_terminates_on_a_parent_id_cycle(): void
+    {
+        $this->withStatementTimeout(10000, function () {
+            $a = Unit::create(['name' => 'الف', 'is_active' => true]);
+            $b = Unit::create(['name' => 'ب', 'is_active' => true, 'parent_id' => $a->id]);
+            $a->update(['parent_id' => $b->id]);
+
+            $ancestors = Unit::ancestorChainIds([$b->id]);
+
+            $this->assertEqualsCanonicalizing([$a->id, $b->id], $ancestors->unique()->values()->all());
+        });
+    }
+
     // --- descendantIds ---
 
     public function test_descendant_ids_returns_all_descendants(): void
