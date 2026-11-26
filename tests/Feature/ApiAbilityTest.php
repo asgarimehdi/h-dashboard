@@ -989,6 +989,92 @@ class ApiAbilityTest extends TestCase
     }
 
     // ──────────────────────────────────────────────
+    // tickets:write is minted from manage_unit_tickets too (#1867)
+    // ──────────────────────────────────────────────
+
+    public function test_manage_unit_tickets_only_token_can_update_and_complete(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_unit_tickets']);
+
+        $ticket = $this->createTicketInUnit($unit->id, [
+            'current_assignee_id' => $user->id,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+        $abilities = $this->getTokenAbilities($token);
+
+        $this->assertContains('tickets:write', $abilities);
+        $this->assertNotContains('tickets:read', $abilities);
+
+        // Both routes are gated on permission:manage_unit_tickets.
+        $this->apiPut("/api/tickets/{$ticket->id}", [
+            'subject' => 'Edited by a unit manager',
+        ], $token)
+            ->assertOk()
+            ->assertJson(['data' => ['subject' => 'Edited by a unit manager']]);
+
+        $this->apiPost("/api/tickets/{$ticket->id}/complete", [], $token)
+            ->assertOk()
+            ->assertJson(['data' => ['status' => 'completed']]);
+
+        $this->assertSame('completed', $ticket->fresh()->status);
+    }
+
+    public function test_token_without_create_or_manage_unit_tickets_still_cannot_complete(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit();
+
+        $ticket = $this->createTicketInUnit($unit->id, [
+            'current_assignee_id' => $user->id,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+
+        $this->assertNotContains('tickets:write', $this->getTokenAbilities($token));
+
+        $this->apiPost("/api/tickets/{$ticket->id}/complete", [], $token)
+            ->assertForbidden()
+            // Sanctum's CheckAbilities message — proves the ability gate,
+            // not some later 403, is what answered.
+            ->assertJson(['message' => 'Invalid ability provided.']);
+
+        $this->assertSame('accepted', $ticket->fresh()->status);
+    }
+
+    public function test_manage_unit_tickets_only_token_does_not_open_create_or_accept(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_unit_tickets']);
+        $unit->update(['is_active' => true, 'can_receive_tickets' => true]);
+
+        $token = $user->createToken('flutter-app', $user->getApiTokenAbilities())->plainTextToken;
+        $this->assertContains('tickets:write', $this->getTokenAbilities($token));
+
+        // The ability now passes, so this 403 is the permission:create_ticket gate.
+        $this->apiPost('/api/tickets', [
+            'subject' => 'Must not be created',
+            'content' => 'Body',
+            'priority' => 'normal',
+            'unit_id' => $unit->id,
+        ], $token)->assertForbidden();
+
+        $this->assertDatabaseMissing('tickets', ['subject' => 'Must not be created']);
+
+        // accept also stays behind permission:create_ticket.
+        $ticket = $this->createTicketInUnit($unit->id, [
+            'user_id' => $user->id,
+            'current_assignee_id' => $user->id,
+            'status' => 'forwarded',
+        ]);
+
+        $this->apiPost("/api/tickets/{$ticket->id}/accept", [], $token)->assertForbidden();
+        $this->assertSame('forwarded', $ticket->fresh()->status);
+    }
+
+    // ──────────────────────────────────────────────
     // New Spatie gates on read groups (Plan 003)
     // ──────────────────────────────────────────────
 

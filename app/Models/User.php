@@ -181,7 +181,10 @@ class User extends Authenticatable
             $abilities[] = 'tickets:read';
         }
 
-        if ($this->hasPermissionTo('create_ticket')) {
+        // #1867: `tickets:write` must cover every permission the ticket write
+        // routes accept — update/destroy/assign/complete (and comment
+        // update/destroy) are gated on `manage_unit_tickets`, not `create_ticket`.
+        if ($this->hasAnyPermission(['create_ticket', 'manage_unit_tickets'])) {
             $abilities[] = 'tickets:write';
         }
 
