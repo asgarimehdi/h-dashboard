@@ -398,6 +398,24 @@ return new class extends Component
             return;
         }
 
+        // Issue #1864: only a transition INTO the root is privileged.
+        // `getAllowedUnitTypes()` hides the root type from the dropdown, but
+        // `unit_type_id`/`parent_id` are client-settable on /livewire/update —
+        // hiding an option is presentation, not authorization.
+        $editingUnit = $this->editingId ? Unit::find($this->editingId) : null;
+        $alreadyRoot = $editingUnit !== null
+            && $editingUnit->parent_id === null
+            && (int) $editingUnit->unit_type_id === UnitType::ROOT_ID;
+
+        if (! $this->parent_id
+            && (int) $this->unit_type_id === UnitType::ROOT_ID
+            && ! $alreadyRoot
+            && ! \App\Support\RootUnitPrivilege::allows(auth()->user())) {
+            $this->error('ایجاد یا انتقال واحد به سطح ریشه فقط توسط مدیر سیستم مجاز است.', position: 'toast-bottom');
+
+            return;
+        }
+
         if ($this->parent_id) {
             $parentUnit = Unit::find($this->parent_id);
 

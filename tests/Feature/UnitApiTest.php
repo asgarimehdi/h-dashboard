@@ -12,12 +12,14 @@ use App\Models\UnitPopulation;
 use App\Models\UnitType;
 use App\Models\User;
 use App\Services\CacheInvalidationServiceInterface;
+use App\Support\RoleGuard;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Session;
 use RuntimeException;
+use Spatie\Permission\Models\Role;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -106,7 +108,7 @@ class UnitApiTest extends TestCase
         $response->assertStatus(403);
     }
 
-    public function test_user_can_create_unit(): void
+    public function test_admin_can_create_root_unit(): void
     {
         $this->createUserWithUnit(['organization']);
         // Issue #1649: a non-root unit now requires an allowed parent, so the
@@ -120,6 +122,8 @@ class UnitApiTest extends TestCase
         ]);
         $this->resyncSequence('unit_types');
         $user = User::first();
+        // Issue #1864: minting a root is admin-only.
+        $this->promoteToAdmin($user);
         $token = $this->createApiToken($user, ['units:read', 'units:write']);
 
         $response = $this->apiPost('/api/units', [
@@ -536,6 +540,27 @@ class UnitApiTest extends TestCase
         $this->resyncSequence('unit_types');
     }
 
+    /**
+     * Issue #1864: the root-privilege fixtures need parent/child TYPES, and
+     * `units.unit_type_id` carries `units_type_fk` — a type id without a row
+     * fails the insert. `seedRootUnitType()` only seeds id 1.
+     */
+    private function seedUnitTypes(): void
+    {
+        DB::table('unit_types')->insert([
+            ['id' => 1, 'name' => 'Test Root', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 2, 'name' => 'Test University', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 3, 'name' => 'Test Deputy', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $this->resyncSequence('unit_types');
+    }
+
+    private function promoteToAdmin(User $user): void
+    {
+        Role::firstOrCreate(['name' => RoleGuard::ADMIN, 'guard_name' => 'web']);
+        $user->assignRole(RoleGuard::ADMIN);
+    }
+
     public function test_store_rejects_description_above_max_length(): void
     {
         $this->createUserWithUnit(['organization']);
@@ -577,6 +602,8 @@ class UnitApiTest extends TestCase
         $this->createUserWithUnit(['organization']);
         $this->seedRootUnitType();
         $user = User::first();
+        // Issue #1864: creating a root is admin-only.
+        $this->promoteToAdmin($user);
         $token = $this->createApiToken($user, ['units:read', 'units:write']);
         $description = str_repeat('ا', 20000);
 
@@ -659,6 +686,8 @@ class UnitApiTest extends TestCase
         $this->createUserWithUnit(['organization']);
         $this->seedRootUnitType();
         $user = User::first();
+        // Issue #1864: minting a root is admin-only.
+        $this->promoteToAdmin($user);
         $token = $this->createApiToken($user, ['units:read', 'units:write']);
 
         $response = $this->apiPost('/api/units', [
@@ -678,5 +707,97 @@ class UnitApiTest extends TestCase
         $expected = array_values(array_diff(Schema::getColumnListing('units'), self::INTERNAL));
 
         $this->assertEqualsCanonicalizing($expected, UnitController::UNIT_COLUMNS);
+    }
+
+    // ==================== #1864: root creation/move is admin-only ====================
+
+    public function test_scoped_manager_cannot_create_root_unit(): void
+    {
+        $this->createUserWithUnit(['organization']);
+        $this->seedRootUnitType();
+        $token = $this->createApiToken(User::first(), ['units:read', 'units:write']);
+
+        $this->apiPost('/api/units', [
+            'name' => 'Root-1864',
+            'unit_type_id' => UnitType::ROOT_ID,
+        ], $token)->assertStatus(403);
+
+        $this->assertDatabaseMissing('units', ['name' => 'Root-1864']);
+    }
+
+    /**
+     * Issue #1864: having the root in your own unit scope must not stand in for
+     * the admin role — the scope check and the root privilege answer different
+     * questions.
+     */
+    public function test_scope_covering_the_root_does_not_replace_the_admin_role(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->seedRootUnitType();
+        $unit->update(['unit_type_id' => UnitType::ROOT_ID]); // actor's own scope IS the root
+        $token = $this->createApiToken(User::first(), ['units:read', 'units:write']);
+
+        $this->apiPost('/api/units', [
+            'name' => 'Root-1864-b',
+            'unit_type_id' => UnitType::ROOT_ID,
+        ], $token)->assertStatus(403);
+
+        $this->assertDatabaseMissing('units', ['name' => 'Root-1864-b']);
+    }
+
+    public function test_scoped_manager_cannot_detach_root_typed_unit_to_root(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->seedUnitTypes();
+        $parent = Unit::factory()->create(['unit_type_id' => 2]);
+        $unit->update(['unit_type_id' => UnitType::ROOT_ID, 'parent_id' => $parent->id]);
+        $token = $this->createApiToken(User::first(), ['units:read', 'units:write']);
+
+        $this->apiPut("/api/units/{$unit->id}", ['parent_id' => null], $token)->assertStatus(403);
+
+        $fresh = $unit->fresh();
+        $this->assertSame($parent->id, $fresh->parent_id);
+        $this->assertSame(UnitType::ROOT_ID, (int) $fresh->unit_type_id);
+    }
+
+    public function test_scoped_manager_cannot_change_type_to_root(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->seedUnitTypes();
+        $parent = Unit::factory()->create(['unit_type_id' => 2]);
+        $unit->update(['unit_type_id' => 3, 'parent_id' => $parent->id]);
+        $token = $this->createApiToken(User::first(), ['units:read', 'units:write']);
+
+        $this->apiPut("/api/units/{$unit->id}", [
+            'unit_type_id' => UnitType::ROOT_ID,
+            'parent_id' => null,
+        ], $token)->assertStatus(403);
+
+        $fresh = $unit->fresh();
+        $this->assertSame($parent->id, $fresh->parent_id);
+        $this->assertSame(3, (int) $fresh->unit_type_id);
+    }
+
+    /**
+     * Covers both privileged shapes (type change + detach in one write) and the
+     * idempotency exemption: re-submitting the stored root pair is a no-op
+     * edit, not a new transition into the root.
+     */
+    public function test_admin_can_move_unit_to_root_and_re_submit_the_root_pair(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->seedUnitTypes();
+        $parent = Unit::factory()->create(['unit_type_id' => 2]);
+        $unit->update(['unit_type_id' => 3, 'parent_id' => $parent->id]);
+        $this->promoteToAdmin($user);
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+        $payload = ['unit_type_id' => UnitType::ROOT_ID, 'parent_id' => null];
+
+        // (a) type change + detach in one write
+        $this->apiPut("/api/units/{$unit->id}", $payload, $token)->assertOk();
+        $this->assertNull($unit->fresh()->parent_id);
+
+        // (b) re-submitting the stored root pair must not 403 (alreadyRoot exemption)
+        $this->apiPut("/api/units/{$unit->id}", $payload, $token)->assertOk();
     }
 }

@@ -583,16 +583,21 @@ test('a holder who keeps manage_hardware can still create hardware', function ()
 });
 
 test('a holder who keeps organization can still create a unit', function () {
-    ['user' => $user] = $this->createUserWithUnit(['organization']);
+    ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
+    // Issue #1864: creating at the hierarchy ROOT is admin-only now. This test
+    // proves the `organization` grant still authorizes an ordinary create, so
+    // the new unit goes UNDER the actor's own unit (non-root), not to the root.
+    $parent->update(['unit_type_id' => 1]);
     $this->actingAs($user);
 
     Livewire::test('units.index')
         ->set('name', 'واحد-مجاز-۹۷۵')
-        ->set('unit_type_id', 1)
+        ->set('unit_type_id', 2)
+        ->set('parent_id', $parent->id)
         ->call('saveUnit')
         ->assertStatus(200);
 
-    $this->assertDatabaseHas('units', ['name' => 'واحد-مجاز-۹۷۵']);
+    $this->assertDatabaseHas('units', ['name' => 'واحد-مجاز-۹۷۵', 'parent_id' => $parent->id]);
 });
 
 test('a holder who keeps kargozini can still create a lookup row', function (array $lookup) {
