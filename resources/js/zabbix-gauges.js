@@ -34,8 +34,9 @@
  * Entry points: bootstrap registers the factory on `alpine:init`
  * and calls `setupZabbixPoller()` there; this module re-runs the
  * poller setup on `livewire:init` / `livewire:navigated` (each run
- * clears the previous timer and resets the state, matching the
- * original IIFE).
+ * clears the previous timer — even on a page without gauges — and a
+ * page that has gauges then resets the shared state and rebuilds the
+ * poller, matching the original IIFE).
  */
 
 import { ApiAuthError, apiFetch, isAuthFailed } from './api-fetch';
@@ -398,6 +399,17 @@ export function setupZabbixPoller() {
   // 14 devices, each gauge's 30-second loop made 28 requests per
   // minute and the page fell over with 429 "Too Many Attempts"
   // after a few seconds. Now each cycle = one request.
+  const state = ensureGaugeState();
+
+  // #1890: the previous page's poller must die even when THIS page has no
+  // gauges. This clear used to sit after the `#wireless-item-ids` guard, so
+  // leaving /it/wireless returned early and left a 30 s interval alive on
+  // every other page (2 req/min to /api/zabbix/multi-latest, forever).
+  if (state.timer) {
+    clearInterval(state.timer);
+    state.timer = null;
+  }
+
   const block = document.getElementById('wireless-item-ids');
   if (!block) {
     return;
@@ -410,15 +422,14 @@ export function setupZabbixPoller() {
     itemIds = [];
   }
 
-  const state = ensureGaugeState();
   const REFRESH_MS = 30000;
   // The endpoint's validation cap = 100 items per request.
   const CHUNK = 90;
 
-  if (state.timer) {
-    clearInterval(state.timer);
-    state.timer = null;
-  }
+  // #1890: data resets stay here — they describe the gauges on THIS page,
+  // and only exist when there are gauges. `state.loading` is deliberately
+  // NOT reset: it is the in-flight guard that stops the alpine:init +
+  // livewire:init pair from firing two boot requests.
   state.values = {};
   state.error = null;
   state.loaded = false;
