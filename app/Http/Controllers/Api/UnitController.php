@@ -14,6 +14,33 @@ use Illuminate\Http\JsonResponse;
 
 class UnitController extends Controller
 {
+    /**
+     * Issue #1880: explicit allowlist for every Unit payload this controller
+     * returns (index/show/update).
+     *
+     * `name_folded` is excluded on purpose: it is the generated Persian search
+     * column (`2026_11_14_000001_...`), query-time only.
+     *
+     * `geom` is KEPT in this PR: the issue's scope is the folded columns only,
+     * and dropping the PostGIS column would be a shape change beyond it. It
+     * stays until the owner decides separately (nothing in `app/` writes it;
+     * the documented geometry path is `GET /api/gis/units`, which selects
+     * lat/lng explicitly — GisController.php:109-112).
+     *
+     * FK columns (`unit_type_id`, `region_id`, `parent_id`) are MANDATORY: a
+     * select without them silently nulls the eager-loaded relations (#1689).
+     * A new legitimate units column must be added here — the schema-pin test in
+     * UnitApiTest fails until it is.
+     *
+     * @var list<string>
+     */
+    public const UNIT_COLUMNS = [
+        'id', 'region_id', 'parent_id', 'name', 'unit_type_id',
+        'lat', 'lng', 'description', 'boundary_id',
+        'is_active', 'can_receive_tickets', 'created_at', 'updated_at',
+        'geom',
+    ];
+
     public function index(UnitScopedRequest $request): array
     {
         $ids = $request->accessibleIds();
@@ -25,7 +52,9 @@ class UnitController extends Controller
         // defence in depth in case validation is ever bypassed.
         $request->validate(['per_page' => ['sometimes', new PerPage(100)]]);
         $perPage = min($request->integer('per_page', 15), 100);
-        $units = Unit::whereIn('id', $ids)
+        $units = Unit::query()
+            ->select(self::UNIT_COLUMNS)
+            ->whereIn('id', $ids)
             ->with('unitType:id,name')
             ->paginate($perPage);
 
@@ -48,8 +77,14 @@ class UnitController extends Controller
             return response()->json(['message' => 'Unit not accessible.'], 403);
         }
 
+        $data = Unit::query()
+            ->select(self::UNIT_COLUMNS)
+            ->with(['unitType:id,name', 'region:id,name', 'parent:id,name'])
+            ->whereKey($unit->getKey())
+            ->firstOrFail();
+
         return response()->json([
-            'data' => $unit->load('unitType:id,name', 'region:id,name', 'parent:id,name'),
+            'data' => $data,
         ]);
     }
 
@@ -93,6 +128,10 @@ class UnitController extends Controller
             }
         }
 
+        // Issue #1880: deliberately NOT projected. `create()` only carries the
+        // submitted attributes, so DB-generated columns (`name_folded`) cannot
+        // appear here — verified against the live model. The regression test
+        // pins this so a future `->refresh()`/`fresh()` on this path is caught.
         $unit = Unit::create($validated);
 
         // Invalidate AccessService cache if hierarchy changed (new child created)
@@ -194,7 +233,10 @@ class UnitController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $unit->fresh(),
+            'data' => Unit::query()
+                ->select(self::UNIT_COLUMNS)
+                ->whereKey($unit->getKey())
+                ->firstOrFail(),
         ]);
     }
 

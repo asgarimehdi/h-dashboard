@@ -15,6 +15,7 @@ use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Session;
 use RuntimeException;
 use Tests\Support\Concerns\InteractsWithApiTokens;
@@ -28,6 +29,13 @@ class UnitApiTest extends TestCase
     use InteractsWithApiTokens;
     use InteractsWithTestSetup;
     use RefreshDatabase;
+
+    /**
+     * Issue #1880: internal generated search column. `geom` is NOT in this list
+     * — the Gate kept it in the payload for this PR (issue scope is folded
+     * columns only), so the tests assert it is still present.
+     */
+    private const INTERNAL = ['name_folded'];
 
     protected function setUp(): void
     {
@@ -583,5 +591,92 @@ class UnitApiTest extends TestCase
 
         $stored = Unit::where('name', 'Unit-1658-CAP')->value('description');
         $this->assertSame(20000, mb_strlen($stored));
+    }
+
+    // ==================== #1880: internal columns stay out of the payload ====================
+
+    public function test_unit_list_does_not_expose_internal_columns(): void
+    {
+        $this->createUserWithUnit(['organization']);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read']);
+
+        $item = $this->apiGet('/api/units', $token)
+            ->assertOk()
+            ->json('data.0');
+
+        foreach (self::INTERNAL as $key) {
+            $this->assertArrayNotHasKey($key, $item);
+        }
+        $this->assertArrayHasKey('geom', $item);
+
+        foreach (['id', 'name', 'region_id', 'parent_id', 'unit_type_id', 'lat', 'lng', 'description', 'boundary_id', 'is_active', 'can_receive_tickets', 'created_at', 'updated_at', 'unit_type'] as $key) {
+            $this->assertArrayHasKey($key, $item);
+        }
+    }
+
+    public function test_unit_show_does_not_expose_internal_columns(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read']);
+
+        $data = $this->apiGet("/api/units/{$unit->id}", $token)
+            ->assertOk()
+            ->json('data');
+
+        foreach (self::INTERNAL as $key) {
+            $this->assertArrayNotHasKey($key, $data);
+        }
+        $this->assertArrayHasKey('geom', $data);
+
+        foreach (['id', 'name', 'region_id', 'parent_id', 'unit_type_id', 'lat', 'lng', 'description', 'boundary_id', 'is_active', 'can_receive_tickets', 'created_at', 'updated_at', 'unit_type', 'region', 'parent'] as $key) {
+            $this->assertArrayHasKey($key, $data);
+        }
+    }
+
+    public function test_unit_update_does_not_expose_internal_columns(): void
+    {
+        ['unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiPut("/api/units/{$unit->id}", ['name' => 'Updated Unit'], $token)
+            ->assertOk();
+
+        $data = $response->json('data');
+        foreach (self::INTERNAL as $key) {
+            $this->assertArrayNotHasKey($key, $data);
+        }
+        $this->assertArrayHasKey('geom', $data);
+
+        $this->assertSame('Updated Unit', $data['name']);
+        $this->assertArrayHasKey('is_active', $data);
+    }
+
+    public function test_unit_create_response_never_contains_internal_columns(): void
+    {
+        $this->createUserWithUnit(['organization']);
+        $this->seedRootUnitType();
+        $user = User::first();
+        $token = $this->createApiToken($user, ['units:read', 'units:write']);
+
+        $response = $this->apiPost('/api/units', [
+            'name' => 'New Unit',
+            'unit_type_id' => UnitType::ROOT_ID,
+        ], $token);
+
+        $response->assertStatus(201);
+        foreach (self::INTERNAL as $key) {
+            $this->assertArrayNotHasKey($key, $response->json('data'));
+        }
+        $this->assertSame('New Unit', $response->json('data.name'));
+    }
+
+    public function test_unit_column_allowlist_matches_the_schema_minus_internal_columns(): void
+    {
+        $expected = array_values(array_diff(Schema::getColumnListing('units'), self::INTERNAL));
+
+        $this->assertEqualsCanonicalizing($expected, UnitController::UNIT_COLUMNS);
     }
 }
