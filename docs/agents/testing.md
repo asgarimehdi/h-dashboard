@@ -15,7 +15,7 @@ which is worse than no hook. CI stays the only authority.
 | Layer | What runs | Why there |
 |---|---|---|
 | `pre-commit` | Pint on staged PHP files | Seconds; catches the most |
-| `pre-push` | **Full** PHPStan; tests only if `VERIFY_TESTS` names them | Deterministic with the baseline |
+| `pre-push` | **Full** PHPStan, plus the JS gates when the pushed range touches `resources/js/**` or `package*.json` (never `npm ci`); tests only if `VERIFY_TESTS` names them | Deterministic with the baseline |
 | CI | Everything | The final authority |
 
 - Hooks are **versioned** in `.githooks/` and activated with `core.hooksPath`, not
@@ -30,11 +30,14 @@ which is worse than no hook. CI stays the only authority.
   Blade views, so no `app/… → tests/…` mapping exists. A heuristic could report green
   without ever running the failing test — an intermittently broken gate is worse than
   no gate.
-- `composer verify` reproduces CI's **test job, not the coverage gate**: CI also runs
-  `--parallel --coverage --min=80`, which needs pcov. Coverage is CI-only. It runs the
-  suite **serially** like `composer test`.
+- `composer verify` reproduces CI's **test job** and the **code checks** of the
+  `js-lint`/`js-typecheck` jobs (via `scripts/js-gates.sh`), not their `npm audit`
+  step — the advisory DB is live (§Dependency audits) and it needs the network —
+  and not the coverage gate: CI also runs `--parallel --coverage --min=80`, which
+  needs pcov. Coverage is CI-only. It runs the suite **serially** like `composer test`.
 - `composer verify:fast <paths>` is the **local TDD loop**: Pint runs on the named
-  paths only and PHPStan is skipped, announced by a banner. It is not CI-equivalent
+  paths only and PHPStan is skipped, announced by a banner; the JS gates always run
+  (they cost ~2 s). It is not CI-equivalent
   and never replaces the default before a push — `pre-push` still runs full PHPStan.
 - The preflight **exits 2** (distinct from 1) so callers can tell "your machine is
   wrong" from "your code is wrong". It resolves the effective test database from

@@ -24,6 +24,11 @@ class VerifyWrapperScriptTest extends TestCase
         $this->logFile = $this->sandbox.'/calls.log';
 
         mkdir($this->sandbox.'/bin', 0o777, true);
+
+        // Every run of the wrapper now reaches the JS gates (#1886), so `npm`
+        // and `npx` are always stubbed. CI's `test` job has no `setup-node` and
+        // no node_modules: a real npm call there would turn the suite red.
+        $this->stubNpm();
     }
 
     protected function tearDown(): void
@@ -48,6 +53,22 @@ class VerifyWrapperScriptTest extends TestCase
         $php = $this->sandbox.'/bin/php';
         file_put_contents($php, "#!/bin/bash\necho \"php \$*\" >> ".escapeshellarg($this->logFile)."\nexit {$exitCode}\n");
         chmod($php, 0o755);
+    }
+
+    /**
+     * A fake `npm`/`npx` that records its arguments and exits with the gate's
+     * code. `npm ci` always succeeds: on CI there is no node_modules, and a
+     * wrapper that dies in the install would never reach the gate under test.
+     */
+    private function stubNpm(int $exitCode = 0): void
+    {
+        foreach (['npm', 'npx'] as $bin) {
+            $path = $this->sandbox.'/bin/'.$bin;
+            file_put_contents($path, "#!/bin/bash\necho \"{$bin} \$*\" >> ".escapeshellarg($this->logFile)."\n"
+                ."[ \"\$1\" = \"ci\" ] && exit 0\n"
+                ."exit {$exitCode}\n");
+            chmod($path, 0o755);
+        }
     }
 
     /**
@@ -95,6 +116,7 @@ class VerifyWrapperScriptTest extends TestCase
         $this->assertStringNotContainsString('pint', $calls);
         $this->assertStringNotContainsString('phpstan', $calls);
         $this->assertStringNotContainsString('composer test', $calls);
+        $this->assertStringNotContainsString('npm', $calls, 'the JS gates must not run before a passing preflight');
     }
 
     public function test_a_passing_preflight_clears_the_view_cache_ci_also_clears(): void
@@ -344,5 +366,67 @@ class VerifyWrapperScriptTest extends TestCase
         $this->assertSame('Composer\\Config::disableProcessTimeout', $fast[0]);
         $this->assertStringEndsWith('bash scripts/verify.sh --fast', (string) $fast[2]);
         $this->assertStringEndsWith('bash scripts/verify.sh', (string) ($config['scripts']['verify'][2] ?? ''));
+    }
+
+    // ──────────────────────────────────────────────
+    // Issue #1886 — the JS gates CI blocks on must run locally too
+    // ──────────────────────────────────────────────
+
+    public function test_the_wrapper_runs_the_js_gates_ci_blocks_on(): void
+    {
+        // CI's `js-lint` and `js-typecheck` jobs are blocking, but before #1886
+        // no local gate reproduced them: a JS-only change passed verify,
+        // pre-commit and pre-push and failed only in CI.
+        $this->stubPhp();
+
+        [$exit, $output] = $this->runWrapper();
+
+        $calls = $this->calls();
+
+        $this->assertSame(0, $exit);
+        $this->assertStringContainsString('npm run lint', $calls);
+        $this->assertStringContainsString('npm run format:check', $calls);
+        $this->assertStringContainsString('npx --no-install tsc -p tsconfig.js.json --noEmit', $calls);
+        $this->assertStringContainsString('JS gates', $output);
+    }
+
+    public function test_a_failing_js_gate_stops_the_wrapper_before_phpstan(): void
+    {
+        // Cheap first, fail fast: the JS gates cost ~2 s against Pint's ~27 s,
+        // so a JS failure must be reported before the expensive PHP gates.
+        $this->stubPhp();
+        $this->stubNpm(1);
+
+        [$exit, $output] = $this->runWrapper();
+
+        $calls = $this->calls();
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('npm run lint', $calls);
+        $this->assertStringContainsString('JS gates', $output);
+        $this->assertStringNotContainsString('phpstan analyse', $calls);
+        $this->assertStringNotContainsString('composer test', $calls);
+    }
+
+    public function test_npm_ci_runs_at_most_once_and_before_the_js_checks(): void
+    {
+        // A warm tree must not pay a reinstall on every verify; when the install
+        // IS stale it has to happen before the checks that need node_modules.
+        $this->stubPhp();
+
+        $this->runWrapper();
+
+        $calls = $this->calls();
+
+        $this->assertLessThanOrEqual(1, substr_count($calls, 'npm ci'));
+
+        if (str_contains($calls, 'npm ci')) {
+            $ci = strpos($calls, 'npm ci');
+            $lint = strpos($calls, 'npm run lint');
+
+            $this->assertIsInt($ci);
+            $this->assertIsInt($lint);
+            $this->assertLessThan($lint, $ci, 'npm ci must run before the JS checks, never after');
+        }
     }
 }

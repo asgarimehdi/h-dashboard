@@ -148,4 +148,61 @@ class GitHooksTest extends TestCase
         $this->assertStringContainsString('..HEAD', $commands);
         $this->assertStringContainsString('0000000000000000000000000000000000000000', $commands);
     }
+
+    // ──────────────────────────────────────────────
+    // Issue #1886 — the JS gates ride the pre-push layer when JS changed
+    // ──────────────────────────────────────────────
+
+    public function test_the_pre_push_hook_runs_the_js_gates_when_js_changed(): void
+    {
+        // CI's `js-lint` and `js-typecheck` jobs are blocking; before #1886 a
+        // JS-only change passed every local gate and failed only in CI. The hook
+        // asks git the same range question it asks for PHP, over the JS paths.
+        $commands = $this->commands('pre-push');
+
+        $this->assertStringContainsString('resources/js/*.js', $commands);
+        $this->assertStringContainsString('package-lock.json', $commands);
+        $this->assertStringContainsString('js-gates.sh', $commands);
+    }
+
+    public function test_the_pre_push_hook_never_installs_node_modules(): void
+    {
+        // `npm ci` deletes node_modules and needs the registry: mid-push that
+        // breaks a running vite, and offline it blocks the push entirely. The
+        // shared script skips loudly instead, pointing at `composer verify`.
+        $commands = $this->commands('pre-push');
+
+        $this->assertStringNotContainsString('npm ci', $commands);
+        $this->assertStringContainsString('--no-install', $commands);
+    }
+
+    public function test_the_pre_push_hook_still_skips_phpstan_only_for_php_absence(): void
+    {
+        // Adding the JS branch must not turn a PHP-less push into a PHPStan run:
+        // the message and the skip are exactly what they were before #1886.
+        $commands = $this->commands('pre-push');
+
+        $this->assertStringContainsString('No PHP changes', $commands);
+    }
+
+    public function test_the_js_gates_script_matches_the_ci_steps(): void
+    {
+        // Drift guard: the four blocking commands live in one script, and that
+        // script must keep saying what the two CI jobs say. A command that
+        // changes in the workflow and not here is the bug #1886 is about.
+        $script = (string) file_get_contents(base_path('scripts/js-gates.sh'));
+        $workflow = (string) file_get_contents(base_path('.github/workflows/test.yml'));
+
+        foreach (['npm run lint', 'npm run format:check'] as $step) {
+            $this->assertStringContainsString($step, $script);
+            $this->assertStringContainsString($step, $workflow);
+        }
+
+        $this->assertStringContainsString('tsc -p tsconfig.js.json --noEmit', $script);
+        $this->assertStringContainsString('tsc -p tsconfig.js.json --noEmit', $workflow);
+
+        $ratchet = "grep -L '^// @ts-check' resources/js/*.js";
+        $this->assertStringContainsString($ratchet, $script);
+        $this->assertStringContainsString($ratchet, $workflow);
+    }
 }
