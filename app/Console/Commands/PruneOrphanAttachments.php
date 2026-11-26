@@ -6,6 +6,7 @@ use App\Models\Attachment;
 use App\Support\AttachmentPath;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToRetrieveMetadata;
 
 /**
  * Issue #880 — recover attachment files that were leaked by the pre-#880
@@ -24,10 +25,17 @@ use Illuminate\Support\Facades\Storage;
  * This only ever deletes FILES. A row whose file is already gone is a
  * different (also real) problem, and removing that row here would hide it
  * instead of reporting it.
+ *
+ * Issue #1878 — uploads write the file to disk BEFORE the row exists, so an
+ * unreferenced file may be an upload still in flight. `--grace-minutes`
+ * (default 60) keeps recently modified files out of the orphan set; `0`
+ * disables the guard for an operator who has stopped uploads.
  */
 class PruneOrphanAttachments extends Command
 {
-    protected $signature = 'attachments:prune-orphans {--dry-run : فقط گزارش می‌دهد، بدون حذف فایل}';
+    protected $signature = 'attachments:prune-orphans
+                            {--grace-minutes=60 : فایل‌های تغییرکرده در این تعداد دقیقهٔ اخیر حذف نمی‌شوند}
+                            {--dry-run : فقط گزارش می‌دهد، بدون حذف فایل}';
 
     protected $description = 'Delete attachment files on the private local disk that no attachments row references';
 
@@ -38,13 +46,31 @@ class PruneOrphanAttachments extends Command
 
     public function handle(): int
     {
+        $graceMinutes = filter_var(
+            $this->option('grace-minutes'),
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 0]],
+        );
+
+        if ($graceMinutes === false) {
+            $this->error('--grace-minutes باید عدد صحیح و دست‌کم ۰ باشد.');
+
+            return self::FAILURE;
+        }
+
         $disk = Storage::disk('local');
         $dryRun = (bool) $this->option('dry-run');
+
+        // `0` disables the guard entirely (the pre-#1878 behaviour). Any positive
+        // value keeps files modified within that many minutes out of the orphan set.
+        $cutoff = $graceMinutes > 0 ? now()->subMinutes($graceMinutes)->getTimestamp() : null;
 
         $this->info('Scanning storage/app/private/attachments for unreferenced files...');
 
         $orphans = [];
         $referenced = 0;
+        $recent = 0;
+        $unreadable = 0;
 
         // Issue #1178 — load the referenced set ONCE instead of asking the
         // database about each file separately. The old per-file `exists()`
@@ -73,11 +99,46 @@ class PruneOrphanAttachments extends Command
                 continue;
             }
 
+            // Issue #1878 — an upload writes its file BEFORE the `attachments`
+            // row exists (`TicketsInboxFlow::submitAction()` and
+            // `⚡create.blade.php` store first, insert later). A recently
+            // modified unreferenced file may be an upload still in flight, not
+            // an orphan, so the age guard keeps it.
+            if ($cutoff !== null) {
+                try {
+                    $lastModified = $disk->lastModified($path);
+                } catch (UnableToRetrieveMetadata) {
+                    // It vanished (or cannot be stat'ed) between the walk and
+                    // here. We cannot prove it is old, so we must not delete it.
+                    $unreadable++;
+
+                    continue;
+                }
+
+                // Strict `>=`, the same boundary as `imports:prune-sheets`:
+                // a file exactly on the cutoff is still inside the window.
+                if ($lastModified >= $cutoff) {
+                    $recent++;
+
+                    continue;
+                }
+            }
+
             $orphans[] = $path;
         }
 
+        $unreferenced = count($orphans) + $recent + $unreadable;
+
         $this->line("  Found {$referenced} referenced file(s).");
-        $this->line('  Found '.count($orphans).' unreferenced file(s).');
+        $this->line("  Found {$unreferenced} unreferenced file(s).");
+
+        if ($recent > 0) {
+            $this->line("  Skipped {$recent} file(s) modified within the last {$graceMinutes} minute(s).");
+        }
+
+        if ($unreadable > 0) {
+            $this->warn("  Skipped {$unreadable} file(s) whose last-modified time could not be read.");
+        }
 
         if ($orphans === []) {
             $this->info('  Nothing to prune.');
