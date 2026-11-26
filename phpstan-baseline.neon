@@ -2479,12 +2479,6 @@ parameters:
 			path: resources/views/livewire/reports/advanced.blade.php
 
 		-
-			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/reports/advanced\.blade\.php\:22\:\:\$units has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: resources/views/livewire/reports/advanced.blade.php
-
-		-
 			message: '#^Unable to resolve the template type TKey in call to function collect$#'
 			identifier: argument.templateType
 			count: 2
