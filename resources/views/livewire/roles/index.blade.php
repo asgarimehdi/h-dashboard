@@ -132,11 +132,19 @@ return new class extends Component
         $this->validate([
             'name' => 'required|string|alpha_num:ascii|max:255|unique:roles,name',
             'label' => 'required|string|max:255|unique:roles,label',
-            'permissions' => 'required',
+            // Issue #1860: syncPermissions() resolves every name through
+            // Permission::findByName() and throws PermissionDoesNotExist for a
+            // name that is not in `permissions` — AFTER Role::create() has
+            // committed, leaving an orphan role and a 500. Reject it here.
+            'permissions' => 'required|array',
+            'permissions.*' => 'string|exists:permissions,name',
         ]);
 
-        $newRole = Role::create(['name' => $this->name, 'label' => $this->label]);
-        $newRole->syncPermissions($this->permissions);
+        // Issue #1860: create + sync are one unit, exactly like updateRole().
+        \Illuminate\Support\Facades\DB::transaction(function (): void {
+            $newRole = Role::create(['name' => $this->name, 'label' => $this->label]);
+            $newRole->syncPermissions($this->permissions);
+        });
 
         $this->success("$this->label ایجاد شد ", 'با موفقیت', position: 'toast-bottom');
         $this->clear();
