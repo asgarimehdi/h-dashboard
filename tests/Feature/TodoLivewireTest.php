@@ -926,6 +926,7 @@ test('calendar events are bounded by the provided date range', function () {
         'unit_id' => $this->unit->id,
         'title' => 'قبل از بازه',
         'start_at' => '2026-06-15 10:00:00', // Before the range
+        'end_at' => null,
         'is_completed' => false,
     ]);
 
@@ -959,6 +960,7 @@ test('calendar cache key differs across date ranges', function () {
         'unit_id' => $this->unit->id,
         'title' => 'تسک تست',
         'start_at' => '2026-07-15 10:00:00',
+        'end_at' => null,
     ]);
 
     $component = Livewire::test('todo.todo')->instance();
@@ -999,6 +1001,7 @@ test('initial calendar payload only contains todos inside the seeded month windo
         'unit_id' => $this->unit->id,
         'title' => 'وظیفه خارج پنجره',
         'start_at' => '2026-07-10 10:00:00',
+        'end_at' => null,
     ]);
 
     $eventIds = array_column(Livewire::test('todo.todo')->instance()->getEvents(), 'id');
@@ -1130,12 +1133,14 @@ test('navigating to the next month fetches that month with its own cache entry',
         'unit_id' => $this->unit->id,
         'title' => 'وظیفه مهر',
         'start_at' => '2026-10-20 10:00:00',
+        'end_at' => null,
     ]);
 
     $november = Todo::factory()->create([
         'unit_id' => $this->unit->id,
         'title' => 'وظیفه آبان',
         'start_at' => '2026-11-10 10:00:00',
+        'end_at' => null,
     ]);
 
     $component = Livewire::test('todo.todo')->instance();
@@ -1159,6 +1164,7 @@ test('navigating to the next month fetches that month with its own cache entry',
         'unit_id' => $this->unit->id,
         'title' => 'وظیفه دیررس مهر',
         'start_at' => '2026-10-22 10:00:00',
+        'end_at' => null,
     ]);
 
     [$octStart, $octEnd] = $component->calendarWindowFor(Carbon::parse('2026-10-15'));
@@ -1189,6 +1195,83 @@ test('dead guard property hasPubliclyVisibleDates is absent from the codebase', 
 
     // The property should not appear anywhere in the file
     expect($view)->not->toContain('hasPubliclyVisibleDates');
+});
+
+// ==================== Issue #1871 — a todo is visible in every window it overlaps ====================
+
+test('a multiday todo is returned for every window it overlaps, and a point todo only for its start window', function () {
+    $this->actingAs($this->user);
+
+    $windowStart = Carbon::parse('2026-11-01 00:00:00');
+    $windowEnd = Carbon::parse('2026-12-01 00:00:00');
+
+    // starts before the window, ends inside it
+    $spanning = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'چندروزه از ماه قبل',
+        'start_at' => $windowStart->copy()->subDays(4),
+        'end_at' => $windowStart->copy()->addDays(3),
+    ]);
+
+    // starts inside the window, ends after it
+    $startsInside = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'شروع داخل، پایان بعد',
+        'start_at' => $windowStart->copy()->addDays(10),
+        'end_at' => $windowEnd->copy()->addDays(5),
+    ]);
+
+    // fully inside
+    $inside = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'کاملاً داخل',
+        'start_at' => $windowStart->copy()->addDays(15),
+        'end_at' => $windowStart->copy()->addDays(18),
+    ]);
+
+    // fully before
+    $fullyBefore = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'کاملاً قبل',
+        'start_at' => $windowStart->copy()->subDays(40),
+        'end_at' => $windowStart->copy()->subDays(30),
+    ]);
+
+    // point todo inside, and the leak guard: point todo before the window
+    $pointInside = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'بدون پایان داخل',
+        'start_at' => $windowStart->copy()->addDays(20),
+        'end_at' => null,
+    ]);
+    $pointBefore = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'بدون پایان قبل',
+        'start_at' => $windowStart->copy()->subDays(40),
+        'end_at' => null,
+    ]);
+
+    // All fixtures exist before the first fetch: the payload is cached per window.
+    $component = Livewire::test('todo.todo')->instance();
+    $component->fetchEvents($windowStart->toIso8601String(), $windowEnd->toIso8601String());
+
+    $events = $component->getEvents();
+    $ids = array_column($events, 'id');
+
+    expect($ids)->toContain('todo-'.$spanning->id)
+        ->toContain('todo-'.$startsInside->id)
+        ->toContain('todo-'.$inside->id)
+        ->toContain('todo-'.$pointInside->id)
+        ->not->toContain('todo-'.$fullyBefore->id)
+        ->not->toContain('todo-'.$pointBefore->id);
+
+    // the row is returned with its real range, not clamped to the window
+    $spanningEvent = collect($events)->firstWhere('id', 'todo-'.$spanning->id);
+    expect($spanningEvent['end'])->not->toBeNull();
+
+    // the absences above are the query window, not missing rows
+    $this->assertDatabaseHas('todos', ['id' => $fullyBefore->id]);
+    $this->assertDatabaseHas('todos', ['id' => $pointBefore->id]);
 });
 
 // #1658: `title` had no upper bound on the Livewire write path, so an
