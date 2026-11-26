@@ -7,6 +7,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
@@ -122,6 +123,77 @@ class UnitsChartLivewireTest extends TestCase
         $expanded = $component->get('expanded');
         $this->assertContains((string) $child->id, $expanded);
         $this->assertContains((string) $user->person->u_id, $expanded);
+    }
+
+    public function test_search_expands_full_ancestor_chain(): void
+    {
+        ['user' => $user, 'unit' => $root] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $a = Unit::create(['name' => 'سطح یک', 'parent_id' => $root->id]);
+        $b = Unit::create(['name' => 'سطح دو', 'parent_id' => $a->id]);
+        $c = Unit::create(['name' => 'سطح سه', 'parent_id' => $b->id]);
+        $d = Unit::create(['name' => 'هدف جستجو', 'parent_id' => $c->id]);
+
+        $component = Livewire::test('units.chart');
+        $component->set('search', 'هدف جستجو');
+
+        $expanded = $component->get('expanded');
+
+        // همهٔ سطوح اجداد باز می‌شوند، نه فقط والد مستقیم.
+        foreach ([$root->id, $a->id, $b->id, $c->id] as $ancestorId) {
+            $this->assertContains((string) $ancestorId, $expanded);
+        }
+        $this->assertNotContains((string) $d->id, $expanded);
+    }
+
+    public function test_search_ancestor_walk_is_batched(): void
+    {
+        ['user' => $user, 'unit' => $root] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        // 12 match در عمق ۲ — کد قدیم 12×2 = 24 کوئری می‌زد.
+        for ($i = 1; $i <= 12; $i++) {
+            $mid = Unit::create(['name' => 'میانی '.$i, 'parent_id' => $root->id]);
+            Unit::create(['name' => 'برگ '.$i, 'parent_id' => $mid->id]);
+        }
+
+        $component = Livewire::test('units.chart');
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query->sql;
+        });
+
+        $component->set('search', 'برگ');
+
+        $ancestorQueries = array_filter($queries, fn (string $sql): bool => str_contains($sql, 'unit_ancestors'));
+        $this->assertCount(1, $ancestorQueries, 'یک search باید فقط یک کوئری اجداد بزند');
+
+        $nPlusOne = array_filter($queries, fn (string $sql): bool => preg_match('/from "units" where "id" = \?/', $sql) === 1);
+        $this->assertSame([], array_values($nPlusOne), 'مسیر جستجو نباید Unit::find بزند');
+    }
+
+    public function test_search_match_cap_is_enforced(): void
+    {
+        ['user' => $user, 'unit' => $root] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $midIds = [];
+        for ($i = 1; $i <= 55; $i++) {
+            $mid = Unit::create(['name' => 'میانی '.$i, 'parent_id' => $root->id]);
+            $midIds[] = $mid->id;
+            Unit::create(['name' => 'هدف '.$i, 'parent_id' => $mid->id]);
+        }
+
+        $component = Livewire::test('units.chart');
+        $component->set('search', 'هدف');
+
+        $expandedInts = array_map('intval', $component->get('expanded'));
+
+        // سقف ۵۰ روی matchها → فقط والدهای ۵۰ match اول (orderBy('id')) باز می‌شوند.
+        $this->assertCount(50, array_intersect($midIds, $expandedInts));
+        $this->assertSame([], array_values(array_intersect(array_slice($midIds, 50), $expandedInts)));
     }
 
     public function test_two_persian_letters_do_not_expand(): void
