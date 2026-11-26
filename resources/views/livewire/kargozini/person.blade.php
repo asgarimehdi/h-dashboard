@@ -7,6 +7,7 @@ use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
 use App\Services\AccessService;
+use App\Services\PersonService;
 use App\Support\PersonRules;
 use App\Traits\ClampsPageSize;
 use App\Traits\PersianNormalizer;
@@ -223,7 +224,7 @@ return new class extends Component
                 return;
             }
 
-            $person->update([
+            app(PersonService::class)->update($person, [
                 'n_code' => $this->n_code,
                 'f_name' => $this->f_name,
                 'l_name' => $this->l_name,
@@ -234,11 +235,6 @@ return new class extends Component
                 'u_id' => $this->u_id,
                 'phone' => $this->phone,
             ]);
-
-            if ($user = $person->user) {
-                app(AccessService::class)->clearCache($user);
-                $user->setPrimaryUnit((int) $this->u_id);
-            }
 
             $this->success('شخص به‌روزرسانی شد');
         } else {

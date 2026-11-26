@@ -7,8 +7,11 @@ use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\AccessService;
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Session;
 use Tests\Support\Concerns\InteractsWithApiTokens;
@@ -98,6 +101,66 @@ class PersonApiTest extends TestCase
         $response->assertStatus(200)
             ->assertJson(['data' => ['f_name' => 'Updated']]);
         $this->assertDatabaseHas('persons', ['n_code' => $person->n_code, 'f_name' => 'Updated']);
+    }
+
+    /**
+     * #1896: an API transfer must move the linked user's primary unit too.
+     *
+     * `persons.u_id` and `user_units.is_primary` are one invariant; before the
+     * fix the pivot kept the old unit, so `TodoController`'s fallback created
+     * new todos there and the moved user's scope stayed on the old unit.
+     */
+    public function test_update_person_transfer_syncs_linked_users_primary_unit(): void
+    {
+        ['user' => $actor, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $target = Unit::create(['name' => 'واحد فرزند', 'parent_id' => $unit->id]);
+
+        $nCode = (string) fake()->unique()->numerify('##########');
+        $person = Person::factory()->create(['n_code' => $nCode, 'u_id' => $unit->id]);
+        $linked = User::factory()->create(['n_code' => $nCode]);
+        $linked->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+
+        $token = $this->createApiToken($actor, ['persons:read', 'persons:write']);
+
+        $this->apiPut("/api/persons/{$nCode}", ['u_id' => $target->id], $token)->assertOk();
+
+        $this->assertSame($target->id, $person->fresh()->u_id);
+        $this->assertSame($target->id, $linked->fresh()->primaryUnit()?->id);
+        // Proves the scope now comes from the NEW pivot row, not the stale one.
+        $this->assertContains(
+            $target->id,
+            app(AccessService::class)->accessibleUnitIds($linked->fresh())
+        );
+    }
+
+    /**
+     * #1896 no-op contract: a person edit that does not change `u_id` (absent
+     * or equal) must not rewrite the pivot and must not invalidate the access
+     * cache — otherwise editing a phone number silently rewrites authorization
+     * reach.
+     */
+    public function test_update_person_without_unit_change_leaves_primary_and_cache_untouched(): void
+    {
+        ['user' => $actor, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+
+        $nCode = (string) fake()->unique()->numerify('##########');
+        $person = Person::factory()->create(['n_code' => $nCode, 'u_id' => $unit->id]);
+        $linked = User::factory()->create(['n_code' => $nCode]);
+        $linked->units()->attach($unit->id, ['role' => 'staff', 'is_primary' => true]);
+
+        $token = $this->createApiToken($actor, ['persons:read', 'persons:write']);
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $versionBefore = $cache->getVersion('unit_hierarchy');
+
+        // (a) payload without u_id
+        $this->apiPut("/api/persons/{$nCode}", ['f_name' => 'Updated'], $token)->assertOk();
+        // (b) payload with u_id equal to the stored value
+        $this->apiPut("/api/persons/{$nCode}", ['f_name' => 'Updated Again', 'u_id' => $unit->id], $token)->assertOk();
+
+        $this->assertSame($unit->id, $linked->fresh()->primaryUnit()?->id);
+        $this->assertSame(1, DB::table('user_units')->where('user_id', $linked->id)->count());
+        $this->assertSame($versionBefore, $cache->getVersion('unit_hierarchy'));
+        $this->assertDatabaseHas('persons', ['n_code' => $nCode, 'f_name' => 'Updated Again']);
     }
 
     public function test_user_can_delete_person(): void
