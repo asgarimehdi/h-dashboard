@@ -73,14 +73,13 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        // Issue #819: unconditional scope predicate. `whereIn()` at the top level
-        // would degrade the builder to Query\Builder for `(clone $query)->with()`,
-        // so the predicate goes inside a closure — still unconditional, still
-        // fail-closed on an empty scope (`[]` compiles to `0 = 1`).
-        $query = Todo::query()
-            ->where(function ($q) use ($accessibleIds) {
-                $q->whereIn('unit_id', $accessibleIds);
-            })
+        // Issue #819 / #1872: unconditional, fail-closed scope predicate that
+        // also honours the null-unit contract (#838) — a unit-less todo belongs
+        // to its creator. `accessibleTo()` wraps the predicate in its own
+        // `where(function…)` on the Eloquent builder, so `(clone $query)->with()`
+        // stays on the Eloquent builder and an empty scope still compiles to
+        // `0 = 1`.
+        $query = Todo::accessibleTo($accessibleIds, auth()->id())
             ->when($this->selectedUnitId, fn ($q) => $q->where('unit_id', $this->selectedUnitId));
 
         // #1942 — window membership is overlap, not "starts inside": a todo
@@ -174,6 +173,10 @@ return new class extends Component
                 // filter on `$query` reaches `byUnit` for free. `leftJoin`, never
                 // `join`: a todo whose unit row is missing still lands in
                 // «نامشخص» instead of silently dropping out of the sum.
+                //
+                // #1872 — `$query` starts from `Todo::accessibleTo()`, so the
+                // null-unit arm (a unit-less todo belongs to its creator) is
+                // already part of the clone; no second predicate is needed here.
                 $byUnit = (clone $query)
                     ->leftJoin('units', 'todos.unit_id', '=', 'units.id')
                     ->selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
@@ -224,6 +227,9 @@ return new class extends Component
                 // bumps the version on deploy; without this discriminator the
                 // pre-fix payload survives the 10-minute TTL (#1794 precedent).
                 'byunit' => 'windowed',
+                // #1872 — null-unit todos are per-user, so the cached aggregate
+                // must not be shared across users with the same unit scope.
+                'uid' => auth()->id(),
             ],
         );
 

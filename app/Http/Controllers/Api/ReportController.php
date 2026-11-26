@@ -61,11 +61,14 @@ class ReportController extends Controller
     {
         $days = $this->days($request);
         $accessibleIds = $request->accessibleIds();
+        $userId = $request->user()->id;
         $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
-        $data = $this->cache->remember('report_todos', $scopeHash, function () use ($accessibleIds, $days) {
+        $data = $this->cache->remember('report_todos', $scopeHash, function () use ($accessibleIds, $userId, $days) {
             $now = now();
-            $query = Todo::whereIn('unit_id', $accessibleIds);
+            // Null-unit contract (#838): a null-unit todo belongs to its creator,
+            // so the aggregate payload is per-user, not scope-only.
+            $query = Todo::accessibleTo($accessibleIds, $userId);
 
             // Single query: completed/pending/overdue via conditional aggregation (was 3 count queries)
             $stats = (clone $query)
@@ -79,8 +82,8 @@ class ReportController extends Controller
 
             $byDay = $this->dailySeries($days, $query, 'start_at');
 
-            $byUnit = Todo::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
-                ->whereIn('todos.unit_id', $accessibleIds)
+            $byUnit = Todo::accessibleTo($accessibleIds, $userId)
+                ->selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
                 ->leftJoin('units', 'todos.unit_id', '=', 'units.id')
                 ->groupBy('unit_name')
                 ->pluck('count', 'unit_name')
@@ -93,7 +96,7 @@ class ReportController extends Controller
                 'by_day' => $byDay,
                 'by_unit' => $byUnit,
             ];
-        }, 10, ['days' => $days]);
+        }, 10, ['days' => $days, 'uid' => $userId]);
 
         return response()->json($data);
     }

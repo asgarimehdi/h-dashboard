@@ -292,6 +292,9 @@ return new class extends Component
                 // #1942 — the todos window predicate became overlap; the key
                 // changes so a pre-fix payload is not served for its 10-minute TTL.
                 'window' => 'overlap',
+                // #1872 — a null-unit todo belongs to its creator, so the todo
+                // payload is per-user. Tickets/persons keep the shared cache.
+                'uid' => $this->reportType === 'todos' ? auth()->id() : null,
             ],
         );
 
@@ -308,7 +311,7 @@ return new class extends Component
     private function buildReport(array $accessibleIds, ?Carbon $from, ?Carbon $to, ?array $range, ?int $unitId): array
     {
         $query = $this->reportType === 'todos'
-            ? Todo::whereIn('unit_id', $accessibleIds)
+            ? Todo::accessibleTo($accessibleIds, auth()->id())
             : Ticket::whereIn('unit_id', $accessibleIds);
 
         // Issue #1794 — a todo's report date is its start date, not its creation date.
