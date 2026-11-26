@@ -490,4 +490,128 @@ class DiseaseCaseServiceTest extends TestCase
             'recorded_at'
         );
     }
+
+    public function test_create_rejects_a_future_diagnosed_date(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-20 10:00:00'));
+
+        $this->assertValidationError(
+            fn () => $this->service->create(
+                $this->payload(['diagnosed_at' => '2026-05-21']),
+                $this->center->id,
+                $this->accessIds
+            ),
+            'diagnosed_at'
+        );
+
+        $this->assertDatabaseCount('disease_cases', 0);
+    }
+
+    public function test_create_rejects_a_future_recorded_date(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-20 10:00:00'));
+
+        $this->assertValidationError(
+            fn () => $this->service->create(
+                $this->payload(['recorded_at' => '2026-05-21']),
+                $this->center->id,
+                $this->accessIds
+            ),
+            'recorded_at'
+        );
+
+        $this->assertDatabaseCount('disease_cases', 0);
+    }
+
+    public function test_create_allows_today_and_the_defaulted_recorded_date(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-20 10:00:00'));
+
+        $case = $this->service->create(
+            $this->payload(['diagnosed_at' => '2026-05-20']),
+            $this->center->id,
+            $this->accessIds
+        );
+
+        $this->assertSame('2026-05-20', $case->diagnosed_at->format('Y-m-d'));
+        $this->assertSame('2026-05-20', $case->recorded_at->format('Y-m-d'));
+    }
+
+    public function test_create_rejects_recorded_at_before_diagnosed_at(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-20 10:00:00'));
+
+        $this->assertValidationError(
+            fn () => $this->service->create(
+                $this->payload(['diagnosed_at' => '2026-05-20', 'recorded_at' => '2026-05-19']),
+                $this->center->id,
+                $this->accessIds
+            ),
+            'recorded_at'
+        );
+
+        $this->assertDatabaseCount('disease_cases', 0);
+    }
+
+    public function test_update_rejects_a_future_diagnosed_date(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-20 10:00:00'));
+        $case = $this->service->create($this->payload(), $this->center->id, $this->accessIds);
+
+        $this->assertValidationError(
+            fn () => $this->service->update(
+                $case->id,
+                $this->payload(['diagnosed_at' => '2026-05-21']),
+                $this->accessIds
+            ),
+            'diagnosed_at'
+        );
+
+        $this->assertSame('2026-03-11', $case->refresh()->diagnosed_at->format('Y-m-d'));
+    }
+
+    public function test_update_validates_the_final_pair_against_the_stored_recorded_at(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-20 10:00:00'));
+
+        $case = $this->service->create(
+            $this->payload(['recorded_at' => '2026-04-01']),
+            $this->center->id,
+            $this->accessIds
+        );
+
+        // No recorded_at in the payload → stored 2026-04-01 is the final value,
+        // so a diagnosed date after it is an impossible order.
+        $this->assertValidationError(
+            fn () => $this->service->update(
+                $case->id,
+                $this->payload(['diagnosed_at' => '2026-04-02']),
+                $this->accessIds
+            ),
+            'recorded_at'
+        );
+
+        $case->refresh();
+        $this->assertSame('2026-03-11', $case->diagnosed_at->format('Y-m-d'));
+        $this->assertSame('2026-04-01', $case->recorded_at->format('Y-m-d'));
+    }
+
+    public function test_update_accepts_an_equal_final_pair(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-20 10:00:00'));
+
+        $case = $this->service->create(
+            $this->payload(['recorded_at' => '2026-04-01']),
+            $this->center->id,
+            $this->accessIds
+        );
+
+        $updated = $this->service->update(
+            $case->id,
+            $this->payload(['diagnosed_at' => '2026-04-01']),
+            $this->accessIds
+        );
+
+        $this->assertSame('2026-04-01', $updated->recorded_at->format('Y-m-d'));
+    }
 }

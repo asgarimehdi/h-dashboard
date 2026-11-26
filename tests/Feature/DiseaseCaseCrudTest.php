@@ -226,9 +226,9 @@ test('recorded date defaults to today and can be edited', function () {
     $component = dc_form($patient, $disease)
         ->assertSet('recordedAt', Jalalian::fromCarbon(now())->format('Y/m/d'));
 
-    $component->set('recordedAt', '1404/07/01')->call('save')->assertHasNoErrors();
+    $component->set('recordedAt', '1404/07/10')->call('save')->assertHasNoErrors();
 
-    $expected = Jalalian::fromFormat('Y/m/d', '1404/07/01')->toCarbon()->toDateString();
+    $expected = Jalalian::fromFormat('Y/m/d', '1404/07/10')->toCarbon()->toDateString();
 
     $this->assertDatabaseHas('disease_cases', [
         'patient_id' => $patient->id,
@@ -719,7 +719,7 @@ test('editing changes the dynamic fields and subject unit but never the recorder
     $component
         ->set('subjectUnitId', $descendant->id)
         ->set('fields.sys', 130)
-        ->set('diagnosedAt', dc_jalali('2026-10-02'))
+        ->set('diagnosedAt', dc_jalali('2026-09-30'))
         ->call('saveEdit')
         ->assertHasNoErrors();
 
@@ -728,7 +728,7 @@ test('editing changes the dynamic fields and subject unit but never the recorder
         'unit_id' => $this->actorUnit->id,
         'subject_unit_id' => $descendant->id,
         'fields->sys' => 130,
-        'diagnosed_at' => '2026-10-02',
+        'diagnosed_at' => '2026-09-30',
     ]);
 });
 
@@ -796,6 +796,7 @@ test('editing writes an updated activity log with the old and new values', funct
         ->call('edit', $case->id)
         ->set('subjectUnitId', $descendant->id)
         ->set('diagnosedAt', dc_jalali('2026-10-03'))
+        ->set('recordedAt', dc_jalali('2026-10-03'))
         ->call('saveEdit')
         ->assertHasNoErrors();
 
@@ -1034,4 +1035,29 @@ test('editing succeeds and preserves a stored value whose definition was deactiv
 
     expect($case->fields['sys'])->toBe(125)
         ->and($case->fields['dia'])->toBe(80);
+});
+
+test('the service rejects a recorded date before the diagnosed date and the error lands on recordedAt', function () {
+    $disease = dc_disease('order-create-disease');
+    $patient = dc_patient();
+
+    dc_form($patient, $disease)
+        ->set('diagnosedAt', dc_jalali('2026-10-01'))
+        ->set('recordedAt', dc_jalali('2026-09-30'))
+        ->call('save')
+        ->assertHasErrors('recordedAt');
+
+    $this->assertDatabaseCount('disease_cases', 0);
+});
+
+test('the create form rejects a future diagnosed date through the service', function () {
+    $disease = dc_disease('future-create-disease');
+    $patient = dc_patient();
+
+    dc_form($patient, $disease)
+        ->set('diagnosedAt', dc_jalali(now()->addDay()->toDateString()))
+        ->call('save')
+        ->assertHasErrors('diagnosedAt');
+
+    $this->assertDatabaseCount('disease_cases', 0);
 });

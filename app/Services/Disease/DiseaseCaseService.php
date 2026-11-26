@@ -38,6 +38,8 @@ final class DiseaseCaseService
         $recordedAt = $this->dateValue($data['recorded_at'] ?? null, 'recorded_at', false)
             ?? now()->format('Y-m-d');
 
+        $this->assertRecordedOnOrAfterDiagnosed($diagnosedAt, $recordedAt);
+
         $fields = $this->validatedFields($disease, $data['fields'] ?? []);
 
         $case = new DiseaseCase;
@@ -95,6 +97,8 @@ final class DiseaseCaseService
         $diagnosedAt = $this->dateValue($data['diagnosed_at'] ?? null, 'diagnosed_at', true);
         $recordedAt = $this->dateValue($data['recorded_at'] ?? null, 'recorded_at', false)
             ?? $case->recorded_at->format('Y-m-d');
+
+        $this->assertRecordedOnOrAfterDiagnosed($diagnosedAt, $recordedAt);
 
         $fields = $this->validatedFields($disease, $data['fields'] ?? []);
 
@@ -262,7 +266,32 @@ final class DiseaseCaseService
             throw ValidationException::withMessages([$key => 'تاریخ واردشده معتبر نیست.']);
         }
 
+        if ($value > now()->toDateString()) {
+            throw ValidationException::withMessages([$key => 'تاریخ نمی‌تواند در آینده باشد.']);
+        }
+
         return $value;
+    }
+
+    /**
+     * Diagnosis can never post-date recording. Both values are canonical
+     * `Y-m-d` strings, so the comparison is chronological.
+     *
+     * The null guard is unreachable at both call sites (`diagnosed_at` is
+     * required; `recorded_at` is defaulted/stored) and exists only to narrow
+     * the `?string` return of dateValue() for PHPStan.
+     */
+    private function assertRecordedOnOrAfterDiagnosed(?string $diagnosedAt, ?string $recordedAt): void
+    {
+        if ($diagnosedAt === null || $recordedAt === null) {
+            return;
+        }
+
+        if ($diagnosedAt > $recordedAt) {
+            throw ValidationException::withMessages([
+                'recorded_at' => 'تاریخ ثبت نمی‌تواند قبل از تاریخ تشخیص باشد.',
+            ]);
+        }
     }
 
     /**
