@@ -59,11 +59,13 @@ class RoleSeeder extends Seeder
             'create_ticket',
         ]);
 
-        // Assign roles to demo users
-        $superadmins = User::whereIn('id', [1, 2, 3])->get();
-
-        foreach ($superadmins as $user) {
-            $user->assignRole('admin');
+        // اکانت‌های دمو فقط با هویت (n_code) و فقط جایی که UsersTableSeeder
+        // اجازهٔ ساختشان را دارد (#1847). هرگز با id خام: روی دیتابیس دارای
+        // کاربر، id های ۱..۳ کارمندان واقعی‌اند.
+        if (UsersTableSeeder::isAllowed()) {
+            User::whereIn('n_code', UsersTableSeeder::DEMO_N_CODES)
+                ->get()
+                ->each(fn (User $user) => $user->assignRole($adminRole));
         }
     }
 }

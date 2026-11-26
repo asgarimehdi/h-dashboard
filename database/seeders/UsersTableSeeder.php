@@ -11,6 +11,13 @@ use RuntimeException;
 class UsersTableSeeder extends Seeder
 {
     /**
+     * The demo accounts this seeder creates, in insertion order.
+     *
+     * RoleSeeder grants them `admin` by this identity, never by bare id (#1847).
+     */
+    public const DEMO_N_CODES = ['4411015056', '4400176134', '4400176143'];
+
+    /**
      * The three accounts seeded here all share one trivial literal password,
      * so this seeder has no business running in production (#1036).
      *
@@ -34,25 +41,11 @@ class UsersTableSeeder extends Seeder
             );
         }
 
-        DB::table('users')->insert([
-            [
-                'n_code' => '4411015056',
-                'password' => Hash::make('12345678'),
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
-            ],
-            [
-                'n_code' => '4400176134',
-                'password' => Hash::make('12345678'),
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
-            ],
-            [
-                'n_code' => '4400176143',
-                'password' => Hash::make('12345678'),
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
-            ],
-        ]);
+        DB::table('users')->insert(array_map(fn (string $nCode) => [
+            'n_code' => $nCode,
+            'password' => Hash::make('12345678'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ], self::DEMO_N_CODES));
     }
 }
