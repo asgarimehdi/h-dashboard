@@ -208,6 +208,10 @@ export function registerTrafficChart(Alpine) {
     chart: null,
     /** @type {ReturnType<typeof setInterval> | null} */
     timer: null,
+    /** درخواست در حال پرواز — گاردِ بازگشت تب (#1889) */
+    inflight: false,
+    /** @type {(() => void) | null} */
+    onVisibilityChange: null,
 
     init() {
       const ds = this.$el.dataset;
@@ -216,6 +220,11 @@ export function registerTrafficChart(Alpine) {
       this.chartTitle = ds.title || 'Traffic';
       const duration = parseInt(ds.duration ?? '', 10);
       this.duration = Number.isFinite(duration) ? duration : 3600;
+
+      // #1889: الگوی signalGauge (`this.bound`, :99/:170-179) — هندلر روی
+      // خود کامپوننت می‌ماند تا در destroy() دقیقاً همان رفرنس حذف شود.
+      this.onVisibilityChange = this.handleVisibilityChange.bind(this);
+      document.addEventListener('visibilitychange', this.onVisibilityChange);
 
       this.start();
     },
@@ -258,14 +267,44 @@ export function registerTrafficChart(Alpine) {
           ],
         });
 
-        this.load();
-        // ۶۰ ثانیه، نه ۱۰: هر نمودار یک درخواست به `/api/zabbix/traffic`
-        // می‌زند و این مسیر زیر `throttle:api-user` است (۶۰ درخواست در
-        // دقیقه برای کل کاربر). با ۲۵ شبکه و چرخهٔ ۱۰ ثانیه‌ای یعنی
-        // ۱۵۰ درخواست در دقیقه و ۴۲۹ قطعی. بازهٔ زمانی نمودار از ۳۰
-        // دقیقه شروع می‌شود، پس تازه‌سازی دقیقه‌ای کافی است.
-        this.timer = setInterval(() => this.load(), 60000);
+        // #1889: تبِ پنهان نه درخواست می‌زند نه تایمر می‌سازد؛
+        // handleVisibilityChange هنگام visible شدن همین کار را می‌کند.
+        if (document.visibilityState === 'visible') {
+          this.load();
+          this.scheduleTimer();
+        }
       });
+    },
+
+    scheduleTimer() {
+      // ۶۰ ثانیه، نه ۱۰: هر نمودار یک درخواست به `/api/zabbix/traffic`
+      // می‌زند و این مسیر زیر `throttle:api-user` است (۶۰ درخواست در
+      // دقیقه برای کل کاربر). با ۲۵ شبکه و چرخهٔ ۱۰ ثانیه‌ای یعنی
+      // ۱۵۰ درخواست در دقیقه و ۴۲۹ قطعی. بازهٔ زمانی نمودار از ۳۰
+      // دقیقه شروع می‌شود، پس تازه‌سازی دقیقه‌ای کافی است.
+      this.stopTimer();
+      this.timer = setInterval(() => this.load(), 60000);
+    },
+
+    stopTimer() {
+      if (this.timer) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
+    },
+
+    handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        this.stopTimer();
+        return;
+      }
+      // #1532: لَچ احراز هویت ترمینال است؛ بازگشت تب آن را زنده نکند.
+      if (isAuthFailed()) return;
+      if (!this.chart || this.timer) return;
+      // #1889: اگر درخواستِ قبل از پنهان‌شدن هنوز در پرواز است،
+      // درخواست دوم نساز؛ همان جواب تازه است.
+      if (!this.inflight) this.load();
+      this.scheduleTimer();
     },
 
     reload() {
@@ -282,6 +321,7 @@ export function registerTrafficChart(Alpine) {
       if (isAuthFailed()) {
         return;
       }
+      this.inflight = true;
       if (show) {
         this.loading = true;
       }
@@ -312,10 +352,7 @@ export function registerTrafficChart(Alpine) {
       } catch (e) {
         // #1532: terminal — stop the timer, let the one banner speak.
         if (e instanceof ApiAuthError) {
-          if (this.timer) {
-            clearInterval(this.timer);
-            this.timer = null;
-          }
+          this.stopTimer();
           this.error = null;
 
           return;
@@ -332,6 +369,7 @@ export function registerTrafficChart(Alpine) {
 
         this.error = 'خطا در دریافت داده‌های ترافیک';
       } finally {
+        this.inflight = false;
         if (show) {
           this.loading = false;
         }
@@ -339,8 +377,10 @@ export function registerTrafficChart(Alpine) {
     },
 
     destroy() {
-      if (this.timer) {
-        clearInterval(this.timer);
+      this.stopTimer();
+      if (this.onVisibilityChange) {
+        document.removeEventListener('visibilitychange', this.onVisibilityChange);
+        this.onVisibilityChange = null;
       }
       if (this.chart) {
         this.chart.destroy();

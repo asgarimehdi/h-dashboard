@@ -207,6 +207,23 @@ class WirelessGaugeRateLimitTest extends TestCase
         $this->assertLessThanOrEqual(60, $requestsPerMinute);
     }
 
+    public function test_the_traffic_chart_stops_polling_while_the_tab_is_hidden(): void
+    {
+        // #1889: نمودار باید در تب پنهان پول نکند و با بازگشت تب
+        // تایمر ۶۰ ثانیه‌ای از نو ساخته شود. این تست قرارداد *سورس* است
+        // (مثل بقیهٔ این فایل)؛ رفتار واقعی با وریفیکیشن دستی PR تأیید می‌شود.
+        $source = $this->jsSource('zabbix-gauges.js');
+
+        $this->assertStringContainsString("document.addEventListener('visibilitychange'", $source);
+        $this->assertStringContainsString("document.removeEventListener('visibilitychange'", $source);
+        $this->assertStringContainsString("document.visibilityState === 'hidden'", $source);
+
+        // قید بودجه: هنوز دقیقاً یک پولر ترافیک، و هنوز ۶۰ ثانیه.
+        $this->assertSame(1, substr_count($source, 'setInterval(() => this.load(),'));
+        preg_match('/setInterval\(\(\) => this\.load\(\), (\d+)\)/', $source, $matches);
+        $this->assertSame('60000', $matches[1] ?? null, 'The traffic poll must stay at 60 s.');
+    }
+
     // ==================== Helpers ====================
 
     /**
