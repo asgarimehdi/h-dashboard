@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Ticket;
 use App\Models\Todo;
+use App\Models\Unit;
 use Carbon\Carbon;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,9 +23,10 @@ use Tests\TestCase;
  *
  * The dedicated todos report (`reports.todos`) already filters on `start_at`,
  * so the cross-check pins the two reports against each other on one explicit
- * range — on `total` and `byDay` only. `byUnit` is out of that comparison
- * because the dedicated report applies no date filter to it, and the null/late
- * `end_at` divergence is #1792's territory.
+ * range — on `total`, `byDay` and, since #1858, `byUnit`. The unit comparison
+ * is only valid while the fixtures keep every `end_at` inside the window and
+ * no unit filter is applied: the advanced report lacks the #1792 `end_at` null
+ * arm and its unit filter is hierarchical, while the todos report's is flat.
  */
 #[CoversNothing]
 class ReportsAdvancedTodoDateColumnTest extends TestCase
@@ -123,6 +125,9 @@ class ReportsAdvancedTodoDateColumnTest extends TestCase
         $from = now()->subDays(10);
         $to = now();
 
+        // A child unit in scope, so the unit buckets are not trivially identical.
+        $child = Unit::factory()->create(['parent_id' => $unit->id]);
+
         // A non-null end_at inside the range: the null/late end_at divergence
         // between the two reports belongs to #1792, not to this fix.
         $old = Todo::factory()->create([
@@ -136,7 +141,7 @@ class ReportsAdvancedTodoDateColumnTest extends TestCase
         ])->saveQuietly();
 
         Todo::factory()->completed()->create([
-            'unit_id' => $unit->id,
+            'unit_id' => $child->id,
             'start_at' => now()->subDays(2),
             'end_at' => now()->subDays(2),
         ]);
@@ -160,5 +165,13 @@ class ReportsAdvancedTodoDateColumnTest extends TestCase
             array_sum(array_column($advanced['byDay'], 'count')),
             array_sum(array_column($dedicated['byDay'], 'count')),
         );
+
+        $dedicatedUnits = $dedicated['byUnit'];
+        $advancedUnits = $advanced['byUnit'];
+        ksort($dedicatedUnits);
+        ksort($advancedUnits);
+
+        $this->assertSame($advancedUnits, $dedicatedUnits, 'both reports must bucket the same range by unit');
+        $this->assertSame(2, array_sum($dedicatedUnits), 'and cover the whole range total');
     }
 }
