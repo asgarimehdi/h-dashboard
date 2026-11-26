@@ -173,6 +173,45 @@ class DiseaseCaseServiceTest extends TestCase
         );
     }
 
+    public function test_create_ignores_a_deactivated_required_definition(): void
+    {
+        DiseaseFieldDef::create([
+            'disease_id' => $this->disease->id,
+            'field_key' => 'legacy',
+            'label_fa' => 'فیلد قدیمی',
+            'type' => 'number',
+            'required' => true,
+            'is_active' => false,
+            'sort' => 2,
+        ]);
+
+        $case = $this->service->create($this->payload(), $this->center->id, $this->accessIds);
+
+        $this->assertSame(['sys' => 140], $case->fields);
+    }
+
+    public function test_create_rejects_a_submitted_key_of_a_deactivated_definition(): void
+    {
+        DiseaseFieldDef::create([
+            'disease_id' => $this->disease->id,
+            'field_key' => 'legacy',
+            'label_fa' => 'فیلد قدیمی',
+            'type' => 'number',
+            'required' => true,
+            'is_active' => false,
+            'sort' => 2,
+        ]);
+
+        $this->assertValidationError(
+            fn () => $this->service->create(
+                $this->payload(['fields' => ['sys' => '140', 'legacy' => '7']]),
+                $this->center->id,
+                $this->accessIds
+            ),
+            'fields.legacy'
+        );
+    }
+
     public function test_create_writes_a_created_audit_row_without_fields_or_pii(): void
     {
         $case = $this->service->create($this->payload(), $this->center->id, $this->accessIds);
@@ -237,6 +276,29 @@ class DiseaseCaseServiceTest extends TestCase
         $this->assertSame($this->center->id, $log->new_values['subject_unit_id']);
         $this->assertArrayNotHasKey('fields', $log->old_values);
         $this->assertArrayNotHasKey('fields', $log->new_values);
+    }
+
+    public function test_update_ignores_a_deactivated_required_definition(): void
+    {
+        $case = $this->service->create($this->payload(), $this->center->id, $this->accessIds);
+
+        DiseaseFieldDef::create([
+            'disease_id' => $this->disease->id,
+            'field_key' => 'legacy',
+            'label_fa' => 'فیلد قدیمی',
+            'type' => 'number',
+            'required' => true,
+            'is_active' => false,
+            'sort' => 2,
+        ]);
+
+        $updated = $this->service->update(
+            $case->id,
+            $this->payload(['fields' => ['sys' => '150']]),
+            $this->accessIds
+        );
+
+        $this->assertSame(['sys' => 150], $updated->fields);
     }
 
     public function test_update_revalidates_the_submitted_subject_unit(): void

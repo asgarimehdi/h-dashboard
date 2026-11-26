@@ -192,7 +192,16 @@ final class DiseaseCaseService
     private function activeDisease(mixed $diseaseId, bool $mustBeActive = true): Disease
     {
         $id = is_numeric($diseaseId) ? (int) $diseaseId : 0;
-        $disease = $id > 0 ? Disease::query()->with('fieldDefs')->find($id) : null;
+        // Only active definitions are part of the write contract: the form never
+        // renders an inactive one (BuildsDiseaseCaseForm::fieldDefsFor()), so
+        // validating against it would make the disease unwritable (#1852). Stored
+        // values of inactive keys are history, carried forward by the edit screen
+        // (disease/index.blade.php:298-301), never re-validated here.
+        $disease = $id > 0
+            ? Disease::query()
+                ->with(['fieldDefs' => fn ($query) => $query->where('is_active', true)])
+                ->find($id)
+            : null;
 
         if (! $disease instanceof Disease) {
             throw ValidationException::withMessages([
