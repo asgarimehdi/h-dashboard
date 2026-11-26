@@ -9,10 +9,14 @@ use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
+use App\Models\User;
+use App\Services\AccessService;
 use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Maatwebsite\Excel\Facades\Excel;
 use Tests\TestCase;
 
@@ -540,6 +544,196 @@ class PersonImportTest extends TestCase
         $this->assertSame(1, $import->getImportResults()['created']);
         $this->assertDatabaseHas('persons', ['n_code' => '9876543210']);
         $this->assertSame($before + 1, $cache->getVersion('unit_hierarchy'));
+
+        @unlink($file);
+    }
+
+    // -----------------------------------------------------------
+    //  ایشو #1900: انتقال u_id باید واحد اصلی کاربر لینک‌شده را sync کند
+    // -----------------------------------------------------------
+
+    /**
+     * انتقال یک شخص به واحد دیگر باید `user_units.is_primary` کاربر
+     * لینک‌شده را به همان واحد مقصد منتقل کند — دقیقاً یک primary.
+     *
+     * `setPrimaryUnit()` ردیف قبلی را حذف نمی‌کند، فقط `is_primary` را
+     * false می‌کند (#1803)؛ این رفتار عمداً pin می‌شود.
+     */
+    public function test_import_transfer_syncs_the_linked_users_primary_unit(): void
+    {
+        $data = $this->createTestData();
+        $unitB = Unit::create(['name' => 'واحد مقصد']);
+
+        $user = User::create(['n_code' => '1234567890', 'password' => Hash::make('password')]);
+        $user->units()->attach($data['unit']->id, ['role' => 'staff', 'is_primary' => true]);
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
+        $csvContent .= "1234567890\tاحمد\tمحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t{$unitB->id}\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([$data['unit']->id, $unitB->id]);
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        $this->assertSame(1, $import->getImportResults()['updated']);
+        $this->assertSame($unitB->id, (int) $data['person']->fresh()->u_id);
+
+        $user = $user->fresh();
+        $this->assertSame($unitB->id, $user->primaryUnit()?->id);
+
+        $this->assertSame(1, DB::table('user_units')
+            ->where('user_id', $user->id)
+            ->where('is_primary', true)
+            ->count());
+
+        // ردیف واحد قبلی باقی می‌ماند ولی primary نیست.
+        $this->assertDatabaseHas('user_units', [
+            'user_id' => $user->id,
+            'unit_id' => $data['unit']->id,
+            'is_primary' => false,
+        ]);
+
+        @unlink($file);
+    }
+
+    /**
+     * ایمپورتی که `u_id` را عوض نمی‌کند نباید به pivot دست بزند و نباید
+     * نسخه‌ی `unit_hierarchy` را bump کند (bump فقط زیر گیت touchesMapScope
+     * است). نسخه بعد از ساخت داده‌ها خوانده می‌شود، چون `Person::create()`
+     * خودش نسخه را بالا می‌برد.
+     */
+    public function test_import_without_unit_change_leaves_the_pivot_and_the_hierarchy_version_untouched(): void
+    {
+        $data = $this->createTestData();
+
+        $user = User::create(['n_code' => '1234567890', 'password' => Hash::make('password')]);
+        $user->units()->attach($data['unit']->id, ['role' => 'staff', 'is_primary' => true]);
+
+        // timestamp ثابت در گذشته تا برابری واقعاً معنا داشته باشد
+        // (در یک ثانیه، `now()` جدید با قبلی یکسان می‌شود).
+        DB::table('user_units')->update(['updated_at' => now()->subDay()]);
+
+        $pivotBefore = DB::table('user_units')->orderBy('unit_id')->get()->toArray();
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $versionBefore = $cache->getVersion('unit_hierarchy');
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
+        $csvContent .= "1234567890\tاحمدِ جدید\tمحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t{$data['unit']->id}\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([$data['unit']->id]);
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        $this->assertSame(1, $import->getImportResults()['updated']);
+        $this->assertSame('احمدِ جدید', $data['person']->fresh()->f_name);
+
+        $this->assertEquals($pivotBefore, DB::table('user_units')->orderBy('unit_id')->get()->toArray());
+        $this->assertSame($versionBefore, $cache->getVersion('unit_hierarchy'));
+
+        @unlink($file);
+    }
+
+    /**
+     * کاربر soft-deleted عمداً sync نمی‌شود — همان رفتار #1896، چون
+     * `User::whereIn(...)` حساب‌های trashed را برنمی‌گرداند.
+     */
+    public function test_import_transfer_skips_a_soft_deleted_user(): void
+    {
+        $data = $this->createTestData();
+        $unitB = Unit::create(['name' => 'واحد مقصد']);
+
+        $user = User::create(['n_code' => '1234567890', 'password' => Hash::make('password')]);
+        $user->units()->attach($data['unit']->id, ['role' => 'staff', 'is_primary' => true]);
+        $user->delete();
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
+        $csvContent .= "1234567890\tاحمد\tمحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t{$unitB->id}\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([$data['unit']->id, $unitB->id]);
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        // خود انتقال انجام می‌شود، ولی هیچ ردیف pivot تازه‌ای ساخته نمی‌شود.
+        $this->assertSame($unitB->id, (int) $data['person']->fresh()->u_id);
+        $this->assertSame(1, DB::table('user_units')->where('user_id', $user->id)->count());
+        $this->assertDatabaseMissing('user_units', [
+            'user_id' => $user->id,
+            'unit_id' => $unitB->id,
+        ]);
+
+        @unlink($file);
+    }
+
+    /**
+     * شخص بدون کاربر لینک‌شده: انتقال باید no-op باشد، نه null-deref.
+     */
+    public function test_import_transfer_without_a_linked_user_is_a_no_op(): void
+    {
+        $data = $this->createTestData();
+        $unitB = Unit::create(['name' => 'واحد مقصد']);
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
+        $csvContent .= "1234567890\tاحمد\tمحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t{$unitB->id}\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([$data['unit']->id, $unitB->id]);
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        $results = $import->getImportResults();
+        $this->assertSame(1, $results['updated']);
+        $this->assertSame([], $results['errors']);
+        $this->assertSame($unitB->id, (int) $data['person']->fresh()->u_id);
+        $this->assertSame(0, DB::table('user_units')->count());
+
+        @unlink($file);
+    }
+
+    /**
+     * `accessibleUnitIds` بعد از import باید واحد مقصد را **شامل** شود.
+     * چون `setPrimaryUnit()` ردیف قبلی را حذف نمی‌کند، نتیجه هر دو واحد را
+     * دارد — پس `assertContains`، نه `assertEquals`.
+     */
+    public function test_accessible_unit_ids_include_the_transfer_target_after_import(): void
+    {
+        $data = $this->createTestData();
+        $unitB = Unit::create(['name' => 'واحد مقصد']);
+
+        $user = User::create(['n_code' => '1234567890', 'password' => Hash::make('password')]);
+        $user->units()->attach($data['unit']->id, ['role' => 'staff', 'is_primary' => true]);
+
+        $csvContent = "n_code\tf_name\tl_name\tt_id\te_id\ts_id\tr_id\tu_id\n";
+        $csvContent .= "1234567890\tاحمد\tمحمدی\t{$data['tahsil']->id}\t{$data['estekhdam']->id}\t{$data['semat']->id}\t{$data['radif']->id}\t{$unitB->id}\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'person_import_').'.csv';
+        file_put_contents($file, $csvContent);
+
+        $import = new PersonImport;
+        $import->setAccessibleUnitIds([$data['unit']->id, $unitB->id]);
+        $import->setSelectedActions(['row_2' => 'update']);
+        Excel::import($import, $file);
+
+        session()->forget('current_unit_id');
+
+        $accessible = app(AccessService::class)->accessibleUnitIds($user->fresh());
+
+        $this->assertContains($unitB->id, $accessible);
+        // واحد قبلی هم هنوز attach است (رفتار setPrimaryUnit در #1803).
+        $this->assertContains($data['unit']->id, $accessible);
 
         @unlink($file);
     }
