@@ -2977,12 +2977,6 @@ parameters:
 			path: resources/views/livewire/units/chart.blade.php
 
 		-
-			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:11\:\:expandParents\(\) has parameter \$unit with no type specified\.$#'
-			identifier: missingType.parameter
-			count: 1
-			path: resources/views/livewire/units/chart.blade.php
-
-		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/units/chart\.blade\.php\:11\:\:toggle\(\) has parameter \$id with no type specified\.$#'
 			identifier: missingType.parameter
 			count: 1
