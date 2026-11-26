@@ -27,6 +27,12 @@ return new class extends Component
 
     public int $directUserCount = 0;
 
+    /**
+     * سقف matchهای جستجو (قبل از expand). درخت با جستجو فیلتر نمی‌شود —
+     * فقط شاخه‌ها باز می‌شوند — پس سقف هیچ matchی را از دید کاربر پنهان نمی‌کند.
+     */
+    private const SEARCH_MATCH_LIMIT = 50;
+
     // Issue #1632: the route gate (`role_or_permission:organization`) runs only
     // on the full page load, never on `/livewire/update`, so it is re-checked here.
     public function boot(): void
@@ -96,25 +102,21 @@ return new class extends Component
         $term = trim($this->search);
 
         if (mb_strlen($term) > 2) {
-            $matchingUnits = Unit::where('name', 'LIKE', '%'.self::escapeLikeWildcards($term).'%')
+            // سقف روی matchها + ترتیب قطعی: بدون ORDER BY، limit() در
+            // Postgres غیرقطعی است و تست سقف flaky می‌شود.
+            $matchingIds = Unit::where('name', 'LIKE', '%'.self::escapeLikeWildcards($term).'%')
                 ->whereIn('id', $accessibleIds)
-                ->get();
+                ->orderBy('id')
+                ->limit(self::SEARCH_MATCH_LIMIT)
+                ->pluck('id')
+                ->all();
 
-            foreach ($matchingUnits as $unit) {
-                $this->expandParents($unit);
-            }
-
-            $this->expanded = array_unique($this->expanded);
-        }
-    }
-
-    protected function expandParents($unit): void
-    {
-        if ($unit->parent_id) {
-            $this->expanded[] = (string) $unit->parent_id;
-            $parent = Unit::find($unit->parent_id);
-            if ($parent) {
-                $this->expandParents($parent);
+            if ($matchingIds !== []) {
+                // یک Recursive CTE برای همهٔ matchها، مستقل از تعداد و عمق
+                // (قبلاً به‌ازای هر سطحِ هر match یک کوئری جدا زده می‌شد).
+                $this->expanded = Unit::ancestorChainIds($matchingIds)
+                    ->map(fn (int $id): string => (string) $id)
+                    ->all();
             }
         }
     }
