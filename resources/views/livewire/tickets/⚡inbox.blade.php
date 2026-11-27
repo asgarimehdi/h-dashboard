@@ -566,6 +566,11 @@ new class extends Component
 
                 if ($doneTaskIds->isNotEmpty()) {
                     Todo::query()->whereIn('id', $doneTaskIds->all())->update(['is_completed' => true]);
+
+                    // #1934: the mass update bypasses `Todo::updated` — bump
+                    // `report_todos` manually. `dashboard` was already bumped at
+                    // :512 for the ticket mass-update.
+                    $cache->increment('report_todos');
                 }
             }
 

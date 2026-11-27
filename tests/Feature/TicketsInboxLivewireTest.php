@@ -10,6 +10,7 @@ use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\CacheInvalidationServiceInterface;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -2284,6 +2285,95 @@ class TicketsInboxLivewireTest extends TestCase
         $this->assertSame(1, $log->filter(
             fn (array $q) => str_starts_with($q['query'], 'update "todos"')
         )->count(), 'Expected exactly one mass update of todos');
+    }
+
+    public function test_bulk_complete_auto_completed_parent_task_invalidates_todos_report_cache(): void
+    {
+        // #1934: the auto-complete of a parent task is a query-builder mass
+        // update, so `Todo::updated` never fires. `report_todos` must be
+        // bumped manually or the todos report stays stale for its 10-min TTL.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit([
+            'view_assigned_tickets',
+            'manage_unit_tickets',
+        ]);
+        $this->actingAs($user);
+
+        $todo = Todo::create([
+            'title' => 'وظیفه تست',
+            'start_at' => now(),
+            'is_completed' => false,
+            'unit_id' => $unit->id,
+        ]);
+
+        $ticket = $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+            'task_id' => $todo->id,
+            'unit' => $unit,
+            'user' => $user,
+        ]);
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $versionBefore = $cache->getVersion('report_todos');
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$ticket->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal');
+
+        $this->assertSame('completed', $ticket->fresh()->status);
+        $this->assertTrue($todo->fresh()->is_completed);
+        $this->assertGreaterThan(
+            $versionBefore,
+            $cache->getVersion('report_todos'),
+            'Todo mass-update in bulk-complete bypasses Todo::updated; report_todos must be bumped manually.'
+        );
+    }
+
+    public function test_bulk_complete_that_leaves_the_parent_task_open_does_not_bump_todos_report_cache(): void
+    {
+        // #1934: the bump is conditional — a bulk-complete that leaves a
+        // sibling ticket open does not complete the parent task, so it must
+        // not invalidate the todos report.
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit([
+            'view_assigned_tickets',
+            'manage_unit_tickets',
+        ]);
+        $this->actingAs($user);
+
+        $todo = Todo::create([
+            'title' => 'وظیفه نیمه‌کاره',
+            'start_at' => now(),
+            'is_completed' => false,
+            'unit_id' => $unit->id,
+        ]);
+
+        $own = $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+            'task_id' => $todo->id,
+            'unit' => $unit,
+            'user' => $user,
+        ]);
+        $this->createTicket([
+            'status' => 'created',
+            'task_id' => $todo->id,
+            'unit' => $unit,
+            'user' => $user,
+        ]);
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $versionBefore = $cache->getVersion('report_todos');
+
+        Livewire::test('tickets.inbox')
+            ->set('selectedTickets', [$own->id])
+            ->set('bulkAction', 'complete')
+            ->call('executeBulkAction')
+            ->assertDispatched('swal');
+
+        $this->assertFalse($todo->fresh()->is_completed);
+        $this->assertSame($versionBefore, $cache->getVersion('report_todos'));
     }
 
     public function test_select_all_then_complete_on_pending_tab_processes_nothing(): void
