@@ -25,8 +25,14 @@ use Illuminate\Support\Facades\Storage;
  *   5. `attachments:move-to-local --delete-public`  (public copy removed)
  *   6. remove the `public/storage` symlink, after reviewing its contents
  *
- * The command is idempotent: a row already served from `local` is skipped, and
- * `--delete-public` still removes its public copy once the sizes match.
+ * The command is idempotent and self-healing: a row already served from `local`
+ * is skipped only while its size matches the public original. A size mismatch
+ * proves an interrupted copy left a partial file behind, so the corrupt local
+ * copy is discarded and recopied from public (never the other way round); the
+ * public copy is still only deleted after the new copy passes the size gate.
+ * A copy that fails is deleted instead of left in place, so the next run
+ * retries from a clean state rather than failing forever. `--delete-public`
+ * still removes the public copy once the sizes match.
  */
 class MoveAttachmentsToLocal extends Command
 {
@@ -78,30 +84,50 @@ class MoveAttachmentsToLocal extends Command
                     }
 
                     if ($local->exists($path)) {
-                        // Already migrated. `--delete-public` still has work to
-                        // do here: the documented runbook copies first and
-                        // deletes in a later invocation, so the second run must
-                        // remove a public copy it did not just create.
-                        if (! $deletePublic || ! $public->exists($path)) {
-                            $alreadyLocal++;
+                        // #1928: a size mismatch proves the local copy is the
+                        // failed half of an interrupted migration. Nothing
+                        // writes to the public disk any more
+                        // (NoPublicDiskStorageTest), so public is the source
+                        // of truth. Repair it whether or not `--delete-public`
+                        // is set — without the flag the run used to report a
+                        // silent `alreadyLocal` while downloads served the
+                        // corrupt bytes.
+                        $needsRepair = $public->exists($path)
+                            && $public->size($path) !== $local->size($path);
+
+                        if ($needsRepair) {
+                            if ($dryRun) {
+                                $migrated++;
+                                $this->warn("    would re-copy: {$path} differs in size between disks (attachment #{$attachment->id})");
+
+                                continue;
+                            }
+
+                            // Drop the corrupt copy; the normal copy path below
+                            // recreates it. The public original is only deleted
+                            // after the new copy passes the same size gate.
+                            $local->delete($path);
+                        } else {
+                            // Already migrated. `--delete-public` still has work
+                            // to do here: the documented runbook copies first
+                            // and deletes in a later invocation, so the second
+                            // run must remove a public copy it did not just
+                            // create. A missing public copy is not evidence of
+                            // corruption — keep the only local copy.
+                            if (! $deletePublic || ! $public->exists($path)) {
+                                $alreadyLocal++;
+
+                                continue;
+                            }
+
+                            if (! $dryRun) {
+                                $public->delete($path);
+                            }
+
+                            $deletedFromPublic++;
 
                             continue;
                         }
-
-                        if ($public->size($path) !== $local->size($path)) {
-                            $failed++;
-                            $this->error("    failed: {$path} differs in size between disks; public copy kept (attachment #{$attachment->id})");
-
-                            continue;
-                        }
-
-                        if (! $dryRun) {
-                            $public->delete($path);
-                        }
-
-                        $deletedFromPublic++;
-
-                        continue;
                     }
 
                     if (! $public->exists($path)) {
@@ -133,6 +159,13 @@ class MoveAttachmentsToLocal extends Command
                     }
 
                     if ($written === false) {
+                        // A failed write can leave a partial file behind; drop
+                        // it so the next run retries from a clean state instead
+                        // of treating the fragment as an already-migrated copy.
+                        if ($local->exists($path)) {
+                            $local->delete($path);
+                        }
+
                         $failed++;
                         $this->error("    failed: could not write {$path} (attachment #{$attachment->id})");
 
@@ -142,6 +175,10 @@ class MoveAttachmentsToLocal extends Command
                     // Never delete the only other copy before proving the copy
                     // is complete.
                     if ($public->size($path) !== $local->size($path)) {
+                        if ($local->exists($path)) {
+                            $local->delete($path);
+                        }
+
                         $failed++;
                         $this->error("    failed: size mismatch after copying {$path} (attachment #{$attachment->id})");
 
