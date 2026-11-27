@@ -374,21 +374,7 @@ return new class extends Component
     #[Computed]
     public function unitTree(): array
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-
-        return Unit::query()
-            ->with('unitType')
-            ->whereIn('id', $accessibleIds)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get()
-            ->map(static fn (mixed $unit): array => [
-                'id' => (int) data_get($unit, 'id'),
-                'name' => (string) data_get($unit, 'name'),
-                'parent_id' => data_get($unit, 'parent_id') !== null ? (int) data_get($unit, 'parent_id') : null,
-                'unit_type_name' => data_get($unit, 'unitType.name') !== null ? (string) data_get($unit, 'unitType.name') : null,
-            ])
-            ->all();
+        return OptionCatalog::unitsForPicker(app(AccessService::class)->accessibleUnitIds());
     }
 
     #[Computed]
