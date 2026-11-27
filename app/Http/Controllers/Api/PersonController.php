@@ -16,6 +16,29 @@ class PersonController extends Controller
 {
     use PersianNormalizer;
 
+    /**
+     * Issue #1880: explicit allowlist for every Person payload this controller
+     * returns (index/show/update). The four `*_folded` search columns are
+     * generated (`2026_11_14_000001_...`) and internal to query-time folding —
+     * never part of the API contract. Same convention as
+     * HrStatsController::personColumns() (#1802) and
+     * TicketCommentController::REPLY_AUTHOR_PERSON_COLUMNS (#1689), which chose
+     * a select allowlist over a model `$hidden` for exactly these columns.
+     *
+     * FK columns are MANDATORY here: a select without them silently nulls the
+     * eager-loaded relations (#1689). A new legitimate persons column must be
+     * added here — `PersonApiTest::test_person_column_allowlist_matches_...`
+     * fails until it is.
+     *
+     * @var list<string>
+     */
+    public const PERSON_COLUMNS = [
+        'id', 'n_code', 'f_name', 'l_name',
+        't_id', 'e_id', 's_id', 'r_id', 'u_id',
+        'phone', 'birth_date', 'hire_date', 'status',
+        'created_at', 'updated_at',
+    ];
+
     public function index(UnitScopedRequest $request): JsonResponse
     {
         // Issue #1777: `search[]=x` used to blow up inside normalizeForQuery()
@@ -32,7 +55,9 @@ class PersonController extends Controller
 
         $accessibleIds = $request->accessibleIds();
 
-        $query = Person::whereIn('u_id', $accessibleIds)
+        $query = Person::query()
+            ->select(self::PERSON_COLUMNS)
+            ->whereIn('u_id', $accessibleIds)
             ->with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name']);
 
         if ($request->filled('search')) {
@@ -93,8 +118,14 @@ class PersonController extends Controller
             return response()->json(['message' => 'Person not accessible.'], 403);
         }
 
+        $data = Person::query()
+            ->select(self::PERSON_COLUMNS)
+            ->with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name'])
+            ->whereKey($person->getKey())
+            ->firstOrFail();
+
         return response()->json([
-            'data' => $person->load(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name']),
+            'data' => $data,
         ]);
     }
 
@@ -108,6 +139,10 @@ class PersonController extends Controller
             return response()->json(['message' => 'Unit not accessible.'], 403);
         }
 
+        // Issue #1880: deliberately NOT projected. `create()` only carries the
+        // submitted attributes, so DB-generated columns (`*_folded`) cannot
+        // appear here — verified against the live model. The regression test
+        // pins this so a future `->refresh()`/`fresh()` on this path is caught.
         $person = Person::create($validated);
 
         return response()->json([
@@ -145,9 +180,15 @@ class PersonController extends Controller
 
         $person->update($validated);
 
+        $data = Person::query()
+            ->select(self::PERSON_COLUMNS)
+            ->with(['unit:id,name', 'semat:id,name'])
+            ->whereKey($person->getKey())
+            ->firstOrFail();
+
         return response()->json([
             'success' => true,
-            'data' => $person->fresh()->load(['unit:id,name', 'semat:id,name']),
+            'data' => $data,
         ]);
     }
 

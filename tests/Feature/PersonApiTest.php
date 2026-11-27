@@ -9,6 +9,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Session;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -21,6 +22,9 @@ class PersonApiTest extends TestCase
     use InteractsWithApiTokens;
     use InteractsWithTestSetup;
     use RefreshDatabase;
+
+    /** Issue #1880: internal generated Persian-search columns. */
+    private const FOLDED = ['f_name_folded', 'l_name_folded', 'full_name_folded', 'full_name_rev_folded'];
 
     protected function setUp(): void
     {
@@ -427,5 +431,95 @@ class PersonApiTest extends TestCase
         foreach ($data as $person) {
             $this->assertSame($unit->id, (int) $person['u_id']);
         }
+    }
+
+    // ==================== #1880: internal folded columns stay out of the payload ====================
+
+    public function test_person_list_does_not_expose_folded_columns(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $token = $this->createApiToken($user, ['persons:read']);
+
+        $item = $this->apiGet("/api/persons?unit_id={$unit->id}", $token)
+            ->assertOk()
+            ->json('data.0');
+
+        foreach (self::FOLDED as $key) {
+            $this->assertArrayNotHasKey($key, $item);
+        }
+
+        foreach (['id', 'n_code', 'f_name', 'l_name', 't_id', 'e_id', 's_id', 'r_id', 'u_id', 'phone', 'birth_date', 'hire_date', 'status', 'created_at', 'updated_at', 'unit', 'semat', 'tahsil', 'estekhdam', 'radif'] as $key) {
+            $this->assertArrayHasKey($key, $item);
+        }
+        $this->assertSame($unit->name, $item['unit']['name']);
+    }
+
+    public function test_person_show_does_not_expose_folded_columns(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $person = Person::where('u_id', $unit->id)->first();
+        $token = $this->createApiToken($user, ['persons:read']);
+
+        $data = $this->apiGet("/api/persons/{$person->n_code}", $token)
+            ->assertOk()
+            ->json('data');
+
+        foreach (self::FOLDED as $key) {
+            $this->assertArrayNotHasKey($key, $data);
+        }
+
+        foreach (['n_code', 'f_name', 'l_name', 'phone', 'birth_date', 'hire_date', 'status', 'unit', 'semat'] as $key) {
+            $this->assertArrayHasKey($key, $data);
+        }
+    }
+
+    public function test_person_update_does_not_expose_folded_columns(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $person = Person::where('u_id', $unit->id)->first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+
+        $response = $this->apiPut("/api/persons/{$person->n_code}", ['f_name' => 'Updated'], $token)
+            ->assertOk();
+
+        $data = $response->json('data');
+        foreach (self::FOLDED as $key) {
+            $this->assertArrayNotHasKey($key, $data);
+        }
+
+        $this->assertSame('Updated', $data['f_name']);
+        $this->assertArrayHasKey('phone', $data);
+        $this->assertArrayHasKey('status', $data);
+    }
+
+    public function test_person_create_response_never_contains_folded_columns(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $existingPerson = Person::first();
+        $token = $this->createApiToken($user, ['persons:read', 'persons:write']);
+
+        $response = $this->apiPost('/api/persons', [
+            'n_code' => '1111111111',
+            'f_name' => 'John',
+            'l_name' => 'Doe',
+            't_id' => $existingPerson->t_id,
+            'e_id' => $existingPerson->e_id,
+            's_id' => $existingPerson->s_id,
+            'r_id' => $existingPerson->r_id,
+            'u_id' => $unit->id,
+        ], $token);
+
+        $response->assertStatus(201);
+        foreach (self::FOLDED as $key) {
+            $this->assertArrayNotHasKey($key, $response->json('data'));
+        }
+        $this->assertSame('1111111111', $response->json('data.n_code'));
+    }
+
+    public function test_person_column_allowlist_matches_the_schema_minus_folded_columns(): void
+    {
+        $expected = array_values(array_diff(Schema::getColumnListing('persons'), self::FOLDED));
+
+        $this->assertEqualsCanonicalizing($expected, PersonController::PERSON_COLUMNS);
     }
 }
