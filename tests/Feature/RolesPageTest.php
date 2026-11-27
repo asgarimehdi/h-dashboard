@@ -209,6 +209,70 @@ test('#1607: an admin-role holder can create, rename and delete a role', functio
 
 /*
  * ---------------------------------------------------------------------------
+ * Issue #1860 — an unknown permission name must not 500 after the role row
+ * has been persisted. The actor is an admin-role holder on purpose: a
+ * non-admin never reaches validation, the #1607 ceiling 403s first.
+ * ---------------------------------------------------------------------------
+ */
+test('#1860: an unknown permission name is a validation error and creates no role', function () {
+    $this->user->givePermissionTo('manage_roles');
+    $this->user->assignRole('admin');
+
+    Livewire::actingAs($this->user)
+        ->test('roles/index')
+        ->set('name', 'ghostrole')
+        ->set('label', 'نقش ناموجود')
+        ->set('permissions', ['does_not_exist'])
+        ->call('createRole')
+        ->assertHasErrors(['permissions.0']);
+
+    $this->assertDatabaseMissing('roles', ['name' => 'ghostrole']);
+});
+
+test('#1860: creating a role with valid permissions still works', function () {
+    $this->user->givePermissionTo('manage_roles');
+    $this->user->assignRole('admin');
+
+    Livewire::actingAs($this->user)
+        ->test('roles/index')
+        ->set('name', 'validrole')
+        ->set('label', 'نقش معتبر')
+        ->set('permissions', ['manage_roles', 'manage_users'])
+        ->call('createRole')
+        ->assertHasNoErrors();
+
+    $created = Role::where('name', 'validrole')->first();
+    expect($created)->not->toBeNull();
+    expect($created->permissions->pluck('name')->sort()->values()->all())
+        ->toBe(['manage_roles', 'manage_users']);
+});
+
+test('#1860: a failed create leaves no role behind, so a retry with the same name succeeds', function () {
+    $this->user->givePermissionTo('manage_roles');
+    $this->user->assignRole('admin');
+
+    $component = Livewire::actingAs($this->user)->test('roles/index');
+
+    $component
+        ->set('name', 'retryrole')
+        ->set('label', 'نقش تلاش دوباره')
+        ->set('permissions', ['does_not_exist'])
+        ->call('createRole')
+        ->assertHasErrors(['permissions.0']);
+
+    $this->assertDatabaseMissing('roles', ['name' => 'retryrole']);
+
+    // همان کامپوننت، همان name/label — دیگر به unique:roles,name نمی‌خورد.
+    $component
+        ->set('permissions', ['manage_roles'])
+        ->call('createRole')
+        ->assertHasNoErrors();
+
+    expect(Role::where('name', 'retryrole')->exists())->toBeTrue();
+});
+
+/*
+ * ---------------------------------------------------------------------------
  * Issue #1663 — the last-admin safeguard on roles.index
  * ---------------------------------------------------------------------------
  * #1607 stops a NON-admin from touching `admin`; the admin-role holder was
