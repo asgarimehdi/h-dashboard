@@ -62,14 +62,6 @@ return new class extends Component
 
     public bool $showHelpModal = false;
 
-    /**
-     * Stored keys with no active definition (#1242 may hide/delete one). They
-     * are read-only history: never rendered as inputs, never destroyed (§8.4).
-     *
-     * @var array<string, mixed>
-     */
-    public array $orphanFields = [];
-
     public function mount(): void
     {
         $this->authorize('manage_diseases');
@@ -206,9 +198,7 @@ return new class extends Component
         $this->recordedAt = Jalalian::fromCarbon($case->recorded_at)->format('Y/m/d');
         $this->subjectUnitId = $case->subject_unit_id;
 
-        $stored = $case->fields ?? [];
-        $this->fields = $this->fieldsFromStored($stored, $case->disease_id);
-        $this->orphanFields = array_diff_key($stored, $this->emptyFieldsFor($case->disease_id));
+        $this->fields = $this->fieldsFromStored($case->fields ?? [], $case->disease_id);
 
         $this->resetValidation();
     }
@@ -233,6 +223,13 @@ return new class extends Component
         } catch (ModelNotFoundException) {
             abort(403);
         }
+
+        // #1870: the orphan set is derived from the stored row on every write,
+        // never from dehydrated client state. `$case` is read before the
+        // service write, so `$case->fields` is still the pre-edit row.
+        // `emptyFieldsFor()` is exactly the active-definition key set, so a key
+        // that still has a definition can never be an orphan.
+        $orphanFields = array_diff_key($case->fields ?? [], $this->emptyFieldsFor($case->disease_id));
 
         $this->fields = $this->nonEmptyFields($this->fields);
 
@@ -294,10 +291,16 @@ return new class extends Component
             return;
         }
 
-        // The validator only accepts known keys, so orphaned historical keys
-        // are merged back outside the write path — they are not new input.
-        if ($this->orphanFields !== []) {
-            $updated->forceFill(['fields' => $this->orphanFields + ($updated->fields ?? [])])->saveQuietly();
+        // #1242: the validator only accepts known keys, so the stored
+        // historical keys are merged back outside the write path. Both
+        // operands are server-derived: `$orphanFields` cannot hold an active
+        // definition's key (see above), so it can never shadow a validated
+        // value; for a key whose definition was deactivated the stored value
+        // wins, which is the "read-only history, never destroyed" contract.
+        // `save()` — not `saveQuietly()` — fires `updated` so #1245 also
+        // invalidates `disease_maps` for this second write.
+        if ($orphanFields !== []) {
+            $updated->forceFill(['fields' => $orphanFields + ($updated->fields ?? [])])->save();
         }
 
         $this->success('کیس بیماری ویرایش شد.', position: 'toast-bottom');
@@ -318,7 +321,6 @@ return new class extends Component
             'recordedAt',
             'subjectUnitId',
             'fields',
-            'orphanFields',
             'unitModal',
         ]);
 

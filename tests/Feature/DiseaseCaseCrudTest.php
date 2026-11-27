@@ -11,6 +11,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Session;
+use Livewire\Exceptions\PublicPropertyNotFoundException;
 use Livewire\Livewire;
 use Morilog\Jalali\Jalalian;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -771,6 +772,146 @@ test('editing preserves stored field keys whose definition no longer exists', fu
 
     expect($case->fields['sys'])->toBe(125)
         ->and($case->fields['legacy'])->toBe('kept');
+});
+
+test('a client cannot write the orphan bookkeeping state', function () {
+    $disease = dc_disease('orphan-not-client-writable');
+    dc_required_defs($disease);
+
+    $case = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'fields' => ['sys' => 120, 'dia' => 80, 'legacy' => 'kept'],
+    ]);
+
+    // #1870: this used to be public Livewire state, so a crafted
+    // POST /livewire/update could shadow `sys` and inject `evil`.
+    expect(fn () => Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('orphanFields', ['sys' => 999, 'evil' => 'injected'])
+    )->toThrow(PublicPropertyNotFoundException::class);
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('fields.sys', 130)
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    $case->refresh();
+
+    expect($case->fields['sys'])->toBe(130)
+        ->and($case->fields['legacy'])->toBe('kept')
+        ->and($case->fields)->not->toHaveKey('evil');
+});
+
+test('orphans survive a saveEdit that was never preceded by edit()', function () {
+    $disease = dc_disease('orphan-direct-save');
+    dc_required_defs($disease);
+
+    $case = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'fields' => ['sys' => 120, 'dia' => 80, 'legacy' => 'kept'],
+    ]);
+
+    // #1870: `editingId` is client-settable, so `saveEdit()` must not depend on
+    // `edit()` having populated a property first — that path destroyed every
+    // orphan silently.
+    Livewire::test('disease.index')
+        ->set('editingId', $case->id)
+        ->set('fields', ['sys' => 130, 'dia' => 80])
+        ->set('diagnosedAt', dc_jalali('2026-10-01'))
+        ->set('recordedAt', dc_jalali('2026-10-01'))
+        ->set('subjectUnitId', $this->actorUnit->id)
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    expect($case->refresh()->fields)
+        ->toMatchArray(['sys' => 130, 'dia' => 80, 'legacy' => 'kept']);
+});
+
+test('orphans loaded for one case never land on another', function () {
+    $disease = dc_disease('orphan-cross-case');
+    dc_required_defs($disease);
+    $patient = dc_patient();
+
+    $caseA = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'patient_id' => $patient->id,
+        'diagnosed_at' => '2026-10-01',
+        'fields' => ['sys' => 120, 'dia' => 80, 'legacyA' => 'from-a'],
+    ]);
+
+    $caseB = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'patient_id' => $patient->id,
+        'diagnosed_at' => '2026-10-05',
+        'fields' => ['sys' => 110, 'dia' => 70],
+    ]);
+
+    Livewire::test('disease.index')
+        ->call('edit', $caseA->id)
+        ->set('editingId', $caseB->id)
+        ->set('diagnosedAt', dc_jalali('2026-10-05'))
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    expect($caseB->refresh()->fields)->not->toHaveKey('legacyA');
+});
+
+test('the orphan merge fires updated so the disease map cache is invalidated', function () {
+    $disease = dc_disease('orphan-cache');
+    dc_required_defs($disease);
+
+    $case = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'fields' => ['sys' => 120, 'dia' => 80, 'legacy' => 'kept'],
+    ]);
+
+    // #1245 invalidates `disease_maps` from `DiseaseCase::updated`, so the LAST
+    // event must already carry the merged fields. `saveQuietly()` fired none:
+    // the only event saw the orphan-less row, and a concurrent reader could
+    // cache that state under the fresh version for the full 60-minute TTL.
+    $payloads = [];
+    DiseaseCase::updated(function (DiseaseCase $model) use (&$payloads): void {
+        $payloads[] = $model->fields;
+    });
+
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    expect($payloads)->not->toBeEmpty()
+        ->and(end($payloads))->toHaveKey('legacy');
+});
+
+test('a deactivated definition keeps its stored value against a client write', function () {
+    $disease = dc_disease('orphan-inactive-def');
+    dc_required_defs($disease);
+
+    DiseaseFieldDef::query()->create([
+        'disease_id' => $disease->id,
+        'field_key' => 'fever',
+        'label_fa' => 'تب',
+        'type' => 'number',
+        'required' => false,
+        'sort' => 9,
+        'is_active' => false,
+    ]);
+
+    $case = dc_case($this->actorUnit, [
+        'disease_id' => $disease->id,
+        'fields' => ['sys' => 120, 'dia' => 80, 'fever' => 39],
+    ]);
+
+    // No `assertHasNoErrors` on purpose: before #1852 the validator still
+    // accepts an inactive key and the orphan merge reverts it; after #1852 the
+    // key is rejected as unknown. Either way the stored value must not change.
+    Livewire::test('disease.index')
+        ->call('edit', $case->id)
+        ->set('fields.fever', 41)
+        ->call('saveEdit');
+
+    expect($case->refresh()->fields['fever'])->toBe(39);
 });
 
 test('a case outside the unit scope cannot be opened for editing', function () {
