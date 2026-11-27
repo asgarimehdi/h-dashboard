@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Person;
 use App\Models\Ticket;
 use App\Models\Todo;
+use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -49,11 +50,79 @@ class ReportsAdvancedLivewireTest extends TestCase
 
     public function test_advanced_report_has_units_loaded(): void
     {
-        ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
         Livewire::test('reports.advanced')
-            ->assertSet('units', fn ($units) => count($units) >= 1);
+            ->assertSet('units', fn ($units) => count($units) >= 1)
+            ->assertSeeHtml('<option value="'.$unit->id.'">'.$unit->name.'</option>');
+    }
+
+    /**
+     * Issue #1898 — the accessible unit list is view data, not public state.
+     * While it was a public property every round trip serialized the whole list
+     * into the snapshot (~834 units: ~97 KB JSON / ~130 KB `wire:snapshot`
+     * attribute on the dev database). As a `#[Computed]` property it is never
+     * dehydrated, so the snapshot stays flat regardless of unit count.
+     */
+    public function test_snapshot_stays_light_with_two_hundred_units(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+
+        // Persian names: the real byte profile (`json_encode` escapes non-ASCII as \uXXXX).
+        foreach (range(1, 200) as $i) {
+            Unit::factory()->create(['name' => 'واحد آزمایشی شماره '.$i, 'parent_id' => $unit->id]);
+        }
+
+        $this->actingAs($user);
+
+        $component = Livewire::test('reports.advanced');
+        $snapshot = $component->snapshot;
+        $snapshotJson = (string) json_encode($snapshot);
+
+        // A computed property never lands in the snapshot (same pattern as #1040 —
+        // UnitsIndexLivewireTest snapshot assertions).
+        $this->assertArrayNotHasKey('units', $snapshot['data']);
+        $this->assertStringNotContainsString('"units"', $snapshotJson);
+
+        // Measured 724 B with this fixture; 2000 leaves headroom and is still
+        // ~15x below the regression (30,909 B while `units` was public state).
+        $this->assertLessThan(2000, strlen($snapshotJson), 'the snapshot payload grew — a heavy property slipped back into public state');
+    }
+
+    /**
+     * Issue #1898 — the cascading selects must still filter after `units`
+     * became a computed property, including across a second round trip
+     * (`#[Computed]` memoizes per request, so a lost read would show up here).
+     *
+     * The root select renders EVERY accessible unit, so asserting a child name
+     * in the HTML proves nothing — assert through `childUnits()` /
+     * `grandChildUnits()` instead.
+     */
+    public function test_cascading_unit_selects_still_filter_after_a_round_trip(): void
+    {
+        ['user' => $user, 'unit' => $root] = $this->createUserWithUnit(['manage_personnel']);
+        $child = Unit::factory()->create(['name' => 'فرعی-آزمایشی', 'parent_id' => $root->id]);
+        $grand = Unit::factory()->create(['name' => 'نوه-آزمایشی', 'parent_id' => $child->id]);
+        $this->actingAs($user);
+
+        $component = Livewire::test('reports.advanced')
+            ->assertSeeHtml('<option value="'.$child->id.'">فرعی-آزمایشی</option>');
+
+        $this->assertSame([], $component->instance()->childUnits()->all());
+        $this->assertSame([], $component->instance()->grandChildUnits()->all());
+
+        $component->set('rootUnitId', $root->id);
+        $this->assertContains($child->id, $component->instance()->childUnits()->pluck('id')->all());
+        $this->assertSame([], $component->instance()->grandChildUnits()->all());
+
+        $component->set('parentUnitId', $child->id);
+        $this->assertSame([$grand->id], $component->instance()->grandChildUnits()->pluck('id')->all());
+
+        // One more round trip: the memo must not be lost between renders.
+        $component->set('statusFilter', 'all');
+        $this->assertContains($child->id, $component->instance()->childUnits()->pluck('id')->all());
+        $this->assertSame([$grand->id], $component->instance()->grandChildUnits()->pluck('id')->all());
     }
 
     /**
