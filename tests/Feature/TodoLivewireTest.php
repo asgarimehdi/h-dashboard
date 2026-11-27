@@ -1445,3 +1445,67 @@ test('update_todo_dates accepts end equal to start', function () {
         'end_at' => '2026-09-26 10:00:00',
     ]);
 });
+
+// ==================== Issue #1873 — dragging must not reset the viewed window ====================
+
+/**
+ * Issue #1873: `updateTodoDates()` called `$this->mount()`, which rebuilt the
+ * calendar window from `now()` for the rest of that render. The window was
+ * also `private`, so Livewire dropped it between requests and every later
+ * mutator dispatched an unbounded payload. Persisting the window (`public +
+ * #[Locked]`) and removing the `mount()` call together keep the viewed month
+ * — the window the user navigated to — for the drag and the next mutator.
+ */
+test('dragging in a non-current month keeps the viewed window and dispatches it', function () {
+    $this->actingAs($this->user);
+    $this->travelTo(Carbon::parse('2026-10-15 12:00:00')); // current month = October
+
+    $outside = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'مهر — بیرون پنجره آبان',
+        'start_at' => '2026-10-15 10:00:00',
+    ]);
+    $inside = Todo::factory()->create([
+        'unit_id' => $this->unit->id,
+        'title' => 'آبان — داخل پنجره',
+        'start_at' => '2026-11-15 10:00:00',
+    ]);
+
+    $component = Livewire::test('todo.todo');
+
+    // The window is set through the public server-side path, never `->set()`
+    // (the props are `#[Locked]` after the fix).
+    $novStart = '2026-10-31T00:00:00+03:30';
+    $novEnd = '2026-12-05T00:00:00+03:30';
+    $component->call('fetchEvents', $novStart, $novEnd);
+
+    expect($component->get('calendarStart'))->toBe($novStart)
+        ->and($component->get('calendarEnd'))->toBe($novEnd);
+
+    $component->call('updateTodoDates', (string) $inside->id, '2026-11-20T10:00:00', '2026-11-20T11:00:00');
+
+    // After the drag the window is still the viewed month, not the current one.
+    expect($component->get('calendarStart'))->toBe($novStart)
+        ->and($component->get('calendarEnd'))->toBe($novEnd)
+        ->and($component->html())->toContain($novStart)->toContain($novEnd);
+
+    $this->assertDatabaseHas('todos', [
+        'id' => $inside->id,
+        'start_at' => '2026-11-20 10:00:00',
+        'end_at' => '2026-11-20 11:00:00',
+    ]);
+
+    $onlyViewedMonth = function (string $name, array $params) use ($inside, $outside): bool {
+        $ids = array_column($params['events'] ?? [], 'id');
+
+        return in_array('todo-'.$inside->id, $ids, true)
+            && ! in_array('todo-'.$outside->id, $ids, true);
+    };
+
+    // The drag success path dispatches the events of the same window.
+    $component->assertDispatched('calendar-updated', $onlyViewedMonth);
+
+    // The next mutator must dispatch the same window, not the current month.
+    $component->call('toggleComplete', $inside->id);
+    $component->assertDispatched('calendar-updated', $onlyViewedMonth);
+});

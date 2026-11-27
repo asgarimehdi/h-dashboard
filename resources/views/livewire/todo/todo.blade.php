@@ -40,9 +40,11 @@ return new class extends Component
 
     public $end_time_picker;
 
-    private ?string $calendarStart = null;
+    #[Locked]
+    public ?string $calendarStart = null;
 
-    private ?string $calendarEnd = null;
+    #[Locked]
+    public ?string $calendarEnd = null;
 
     public function mount(): void
     {
@@ -322,7 +324,7 @@ return new class extends Component
         app(CacheInvalidationServiceInterface::class)->increment('calendar');
 
         $this->dispatch('swal', ['title' => 'تاریخ وظیفه به‌روزرسانی شد', 'icon' => 'success']);
-        $this->mount();
+        $this->dispatch('calendar-updated', events: $this->getEvents());
     }
 
     public function editEvent($id): void
