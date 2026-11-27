@@ -983,8 +983,9 @@ jobs:
     name: PHP 8.6 Preview (non-blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Informational only: PHP 8.6 is pre-release (RC3 2026-10-08, GA 2026-11-19).
-    # It never blocks a merge; it surfaces 8.6 incompatibilities and
+    # Informational only: PHP 8.6 went GA on 2026-11-19, but this job is still
+    # non-blocking until the owner promotes it in a separate policy change
+    # (#1945 PR 1 is the migration only). It surfaces 8.6 incompatibilities and
     # deprecations while there is still time to fix them.
     continue-on-error: true
 
@@ -1033,17 +1034,12 @@ jobs:
             composer-vendor-${{ runner.os }}-
 
       - name: Install dependencies
-        # The *locked* versions cap php at 8.5: brianium/paratest v7.20.0
-        # (~8.3.0 || ~8.4.0 || ~8.5.0, dev) is the only one left — nette/schema
-        # v1.4.0 (8.1 - 8.6) and nette/utils v4.1.6 (8.2 - 8.6) cleared with the
-        # #1506 lock refresh — so a plain install cannot resolve on 8.6, with or
-        # without dev dependencies. The preview installs the locked packages
-        # anyway — surfacing real 8.6 behaviour is the job's whole point. Drop the
-        # flag once a plain install resolves on 8.6: brianium/paratest needs
-        # >=7.25.0 (~8.4.0 || ~8.5.0 || ~8.6.0) and that pulls phpunit ^13.3.4
-        # (pest 5) — a test-stack major, not a bump. This flag exists ONLY in this
-        # job.
-        run: composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php
+        # The lock resolves on PHP 8.6: brianium/paratest v7.29.0 supports
+        # ~8.4.0 || ~8.5.0 || ~8.6.0, and the #1945 migration regenerated the
+        # lock with Pest 5 (phpunit 13.4.7) so a plain install works without
+        # --ignore-platform-req=php. Keep this install flag-free: it is the
+        # job's whole point to prove the locked test stack really installs on 8.6.
+        run: composer install --prefer-dist --no-interaction --no-progress
 
       # Issue #1185: no Node, no Vite build. `Tests\TestCase::setUp()` calls
       # `withoutVite()` for the whole suite and no test reads the Vite manifest
@@ -1066,5 +1062,5 @@ jobs:
           php artisan route:clear --env=testing
           php artisan view:clear
 
-      - name: Run tests (no coverage gate on a pre-release PHP)
+      - name: Run tests (no coverage gate on 8.6 — coverage gate runs on 8.5)
         run: ./vendor/bin/pest --parallel
