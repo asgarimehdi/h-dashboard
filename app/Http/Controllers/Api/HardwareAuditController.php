@@ -407,8 +407,6 @@ class HardwareAuditController extends Controller
             'source' => $audit->source,
             'source_label' => $this->getSourceLabel($audit->source),
             'changes' => $audit->changes,
-            'ip_address' => $audit->ip_address,
-            'user_agent' => $audit->user_agent,
             'created_at' => $audit->created_at?->toIso8601String(),
             'created_at_jalali' => $audit->created_at
                 ? Jalalian::fromCarbon($audit->created_at)->format('Y/m/d H:i:s')

@@ -126,6 +126,49 @@ class HardwareAuditControllerTest extends TestCase
         $this->assertIsArray($response->json('data.diff_summary'));
     }
 
+    public function test_index_omits_operator_ip_and_user_agent(): void
+    {
+        // #1925: the observer still records operator network identifiers for
+        // the admin-only web modal; only the API response must not carry them.
+        $this->hardware->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')
+            ->firstOrFail();
+        $this->assertNotNull($audit->fresh()->ip_address, 'Fixture guard: the observer must still persist the IP.');
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$this->hardware->id}/audits", $token);
+
+        $response->assertStatus(200);
+        $row = $response->json('data.0');
+        $this->assertIsArray($row);
+        $this->assertArrayNotHasKey('ip_address', $row);
+        $this->assertArrayNotHasKey('user_agent', $row);
+        // Over-stripping guard: the rest of the payload must survive.
+        $this->assertArrayHasKey('changes', $row);
+        $this->assertArrayHasKey('created_at', $row);
+    }
+
+    public function test_show_omits_operator_ip_and_user_agent(): void
+    {
+        $this->hardware->update(['cpu' => 'Intel i7']);
+        $audit = HardwareAudit::where('hardware_id', $this->hardware->id)
+            ->where('action', 'updated')
+            ->firstOrFail();
+        $this->assertNotNull($audit->fresh()->ip_address, 'Fixture guard: the observer must still persist the IP.');
+
+        $token = $this->createTokenForUser($this->user, ['hardware:read']);
+        $response = $this->apiGet("/api/hardware/{$this->hardware->id}/audits/{$audit->id}", $token);
+
+        $response->assertStatus(200);
+        $row = $response->json('data');
+        $this->assertIsArray($row);
+        $this->assertArrayNotHasKey('ip_address', $row);
+        $this->assertArrayNotHasKey('user_agent', $row);
+        $this->assertArrayHasKey('changes', $row);
+        $this->assertArrayHasKey('created_at', $row);
+    }
+
     public function test_show_returns_404_when_audit_belongs_to_another_hardware(): void
     {
         $otherHardware = Hardware::create([

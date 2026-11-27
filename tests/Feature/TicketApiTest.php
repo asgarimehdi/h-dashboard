@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\Api\TicketController;
 use App\Models\Attachment;
 use App\Models\Person;
+use App\Models\TaskActivity;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\Unit;
@@ -254,6 +255,37 @@ class TicketApiTest extends TestCase
         $returned = array_map('intval', collect($response->json('data.activities'))->pluck('id')->all());
 
         $this->assertSame($expected, $returned);
+    }
+
+    /**
+     * #1925: `activities` is `TaskActivity`, not `ActivityLog`. Pin the exact
+     * serialized key set so a future column added to `task_activities` (an
+     * operator IP/user-agent, for example) cannot leak through this endpoint
+     * unnoticed. A "no ip_address key" assertion alone would pass today and
+     * prove nothing.
+     */
+    public function test_show_activities_expose_only_task_activity_fields(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
+        $ticket = Ticket::create(['ticket_code' => 'T-ACT', 'user_id' => $user->id, 'unit_id' => $unit->id, 'subject' => 'Activities', 'content' => 'Body', 'priority' => 'normal', 'status' => 'created']);
+
+        TaskActivity::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'action' => 'created',
+            'description' => 'x',
+        ]);
+
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet("/api/tickets/{$ticket->id}", $token);
+
+        $response->assertStatus(200);
+        $keys = array_keys($response->json('data.activities.0'));
+
+        $this->assertEqualsCanonicalizing(
+            ['id', 'ticket_id', 'user_id', 'action', 'description', 'to_unit_id', 'to_user_id', 'is_internal', 'created_at', 'updated_at', 'user'],
+            $keys,
+        );
     }
 
     public function test_user_can_create_ticket(): void

@@ -58,8 +58,6 @@ class HardwareAuditsExport implements FromQuery, WithCustomChunkSize, WithHeadin
             'عملیات',
             'منبع',
             'تغییرات',
-            'آدرس IP',
-            'کاربر آژنت',
             'تاریخ (میلادی)',
             'تاریخ (شمسی)',
             'کاربر (کد ملی)',
@@ -81,18 +79,16 @@ class HardwareAuditsExport implements FromQuery, WithCustomChunkSize, WithHeadin
         $lines = HardwareAuditChange::lines($audit->changes);
         $changesSummary = $lines === [] ? '' : $this->cell(implode(' | ', $lines));
 
-        // #886 (CWE-1236) / #1766: user_agent / changes / user.name are
-        // attacker-controlled. '=' is escaped at map() time for every format;
-        // the other CSV triggers ('+', '-', '@', tab, CR) are escaped only on
-        // the CSV path, because xlsx binds them as strings and escaping them
-        // there would corrupt values like '-1+2'.
+        // #886 (CWE-1236) / #1766: changes / user.name are attacker-controlled.
+        // '=' is escaped at map() time for every format; the other CSV triggers
+        // ('+', '-', '@', tab, CR) are escaped only on the CSV path, because
+        // xlsx binds them as strings and escaping them there would corrupt
+        // values like '-1+2'. Operator IP/user-agent are not exported (#1925).
         return [
             $audit->id,
             $this->getActionLabel($audit->action),
             $this->getSourceLabel($audit->source),
             $changesSummary,
-            $this->cell($audit->ip_address ?? ''),
-            $this->cell($audit->user_agent ?? ''),
             $audit->created_at?->toIso8601String() ?? '',
             $audit->created_at
                 ? Jalalian::fromCarbon($audit->created_at)->format('Y/m/d H:i:s')
