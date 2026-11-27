@@ -23,7 +23,7 @@ services:
 
   # --- Redis ---
   redis:
-    image: redis:latest
+    image: redis:8.12.0@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
     pull_policy: never
     container_name: h-dashboard-redis
     restart: unless-stopped
@@ -35,7 +35,7 @@ services:
 
   # --- pgAdmin (اختیاری ولی خیلی مفید) ---
   pgadmin:
-    image: dpage/pgadmin4
+    image: dpage/pgadmin4:9.19.0@sha256:3591b3d02910dcd817dec6fcaa681c278ba6966945283dd0ea0042731c330c83
     pull_policy: never
     container_name: h-dashboard-pgadmin
     restart: unless-stopped
@@ -50,7 +50,7 @@ services:
       - postgis
   # --- phpRedisAdmin ---
   phpredisadmin:
-    image: erikdubbelboer/phpredisadmin:latest
+    image: erikdubbelboer/phpredisadmin:1.28.0@sha256:657301376446eb83b1d74a0ec74b4923a3cba46bdd17b0f4fab59067f7470a97
     pull_policy: never
     container_name: h-dashboard-phpredisadmin
     restart: unless-stopped
@@ -65,7 +65,7 @@ services:
 
   # --- MySQL Database ---
   mysql:
-    image: mysql:8.0
+    image: mysql:8.0.46@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
     container_name: h-dashboard-mysql
     restart: unless-stopped
     environment:
@@ -83,7 +83,7 @@ services:
       retries: 10
 
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin
+    image: phpmyadmin/phpmyadmin:5.2.3@sha256:16d0f09c25a2dee07739af9dc11e72c1bf7fb776a449f6cc03ec00b33d0c6d9b
     restart: unless-stopped
     ports:
       - "8081:80"

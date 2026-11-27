@@ -482,9 +482,9 @@ Blade:
 | Service | Image | Port |
 |---|---|---|
 | PostGIS | `postgis/postgis:16-3.4` | 5432 |
-| Redis | `redis:latest` (requirepass `REDIS_PASSWORD`) | 6379 |
-| pgAdmin | `dpage/pgadmin4` | 8082 |
-| phpRedisAdmin | `erikdubbelboer/phpredisadmin` | 8083 |
+| Redis | `redis:8.12.0` (requirepass `REDIS_PASSWORD`) | 6379 |
+| pgAdmin | `dpage/pgadmin4:9.19.0` | 8082 |
+| phpRedisAdmin | `erikdubbelboer/phpredisadmin:1.28.0` | 8083 |
 
 `docker compose -f docker-compose-pgsql-.yml up -d`
 

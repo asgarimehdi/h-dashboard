@@ -20,7 +20,7 @@ Health Dashboard is a Laravel 13.x application for managing hospital/healthcare 
 - **PHP 8.6 preview:** only `brianium/paratest` v7.20.0 (dev) still caps `require.php` below 8.6, so `test-php86` installs with `--ignore-platform-req=php`; `nette/schema` v1.4.0 + `nette/utils` v4.1.6 already allow 8.6 (`^1.2`/`^4.0`) (#1506). Long pole: `brianium/paratest` ≥7.25.0 needs `phpunit ^13` (pest 5).
 - **Frontend:** Livewire 4 — **single-file (anonymous-class) components**: the PHP class lives inline at the top of its Blade view under `resources/views/livewire/<feature>/<name>.blade.php`. Alpine.js, MaryUI (DaisyUI), Tailwind CSS 4
 - **Database:** PostgreSQL 16 (Docker, `postgis/postgis:16-3.4`) with PostGIS for spatial/GIS data
-- **Cache/Session/Queue:** Redis (Docker, `redis:latest`, password-protected via `REDIS_PASSWORD`)
+- **Cache/Session/Queue:** Redis (Docker, image pinned in `docker-compose-pgsql-.yml`, password-protected via `REDIS_PASSWORD`)
 - **Auth:** Laravel Sanctum (session guard for web, Bearer tokens for the Flutter app)
 - **Package Manager:** Composer (backend); npm (frontend): `npm install` + `npm run build` / `vite build` (Node 24, npm 12)
 - **E2E Testing:** Playwright (Chromium, `tests/e2e/`, `npx playwright test`)

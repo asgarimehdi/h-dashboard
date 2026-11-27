@@ -23,7 +23,7 @@ services:
 
   # --- Redis ---
   redis:
-    image: redis:latest
+    image: redis:8.12.0@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
  #   pull_policy: never
     container_name: h-dashboard-redis
     restart: unless-stopped
@@ -35,7 +35,7 @@ services:
 
   # --- pgAdmin (اختیاری ولی خیلی مفید) ---
   pgadmin:
-    image: dpage/pgadmin4
+    image: dpage/pgadmin4:9.19.0@sha256:3591b3d02910dcd817dec6fcaa681c278ba6966945283dd0ea0042731c330c83
   #  pull_policy: never
     container_name: h-dashboard-pgadmin
     restart: unless-stopped
@@ -50,7 +50,7 @@ services:
       - postgis
   # --- phpRedisAdmin ---
   phpredisadmin:
-    image: erikdubbelboer/phpredisadmin:latest
+    image: erikdubbelboer/phpredisadmin:1.28.0@sha256:657301376446eb83b1d74a0ec74b4923a3cba46bdd17b0f4fab59067f7470a97
    # pull_policy: never
     container_name: h-dashboard-phpredisadmin
     restart: unless-stopped
