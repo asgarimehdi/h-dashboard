@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SendNotificationJob;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\DB;
 
@@ -35,6 +36,11 @@ use Illuminate\Support\Facades\DB;
  *  - `ActivityLog` is unchanged by phase 1 (D4): `$audit` exists only so the
  *    web accept path can keep writing its audit row inside the same
  *    transaction.
+ *  - #1909: `accept()`/`complete()` notify the ticket creator through
+ *    `SendNotificationJob` (types `ticket_accepted`/`ticket_completed`),
+ *    skipped when the creator is null or is the actor. The dispatch is
+ *    deferred with `DB::afterCommit` because both methods run inside
+ *    `DB::transaction`: a rolled-back transition must never notify.
  */
 final class TicketTransitionService
 {
@@ -76,6 +82,8 @@ final class TicketTransitionService
                     "پذیرش تیکت {$ticket->ticket_code}"
                 );
             }
+
+            $this->notifyCreator($ticket, $actorId, 'ticket_accepted', 'تیکت شما پذیرفته شد', 'توسط کارشناس پذیرفته شد');
 
             return TicketTransitionResult::success($ticket);
         });
@@ -147,7 +155,43 @@ final class TicketTransitionService
                 ]);
             }
 
+            $this->notifyCreator($ticket, $actorId, 'ticket_completed', 'تیکت شما مختومه شد', 'مختومه شد');
+
             return TicketTransitionResult::success($ticket, $todoCompleted);
+        });
+    }
+
+    /**
+     * #1909: the creator is the one party no other channel informs.
+     * Deferred with afterCommit: a rolled-back transition (or a later failure
+     * in the same transaction) must never notify. Production runs the `redis`
+     * queue (.env.example), so an in-transaction dispatch would be visible to
+     * a worker before the row it describes is committed.
+     */
+    private function notifyCreator(Ticket $ticket, int $actorId, string $type, string $title, string $verb): void
+    {
+        $creatorId = $ticket->user_id;
+
+        if ($creatorId === null || (int) $creatorId === $actorId) {
+            return;
+        }
+
+        $creatorId = (int) $creatorId;
+        $ticketId = (int) $ticket->id;
+        $code = (string) $ticket->ticket_code;
+        $subject = (string) $ticket->subject;
+
+        DB::afterCommit(function () use ($creatorId, $type, $title, $verb, $ticketId, $code, $subject): void {
+            SendNotificationJob::dispatch(
+                $creatorId,
+                $type,
+                $title,
+                "تیکت #{$code} {$verb} - موضوع: {$subject}",
+                'o-ticket',
+                'text-info',
+                route('tickets.inbox', $ticketId),
+                ['ticket_id' => $ticketId],
+            );
         });
     }
 

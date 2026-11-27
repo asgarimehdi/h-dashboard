@@ -235,7 +235,7 @@ Heavy operations are dispatched as queued jobs. All implement `ShouldQueue` with
 | `ImportHardwareJob` | 600s | 1 | Hardware XLSX import on `redis-reports`. One attempt: a partially applied run cannot be replayed without duplicating rows (`hardwares` has no unique key on the compare column). One import per user at a time (#1194) |
 | `ImportPersonsJob` | 600s | 1 | Personnel XLSX import on `redis-reports`. Same one-attempt, one-per-user contract as `ImportHardwareJob` |
 | `SyncZabbixJob` | 30s | 2 | Fetches Zabbix interface traffic, caches it as `zabbix_traffic_data` (5 min TTL); records a `zabbix_sync_logs` row per run (#740) |
-| `SendNotificationJob` | 30s | 3 | Queued wrapper for one in-app notification, **per recipient**; dispatched only from `TicketCommentController` (comment create/update/delete). Not unit-scoped |
+| `SendNotificationJob` | 30s | 3 | Queued wrapper for one in-app notification, **per recipient**; dispatched from `TicketCommentController` (comment create/update/delete), `TicketController::assign()` and `TicketTransitionService::accept()/complete()` (the last two emit `ticket_assigned` / `ticket_accepted` / `ticket_completed`, #1909). Not unit-scoped |
 
 **Import sheet lifecycle (#1759):** a successful import deletes its stored sheet; a **failed** import keeps it on the default disk under `imports/` (the only artifact that shows which rows were in the run), and `imports:prune-sheets` (daily 05:15, default `--days=7`) sweeps it. The permission/scope refusal in `RevalidatesImportActor::abortUnauthorizedImport()` still deletes immediately — it runs before the sheet is read and the UI asks for a re-upload.
 
