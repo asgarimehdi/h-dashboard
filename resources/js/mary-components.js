@@ -268,13 +268,7 @@ export function registerMaryComponents(Alpine) {
     },
 
     isPageFullSelected() {
-      return (
-        this.pageIds.length &&
-        [...this.selection]
-          .sort((a, b) => b - a)
-          .toString()
-          .includes([...this.pageIds].sort((a, b) => b - a).toString())
-      );
+      return this.pageIds.length > 0 && this.pageIds.every((/** @type {any} */ id) => this.selection.includes(id));
     },
 
     /**
