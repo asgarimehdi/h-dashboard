@@ -201,7 +201,7 @@ return new class extends Component
     public function getAllowedUnitTypes()
     {
         if ($this->userUnitLevel === 'ministry') {
-            return UnitType::where('id', '!=', UnitType::ROOT_ID)->get();
+            return UnitType::where('id', '!=', UnitType::ROOT_ID)->orderBy('id')->get();
         }
 
         return $this->walkAllowedUnitTypes();
@@ -258,7 +258,11 @@ return new class extends Component
             return collect();
         }
 
-        return UnitType::whereIn('id', $allowedUnitTypeIds)->get();
+        // The ids arrive in walk order, but `whereIn()` does not promise a row
+        // order: Postgres may answer from the heap. Pin it so the dropdown is
+        // stable from request to request (and the order assertion in
+        // UnitsIndexLivewireTest is not a coin flip).
+        return UnitType::whereIn('id', $allowedUnitTypeIds)->orderBy('id')->get();
     }
 
     public function updatedUnitTypeId($value): void

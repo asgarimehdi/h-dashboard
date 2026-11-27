@@ -287,6 +287,42 @@ class UnitsIndexLivewireTest extends TestCase
         $this->assertSame($ids, array_values(array_unique($ids)), 'the dropdown must not repeat a type');
     }
 
+    public function test_allowed_unit_types_are_ordered_by_id_not_by_heap_order(): void
+    {
+        // `whereIn()` promises no row order, and Postgres is free to answer
+        // from the heap. Re-seed the same fixture in reverse physical order
+        // with the index paths disabled, so this fails unless the query pins
+        // its own order.
+        DB::table('unit_types')->delete();
+
+        foreach ([5, 4, 3, 2, 1] as $id) {
+            DB::table('unit_types')->insert([
+                'id' => $id,
+                'name' => 'نوع '.$id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        DB::table('unit_type_relationships')->insert([
+            ['child_unit_type_id' => 2, 'allowed_parent_unit_type_id' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['child_unit_type_id' => 3, 'allowed_parent_unit_type_id' => 2, 'created_at' => now(), 'updated_at' => now()],
+            ['child_unit_type_id' => 4, 'allowed_parent_unit_type_id' => 3, 'created_at' => now(), 'updated_at' => now()],
+            ['child_unit_type_id' => 5, 'allowed_parent_unit_type_id' => 4, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        DB::statement('SET LOCAL enable_indexscan = off');
+        DB::statement('SET LOCAL enable_bitmapscan = off');
+
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['unit_type_id' => 2, 'region_id' => 1]);
+        $this->actingAs($user);
+
+        $ids = Livewire::test('units.index')->instance()->unitTypes->pluck('id')->all();
+
+        $this->assertSame([3, 4, 5], $ids);
+    }
+
     public function test_allowed_unit_types_stay_finite_on_the_dropdown_reentry_path(): void
     {
         $this->userInSelfReferencingUnit(22);
