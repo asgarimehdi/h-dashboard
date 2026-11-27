@@ -21,11 +21,10 @@ class UnitController extends Controller
      * `name_folded` is excluded on purpose: it is the generated Persian search
      * column (`2026_11_14_000001_...`), query-time only.
      *
-     * `geom` is KEPT in this PR: the issue's scope is the folded columns only,
-     * and dropping the PostGIS column would be a shape change beyond it. It
-     * stays until the owner decides separately (nothing in `app/` writes it;
-     * the documented geometry path is `GET /api/gis/units`, which selects
-     * lat/lng explicitly — GisController.php:109-112).
+     * The raw PostGIS geom column is excluded on purpose (#1954): it is a
+     * stale internal WKB duplicate of lat/lng with no consumer, and nothing in
+     * `app/` writes it. The documented geometry path is `GET /api/gis/units`,
+     * which selects lat/lng explicitly — GisController.php:109-112.
      *
      * FK columns (`unit_type_id`, `region_id`, `parent_id`) are MANDATORY: a
      * select without them silently nulls the eager-loaded relations (#1689).
@@ -38,7 +37,6 @@ class UnitController extends Controller
         'id', 'region_id', 'parent_id', 'name', 'unit_type_id',
         'lat', 'lng', 'description', 'boundary_id',
         'is_active', 'can_receive_tickets', 'created_at', 'updated_at',
-        'geom',
     ];
 
     public function index(UnitScopedRequest $request): array
