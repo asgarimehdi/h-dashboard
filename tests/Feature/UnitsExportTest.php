@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Exports\UnitsExport;
 use App\Http\Controllers\Api\UnitsExportController;
+use App\Http\Middleware\ValidateUnitContext;
 use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -262,6 +263,16 @@ class UnitsExportTest extends TestCase
         Session::forget('current_unit_id');
         $user->units()->detach();
         $user->person->update(['u_id' => null]);
+
+        // Over HTTP the export route sits behind `unit_context`, so a
+        // memberless caller is bounced to the picker before the controller
+        // ever runs (#1830, owner decision D1=B) — it gets no file at all.
+        $this->get(route('units.export'))->assertRedirect('/select-context');
+
+        // The controller's own guard is what keeps an empty scope from
+        // exporting the whole table (`whereRaw('1 = 0')`). It is pinned here
+        // with only the `unit_context` middleware taken out of the way.
+        $this->withoutMiddleware(ValidateUnitContext::class);
 
         $response = $this->get(route('units.export'));
 

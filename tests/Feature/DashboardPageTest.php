@@ -35,6 +35,11 @@ beforeEach(function () {
         'n_code' => '1234567890',
         'password' => Hash::make('password'),
     ]);
+
+    // Membership (`user_units`) is the sole source of scope (#1830, owner
+    // decision D1=B). The fixture must hold it explicitly instead of leaning
+    // on the person's HR `u_id`, which is no longer an access grant.
+    $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 });
 
 test('guest is redirected from dashboard', function () {
@@ -46,7 +51,7 @@ test('authenticated user can load dashboard', function () {
     $this->get('/dashboard')->assertStatus(200);
 });
 
-test('user without accessible unit gets zero stats, not 500', function () {
+test('user without accessible unit is sent to the picker, not a 500', function () {
     $orphan = User::factory()->create([
         'n_code' => '0000000000',
         'password' => Hash::make('password'),
@@ -54,7 +59,12 @@ test('user without accessible unit gets zero stats, not 500', function () {
     Person::where('n_code', '0000000000')->update(['u_id' => null]);
 
     $this->actingAs($orphan);
-    $this->get('/dashboard')->assertStatus(200);
+
+    // The dashboard sits behind `unit_context`: a memberless account has no
+    // scope at all, so it is bounced to the picker rather than served a page
+    // (#1830, owner decision D1=B). The component's own empty-scope
+    // behaviour is pinned by the Livewire test below.
+    $this->get('/dashboard')->assertRedirect('/select-context');
 });
 
 test('dashboard shows empty-scope message when no unit is accessible', function () {

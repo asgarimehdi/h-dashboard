@@ -38,6 +38,12 @@ beforeEach(function () {
         'password' => Hash::make('password'),
     ]);
     $this->user->givePermissionTo('map');
+
+    // Membership (`user_units`) is the sole source of scope (#1830, owner
+    // decision D1=B). The fixture must hold it explicitly instead of leaning
+    // on the person's HR `u_id`, which is no longer an access grant.
+    $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+
     Session::put('current_unit_id', $this->unit->id);
 });
 
@@ -104,7 +110,8 @@ test('select-context redirects to dashboard when single unit is assigned', funct
 });
 
 test('select-context loads when multiple units exist', function () {
-    $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+    // The first unit is already attached in `beforeEach`; the picker needs a
+    // second one to render instead of auto-selecting.
     $secondUnit = Unit::create(['name' => 'واحد دوم']);
     $this->user->units()->attach($secondUnit->id, ['role' => 'staff', 'is_primary' => false]);
 

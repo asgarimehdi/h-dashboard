@@ -74,8 +74,12 @@ class UnitsEmptyScopeTest extends TestCase
         Unit::create(['name' => 'واحد بیرونی تست']);
         Unit::create(['name' => 'بیمارستان خارج از دسترس']);
 
-        $this->get('/units')->assertStatus(200)->assertDontSee('واحد بیرونی تست');
+        // Over HTTP the page sits behind `unit_context`: a memberless account
+        // is bounced to the picker before the list is built (#1830, owner
+        // decision D1=B), so it never sees the organization.
+        $this->get('/units')->assertRedirect('/select-context');
 
+        // The component itself must still fail closed on an empty scope.
         Livewire::test('units.index')->assertDontSee('واحد بیرونی تست');
     }
 
