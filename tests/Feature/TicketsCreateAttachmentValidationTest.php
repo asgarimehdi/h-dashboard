@@ -104,12 +104,20 @@ class TicketsCreateAttachmentValidationTest extends TestCase
     /**
      * The core regression: a file whose type is outside the allowlist must be
      * rejected on the WRITE path — not merely flagged by the `updated` hook.
+     *
+     * `xlsx` is allowed by the temporary-upload endpoint (#1907) but outside
+     * this component's `jpg,jpeg,png,pdf,zip,rar` allowlist, so it reaches the
+     * write path and must be rejected there.
      */
     public function test_save_rejects_a_disallowed_file_type_and_writes_nothing(): void
     {
-        $shell = UploadedFile::fake()->createWithContent('shell.php', '<?php echo 1;');
+        $xlsx = UploadedFile::fake()->create(
+            'report.xlsx',
+            10,
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
 
-        $this->submitWithFile($shell)
+        $this->submitWithFile($xlsx)
             ->assertHasErrors(['files.0' => 'mimes']);
 
         // Validation runs before Ticket::create, so no ticket row exists either.
@@ -148,14 +156,18 @@ class TicketsCreateAttachmentValidationTest extends TestCase
         Session::put('current_unit_id', $unit->id);
         $target = $this->createTargetUnit();
 
-        $shell = UploadedFile::fake()->createWithContent('shell.php', '<?php echo 1;');
+        $xlsx = UploadedFile::fake()->create(
+            'report.xlsx',
+            10,
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
 
         $component = Livewire::actingAs($user)
             ->test('tickets.create')
             ->set('unit_id', $target->id)
             ->set('subject', 'تیکت با پیوست')
             ->set('content', 'محتوای تستی برای بررسی مسیر ذخیره پیوست')
-            ->set('files', [$shell])
+            ->set('files', [$xlsx])
             ->assertHasErrors(['files.0' => 'mimes']);
 
         // The error bag is per-request; the write must re-check regardless.
@@ -173,7 +185,11 @@ class TicketsCreateAttachmentValidationTest extends TestCase
      */
     public function test_save_still_rejects_docx_which_is_outside_the_ticket_allowlist(): void
     {
-        $docx = UploadedFile::fake()->create('report.docx', 10, 'application/msword');
+        $docx = UploadedFile::fake()->create(
+            'report.docx',
+            10,
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        );
 
         $this->submitWithFile($docx)
             ->assertHasErrors(['files.0' => 'mimes']);

@@ -702,7 +702,7 @@ test('hardware confirm refuses a swapped non-spreadsheet file', function () {
         $this->user,
         'hardware.import-hardware.import-hardware',
         UploadedFile::fake()->createWithContent('hardware.csv', issue1678HardwareCsv('PC-ORIGINAL')),
-        UploadedFile::fake()->createWithContent('hardware.txt', 'not a spreadsheet'),
+        UploadedFile::fake()->createWithContent('hardware.pdf', 'not a spreadsheet'),
     );
 
     Queue::assertNotPushed(ImportHardwareJob::class);
@@ -719,7 +719,7 @@ test('person confirm refuses a swapped non-spreadsheet file', function () {
         $this->user,
         'kargozini.import-persons.import-persons',
         UploadedFile::fake()->createWithContent('persons.csv', issue1678PersonsCsv('9876500001', ...$lookups)),
-        UploadedFile::fake()->createWithContent('persons.txt', 'not a spreadsheet'),
+        UploadedFile::fake()->createWithContent('persons.pdf', 'not a spreadsheet'),
     );
 
     Queue::assertNotPushed(ImportPersonsJob::class);

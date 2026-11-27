@@ -91,8 +91,9 @@ class HardwareImportLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
-        // .txt file → MIME text/plain (not in xlsx,xls,csv)
-        $file = UploadedFile::fake()->createWithContent('test.txt', 'test data');
+        // .pdf is allowed by the temporary-upload endpoint (#1907) but not by
+        // this component's mimes:xlsx,xls,csv rule, so it reaches the component.
+        $file = UploadedFile::fake()->createWithContent('test.pdf', 'test data');
 
         Livewire::test('hardware.import-hardware.import-hardware')
             ->set('file', $file)
