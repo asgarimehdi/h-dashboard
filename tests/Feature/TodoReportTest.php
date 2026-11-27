@@ -17,6 +17,10 @@ use Tests\TestCase;
  * null arm, so every todo with no end date vanished from completed/pending,
  * the daily series and the row list. `end_at = null` means open-ended, not
  * out of range — and it is still never overdue.
+ *
+ * Issue #1942 — the window is now overlap (`start_at <= to` and not ended
+ * before `from`), so `test_todo_ending_after_the_range_is_excluded` became
+ * `..._is_included`; the null arm and `byDay`'s `start_at` anchor stay.
  */
 class TodoReportTest extends TestCase
 {
@@ -119,20 +123,39 @@ class TodoReportTest extends TestCase
         $this->assertSame(1, $payload['pending'], 'but it is still open work');
     }
 
-    public function test_todo_ending_after_the_range_is_excluded(): void
+    public function test_todo_ending_after_the_range_is_included(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
-        $this->createTodo($unit, [
+        // #1942 — overlap supersedes #1792's containment guard: running past
+        // `to` is not a reason to drop a todo that is live inside the window.
+        $todo = $this->createTodo($unit, [
             'start_at' => now()->subDays(2)->startOfDay(),
             'end_at' => now()->addDays(60),
         ]);
 
         $payload = $this->payload();
 
-        $this->assertSame(0, $payload['pending']);
+        $this->assertSame(1, $payload['pending']);
         $this->assertSame(0, $payload['completed']);
+        $this->assertSame([$todo->id], array_column($payload['items'], 'id'));
+    }
+
+    public function test_todo_ending_before_the_range_is_excluded(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
+        $this->actingAs($user);
+
+        // Default mount window opens at now - 30 days; this one closed long before.
+        $this->createTodo($unit, [
+            'start_at' => now()->subDays(60)->startOfDay(),
+            'end_at' => now()->subDays(40),
+        ]);
+
+        $payload = $this->payload();
+
+        $this->assertSame(0, $payload['completed'] + $payload['pending'], 'a todo that ended before `from` is outside');
         $this->assertSame([], $payload['items']);
     }
 

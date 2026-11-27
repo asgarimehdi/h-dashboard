@@ -263,8 +263,8 @@ class ReportsPayloadCacheTest extends TestCase
         $this->assertNotSame([], $this->groupBySql($sql), 'a date change must run the aggregates again');
 
         $chart = $component->instance()->chartPayload();
-        $this->assertSame(0, $chart['completed'], 'the completed todo starts two days ago');
-        $this->assertSame(1, $chart['pending'], 'only the todo starting yesterday stays in range');
+        $this->assertSame(1, $chart['completed'], 'the completed todo ended after the new `from`, so overlap keeps it');
+        $this->assertSame(2, $chart['pending'], 'the pending todo and the open-ended one stay in range');
         $this->assertSame(1, array_sum(array_column($chart['byDay'], 'count')));
         $this->assertSame($this->jalali(now()->subDay()), $chart['byDay'][0]['day']);
     }

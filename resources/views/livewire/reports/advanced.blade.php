@@ -276,6 +276,9 @@ return new class extends Component
                 // start_at, and nothing bumps the version on deploy, so the key
                 // must change to keep the pre-fix payload out of the 10-minute TTL.
                 'date_column' => $this->reportType === 'todos' ? 'start_at' : 'created_at',
+                // #1942 — the todos window predicate became overlap; the key
+                // changes so a pre-fix payload is not served for its 10-minute TTL.
+                'window' => 'overlap',
             ],
         );
 
@@ -301,11 +304,20 @@ return new class extends Component
         $dateColumn = $this->reportType === 'todos' ? 'start_at' : 'created_at';
 
         // فیلتر تاریخ (ورودی شمسی)
-        if ($from) {
-            $query->where($dateColumn, '>=', $from);
-        }
+        // #1942 — todos use overlap semantics: started on/before `to` and not
+        // ended before `from` (no end date = open-ended, #1792). The tickets
+        // branch keeps its point-in-time `created_at` bounds.
         if ($to) {
             $query->where($dateColumn, '<=', $to);
+        }
+        if ($from) {
+            if ($this->reportType === 'todos') {
+                $query->where(function ($q) use ($from) {
+                    $q->whereNull('end_at')->orWhere('end_at', '>=', $from);
+                });
+            } else {
+                $query->where($dateColumn, '>=', $from);
+            }
         }
 
         // فیلتر واحد (سلسله‌مراتبی)
