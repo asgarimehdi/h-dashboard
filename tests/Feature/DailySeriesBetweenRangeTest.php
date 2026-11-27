@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\DailySeries;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -120,5 +121,91 @@ class DailySeriesBetweenRangeTest extends TestCase
             array_flip($days),
             'a row outside the picked range is not on the axis at all',
         );
+    }
+
+    /**
+     * Issue #1936 — `counts()` grouped the whole in-scope history and let the
+     * outer `generate_series` join discard the out-of-window days afterwards, so
+     * every cache miss scanned the entire table to return at most 365 rows.
+     *
+     * This asserts on the **SQL shape**, deliberately, not on the returned rows:
+     * the predicate reproduces the condition the LEFT JOIN already imposed, so
+     * the output is byte-identical before and after the fix and no behavioural
+     * test can go red. What changes is whether the aggregate is bounded before
+     * it runs — and only the statement can show that.
+     */
+    public function test_counts_bounds_the_aggregate_to_the_window(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-08 09:00:00'));
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query;
+        });
+
+        DailySeries::lastDays(7)->counts(Ticket::query(), 'created_at');
+
+        $series = collect($queries)->first(fn ($query) => str_contains($query->sql, 'generate_series'));
+
+        $this->assertNotNull($series, 'counts() must run one generate_series query');
+        $this->assertMatchesRegularExpression(
+            '/"tickets"\."created_at"\s*>=/',
+            $series->sql,
+            'the aggregate subquery must bound the date column from below',
+        );
+        $this->assertMatchesRegularExpression(
+            '/"tickets"\."created_at"\s*</',
+            $series->sql,
+            'the aggregate subquery must bound the date column from above (exclusive)',
+        );
+        $this->assertContains('2026-10-02', $series->bindings);
+        $this->assertContains('2026-10-09', $series->bindings, 'the exclusive to+1day bound');
+    }
+
+    /**
+     * The upper bound of the aggregate is `to + 1 day`, exclusive. `whereBetween`
+     * (`<= to`) would compare against `00:00:00` of the last day and silently
+     * drop that whole day, so this pins both edges: the last second of the
+     * window is counted, the first second after it is not.
+     */
+    public function test_counts_keeps_the_whole_last_day_and_drops_the_next_one(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-08 09:00:00'));
+
+        $user = User::factory()->create();
+        $unit = Unit::factory()->create();
+
+        foreach ([
+            '2026-10-01 23:59:59' => 'DAY_BEFORE',
+            '2026-10-02 00:00:00' => 'FIRST_MIDNIGHT',
+            '2026-10-08 23:59:59' => 'LAST_LATE',
+            '2026-10-09 00:00:00' => 'AFTER',
+        ] as $timestamp => $code) {
+            $ticket = Ticket::create([
+                'ticket_code' => $code,
+                'user_id' => $user->id,
+                'unit_id' => $unit->id,
+                'subject' => 'مرز',
+                'content' => 'متن',
+                'priority' => 'normal',
+                'status' => 'created',
+            ]);
+
+            $ticket->forceFill([
+                'created_at' => Carbon::parse($timestamp),
+                'updated_at' => Carbon::parse($timestamp),
+            ])->saveQuietly();
+        }
+
+        $counts = DailySeries::lastDays(7)->counts(Ticket::query(), 'created_at');
+
+        $this->assertCount(7, $counts);
+        $this->assertSame(
+            2,
+            array_sum(array_column($counts, 'count')),
+            'both in-window rows survive, neither out-of-window row does',
+        );
+        $this->assertSame('2026-10-02', $counts[0]['day']);
+        $this->assertSame('2026-10-08', $counts[6]['day']);
     }
 }
