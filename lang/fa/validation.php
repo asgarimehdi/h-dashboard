@@ -140,6 +140,7 @@ return [
         'subject' => 'موضوع',
         'content' => 'محتوا',
         'unit_id' => 'واحد',
+        'assignee_id' => 'کاربر',
         'start_at' => 'تاریخ شروع',
         'end_at' => 'تاریخ پایان',
         'start_date_picker' => 'تاریخ شروع',
