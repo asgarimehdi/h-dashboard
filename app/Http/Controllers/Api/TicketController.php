@@ -54,6 +54,14 @@ class TicketController extends Controller
         'deadline', 'accepted_at', 'completed_at', 'created_at', 'updated_at',
     ];
 
+    /**
+     * #1965: mirrors the web detail modals' activity cap (#1176).
+     * TicketsInboxFlow's constant is private and PHP forbids accessing a trait
+     * constant through the trait name, so the value is duplicated here on
+     * purpose; hoisting it to a shared class is a follow-up, not this fix.
+     */
+    private const ACTIVITY_HISTORY_LIMIT = 50;
+
     public function index(UnitScopedRequest $request): AnonymousResourceCollection
     {
         $request->validate([
@@ -96,7 +104,7 @@ class TicketController extends Controller
                 'unit:id,name',
                 'user:id,n_code',
                 'assignee:id,n_code',
-                'activities' => fn ($q) => $q->latest()->with('user:id,n_code'),
+                'activities' => fn ($q) => $q->latest('id')->limit(self::ACTIVITY_HISTORY_LIMIT)->with('user:id,n_code'),
                 'attachments',
             ])),
         ]);
