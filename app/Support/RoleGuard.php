@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 /**
@@ -25,6 +26,13 @@ use Spatie\Permission\Models\Role;
 final class RoleGuard
 {
     public const ADMIN = 'admin';
+
+    /**
+     * Issue #1921 — the permission that gates `/permissions` and `/roles`.
+     * It is protected by identity (like the `admin` role, #1663) because
+     * deleting or renaming it locks everyone out with no in-app recovery.
+     */
+    public const MANAGEMENT_GATE = 'manage_roles';
 
     /**
      * The roles and direct permissions a `users.index` write would hand out.
@@ -98,6 +106,86 @@ final class RoleGuard
         }
 
         self::assertRoleIsNotAdmin($role);
+    }
+
+    /**
+     * Issue #1921 — permission deletion is part of the #1607 delegation
+     * ceiling.
+     *
+     * A non-admin may delete only a permission assigned NOWHERE: a role pivot
+     * OR a direct `model_has_permissions` grant. Any assignment means the
+     * delete would strip that privilege from its holders — the
+     * `role_has_permissions` FK is `onDelete('cascade')`.
+     */
+    public static function assertCanDeletePermission(User $actor, Permission $permission): void
+    {
+        if ($actor->hasRole(self::ADMIN)) {
+            return;
+        }
+
+        if ($permission->roles()->exists() || $permission->users()->exists()) {
+            abort(403, 'این دسترسی به یک نقش یا کاربر تخصیص یافته است و حذف آن مجاز نیست.');
+        }
+    }
+
+    /**
+     * Issue #1921 — a non-admin may rename only a permission it already holds,
+     * and only to a name it already holds (or the same name).
+     *
+     * Without the first check, renaming a gate it does not hold is a global
+     * strip; without the second, delete-then-rename mints a gate the actor
+     * never had. `assertNoAmplification()` only covers the second — it compares
+     * the submitted set against the current one, so an actor holding the NEW
+     * name but not the current one would pass.
+     *
+     * Do NOT use `hasPermissionTo($name)` for the second check: a brand-new
+     * name has no Permission row and Spatie throws PermissionDoesNotExist.
+     *
+     * @param  string  $name  the validated submitted name
+     */
+    public static function assertCanMutatePermission(User $actor, Permission $permission, string $name): void
+    {
+        if ($actor->hasRole(self::ADMIN)) {
+            return;
+        }
+
+        $actorPermissions = $actor->getAllPermissions()->pluck('name')->all();
+
+        if (! in_array($permission->name, $actorPermissions, true)) {
+            abort(403, 'شما نمی‌توانید دسترسی‌ای را تغییر دهید که خودتان ندارید.');
+        }
+
+        if ($name !== $permission->name && ! in_array($name, $actorPermissions, true)) {
+            abort(403, 'شما نمی‌توانید دسترسی‌ای را به نامی که خودتان ندارید تغییر دهید.');
+        }
+    }
+
+    /**
+     * Issue #1921 (#1663 shape) — the `manage_roles` permission itself can
+     * never be deleted, by anyone.
+     *
+     * It is the only gate on `/permissions` and `/roles`, and the sidebar link
+     * hides behind it. Unlike the #1607 ceiling this guard has NO actor bypass:
+     * an admin deleting it is the same one-click, in-app-irrecoverable lockout
+     * as deleting the `admin` role.
+     */
+    public static function assertCriticalPermissionSurvives(Permission $permission): void
+    {
+        if ($permission->name === self::MANAGEMENT_GATE) {
+            abort(403, 'مجوز manage_roles حذف‌شدنی نیست؛ بدون آن صفحه‌های نقش و دسترسی برای همیشه بسته می‌شوند.');
+        }
+    }
+
+    /**
+     * Issue #1921 (#1663 shape) — the reserved name may not be renamed AWAY
+     * from `manage_roles` either: the gate follows the name, so a rename is
+     * the same lockout as a delete.
+     */
+    public static function assertCriticalPermissionKeepsItsName(Permission $permission, string $name): void
+    {
+        if ($permission->name === self::MANAGEMENT_GATE && $name !== self::MANAGEMENT_GATE) {
+            abort(403, 'نام مجوز manage_roles رزرو شده و قابل تغییر نیست.');
+        }
     }
 
     /**

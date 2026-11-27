@@ -7,6 +7,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -184,4 +185,71 @@ test('#1823: deleting a role revokes its holders\' tokens', function () {
     expect($holder->tokens()->count())->toBe(0);
 
     $this->apiGet('/api/hardware', $token)->assertUnauthorized();
+});
+
+test('#1823: deleting a permission revokes role and direct holders, and only them', function () {
+    // Deleting an ASSIGNED permission is admin-only (#1921), so act as an
+    // admin-role holder.
+    $this->admin->assignRole('admin');
+
+    $role = Role::create(['name' => 'orgrole', 'label' => 'سازمان']);
+    $role->givePermissionTo('organization');
+
+    $roleHolder = sanctumRevocationUser($this->unit, '7000000010');
+    $roleHolder->assignRole($role);
+
+    $directHolder = sanctumRevocationUser($this->unit, '7000000011');
+    $directHolder->givePermissionTo('organization');
+
+    $bystander = sanctumRevocationUser($this->unit, '7000000012');
+    $bystander->givePermissionTo('manage_hardware');
+
+    $roleToken = $this->createApiToken($roleHolder, $roleHolder->getApiTokenAbilities());
+    $directToken = $this->createApiToken($directHolder, $directHolder->getApiTokenAbilities());
+    $bystanderToken = $this->createApiToken($bystander, $bystander->getApiTokenAbilities());
+
+    Livewire::actingAs($this->admin)->test('permissions/index')
+        ->call('delete', Permission::findByName('organization')->id);
+
+    expect($roleHolder->tokens()->count())->toBe(0)
+        ->and($directHolder->tokens()->count())->toBe(0)
+        ->and($bystander->tokens()->count())->toBe(1);
+
+    $this->apiGet('/api/notifications', $roleToken)->assertUnauthorized();
+    $this->apiGet('/api/notifications', $directToken)->assertUnauthorized();
+    $this->apiGet('/api/notifications', $bystanderToken)->assertOk();
+});
+
+test('#1823: renaming a permission revokes holders, a label-only edit does not', function () {
+    $this->admin->assignRole('admin');
+
+    $role = Role::create(['name' => 'orgrole', 'label' => 'سازمان']);
+    $role->givePermissionTo('organization');
+
+    $holder = sanctumRevocationUser($this->unit, '7000000013');
+    $holder->assignRole($role);
+
+    $token = $this->createApiToken($holder, $holder->getApiTokenAbilities());
+    $organization = Permission::findByName('organization');
+
+    // Label-only edit: same name, so the derived abilities are unchanged.
+    Livewire::actingAs($this->admin)->test('permissions/index')
+        ->call('editPermission', $organization->id)
+        ->set('label', 'ساختار تازه')
+        ->call('updatePermission')
+        ->assertHasNoErrors();
+
+    expect($holder->tokens()->count())->toBe(1);
+    $this->apiGet('/api/notifications', $token)->assertOk();
+
+    // Name change: token abilities are derived from permission names.
+    Livewire::actingAs($this->admin)->test('permissions/index')
+        ->call('editPermission', $organization->id)
+        ->set('name', 'orgrenamed')
+        ->call('updatePermission')
+        ->assertHasNoErrors();
+
+    expect($organization->fresh()->name)->toBe('orgrenamed');
+    expect($holder->tokens()->count())->toBe(0);
+    $this->apiGet('/api/notifications', $token)->assertUnauthorized();
 });

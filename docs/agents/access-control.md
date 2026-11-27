@@ -103,7 +103,7 @@ route access (the backup groups in `routes/web.php`) that no permission represen
 cannot assign it, edit it, rename it or delete it — and cannot create a role **named** `admin` or
 rename one into `admin`, which would otherwise pick that route access up under the ceiling.
 
-Five ceiling call sites, each **after** `authorize()` and **before** validation / the transaction /
+Seven ceiling call sites, each **after** `authorize()` and **before** validation / the transaction /
 the `try` in `delete()`: route middleware never sees a Livewire action, and an `abort(403)` inside
 the `delete()` try would be swallowed into a toast (#892). The #1663 invariant guards are the
 exception to the "before the transaction" part — a role sync or deactivation must count inside the
@@ -116,10 +116,23 @@ write's transaction, or two concurrent admins could both see a survivor.
 | `roles/index` | `createRole()` | `assertCanCreateRole($actor, $name, …)` |
 | `roles/index` | `updateRole()` | `assertCanMutateRole($actor, $role, $name, …)` |
 | `roles/index` | `delete()` | `assertCanDeleteRole($actor, $role)` |
+| `permissions/index` | `delete()` | `assertCanDeletePermission($actor, $permission)` + `assertCriticalPermissionSurvives($permission)` |
+| `permissions/index` | `updatePermission()` | `assertCanMutatePermission($actor, $permission, $name)` + `assertCriticalPermissionKeepsItsName($permission, $name)` |
 | `users/index` | `updateUser()` | `assertAdminUserSurvives($target, $roleIds)` — inside the transaction |
 | `users/index` | `delete()` | `assertAdminUserSurvives($target)` — inside the transaction |
 | `roles/index` | `delete()` | `assertAdminRoleSurvives($role)` |
 | `roles/index` | `updateRole()` | `assertAdminRoleKeepsItsName($role, $name)` |
+
+**Permission CRUD (#1921)** is inside the same ceiling, because the pivots are keyed by permission
+**id** and cascade: a non-admin may delete only a permission assigned **nowhere** (no role pivot and
+no direct `model_has_permissions` grant) — otherwise the delete silently strips that privilege from
+its holders. A non-admin may rename only a permission it **holds**, and only to a name it holds;
+the first condition is explicit (`assertNoAmplification()` alone would let an actor holding the new
+name but not the current one through). `manage_roles` itself is protected by **identity** — no
+actor, admin included, may delete or rename it (#1663 shape), since it is the only gate on
+`/permissions` and `/roles`. `createPermission()` stays **unguarded by design**: a brand-new
+permission is inert until assigned, and both assignment paths are ceiling-checked, so a delegated
+manager can create unused/noisy permissions — noise, not escalation.
 
 Every future writer that deletes a role or a user, or syncs a user's roles, must call the
 matching `assertAdmin…` guard. There is deliberately no model-level observer: the existing
