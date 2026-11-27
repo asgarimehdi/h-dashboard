@@ -3,11 +3,13 @@
 use App\Models\Disease;
 use App\Models\DiseaseCase;
 use App\Models\DiseaseFieldDef;
+use App\Services\Disease\DiseaseFieldValidator;
 use App\Traits\ClampsPageSize;
 use App\Traits\PersianNormalizer;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Mary\Traits\Toast;
@@ -337,6 +339,16 @@ return new class extends Component
 
         if ($this->editingFieldId !== null) {
             $def = DiseaseFieldDef::query()->findOrFail($this->editingFieldId);
+
+            if ($this->fieldEditWouldInvalidateStoredValues($def, $payload)) {
+                $this->error(
+                    'این فیلد برای بعضی کیس‌ها مقدار ثبت‌شده دارد که با تعریف جدید سازگار نیست؛ تغییر نوع، گزینه‌ها یا الزامی بودن ممکن نیست.',
+                    position: 'toast-bottom'
+                );
+
+                return;
+            }
+
             // field_key and is_active are deliberately absent.
             $def->update($payload);
         } else {
@@ -352,6 +364,59 @@ return new class extends Component
         $this->success("«{$this->labelFa}» ذخیره شد", 'با موفقیت', position: 'toast-bottom');
         $this->resetValidation();
         $this->resetFieldForm();
+    }
+
+    /**
+     * True when applying $payload to $def would turn a stored case value that
+     * validates today into one the next case edit rejects.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function fieldEditWouldInvalidateStoredValues(DiseaseFieldDef $def, array $payload): bool
+    {
+        // None of the attributes the validator reads changed.
+        if ($payload['type'] === $def->type
+            && $payload['required'] === $def->required
+            && $payload['options'] === $def->options) {
+            return false;
+        }
+
+        $candidate = (clone $def)->forceFill($payload);
+        $before = new Collection([$def]);
+        $after = new Collection([$candidate]);
+        $validator = app(DiseaseFieldValidator::class);
+        $key = $def->field_key;
+
+        return DiseaseCase::query()
+            ->where('disease_id', $def->disease_id)
+            ->select(['id', 'fields'])
+            ->lazyById(500)
+            ->contains(function (DiseaseCase $case) use ($validator, $before, $after, $key): bool {
+                // `??` (not `?:`): 0 and '0' are values (repo rule).
+                $value = ($case->fields ?? [])[$key] ?? null;
+
+                // A value that is already invalid today is not this edit's doing.
+                return $this->storedValueValidates($validator, $before, $key, $value)
+                    && ! $this->storedValueValidates($validator, $after, $key, $value);
+            });
+    }
+
+    /**
+     * @param  Collection<int, DiseaseFieldDef>  $defs
+     */
+    private function storedValueValidates(
+        DiseaseFieldValidator $validator,
+        Collection $defs,
+        string $key,
+        mixed $value,
+    ): bool {
+        try {
+            $validator->validate($defs, [$key => $value]);
+
+            return true;
+        } catch (ValidationException) {
+            return false;
+        }
     }
 
     public function deleteFieldDef(int $id): void
