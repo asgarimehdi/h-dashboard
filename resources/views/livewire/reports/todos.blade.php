@@ -162,17 +162,22 @@ return new class extends Component
         $data = $cache->remember(
             'report_todos',
             \App\Support\ScopeCacheKey::hash($accessibleIds),
-            function () use ($accessibleIds, $query): array {
+            function () use ($query): array {
                 $now = now();
                 $completed = (clone $query)->where('is_completed', true)->count();
                 $pending = (clone $query)->where('is_completed', false)->count();
                 $overdue = (clone $query)->where('is_completed', false)
                     ->whereNotNull('end_at')->where('end_at', '<', $now)->count();
 
-                $byUnit = Todo::selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
-                    ->whereIn('todos.unit_id', $accessibleIds)
-                    ->when($this->selectedUnitId, fn ($q) => $q->where('todos.unit_id', $this->selectedUnitId))
+                // #1858 — the unit bars describe the same window as the totals:
+                // cloning the filtered query carries the scope, `selectedUnitId`
+                // and #1792's open-ended `end_at` arm in one place, so a new
+                // filter on `$query` reaches `byUnit` for free. `leftJoin`, never
+                // `join`: a todo whose unit row is missing still lands in
+                // «نامشخص» instead of silently dropping out of the sum.
+                $byUnit = (clone $query)
                     ->leftJoin('units', 'todos.unit_id', '=', 'units.id')
+                    ->selectRaw('COALESCE(units.name, ?) as unit_name, COUNT(*) as count', ['نامشخص'])
                     ->groupBy('unit_name')
                     ->pluck('count', 'unit_name')
                     ->toArray();
@@ -212,6 +217,10 @@ return new class extends Component
                 'from' => $this->dateFrom,
                 'to' => $this->dateTo,
                 'hierarchy' => $cache->getVersion('unit_hierarchy'),
+                // #1858 — `byUnit` moved from all-time to windowed and nothing
+                // bumps the version on deploy; without this discriminator the
+                // pre-fix payload survives the 10-minute TTL (#1794 precedent).
+                'byunit' => 'windowed',
             ],
         );
 
