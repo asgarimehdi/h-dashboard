@@ -394,7 +394,11 @@ export function registerMaryComponents(Alpine) {
     },
 
     get isAllSelected() {
-      return this.options.length == this.selection.length;
+      return (
+        this.options.length > 0 &&
+        Array.isArray(this.selection) &&
+        this.options.every((option) => this.selection.includes(option[this.optionValueKey()]))
+      );
     },
 
     get isSelectionEmpty() {
