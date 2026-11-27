@@ -41,7 +41,7 @@ class PersonController extends Controller
 
     public function index(UnitScopedRequest $request): JsonResponse
     {
-        // Issue #1777: `search[]=x` used to blow up inside normalizeForQuery()
+        // Issue #1777: `search[]=x` used to blow up inside foldedTerm()
         // and `sort_dir[]=x` inside strtolower() (TypeError), while `unit_id=abc`
         // and `semat_id=abc` raised 22P02 — all 500s. `sort_by` stays unvalidated
         // on purpose: an unknown value already falls back to `n_code` and never
@@ -61,14 +61,19 @@ class PersonController extends Controller
             ->with(['unit:id,name', 'semat:id,name', 'tahsil:id,name', 'estekhdam:id,name', 'radif:id,name']);
 
         if ($request->filled('search')) {
-            $s = self::normalizeForQuery((string) $validated['search']);
-            $query->where(function ($q) use ($s) {
-                $q->where('n_code', 'LIKE', "%{$s}%")
-                    ->orWhere('f_name', 'LIKE', "%{$s}%")
-                    ->orWhere('l_name', 'LIKE', "%{$s}%")
-                    // Issue #1009: the `||` operator (NOT `concat()`) so the
-                    // `persons_fullname_trgm_idx` expression index applies.
-                    ->orWhereRaw("(f_name || ' ' || l_name) LIKE ?", ["%{$s}%"]);
+            // #1963: the same three arms as PersonsExportController::applySearch()
+            // — the stored folded columns (#1482), never the raw f_name/l_name.
+            // PostgreSQL maintains the generated columns on every write path,
+            // including the ones that bypass the model's saving hook (#815), so
+            // a row whose name kept its Arabic yeh/kaf is still found. The term
+            // is folded with the same helper the export uses; it is byte-equal
+            // to normalizeForQuery(), the folded spelling is the point.
+            $term = self::foldedTerm((string) $validated['search']);
+
+            $query->where(function ($q) use ($term) {
+                $q->where('n_code', 'LIKE', "%{$term}%")
+                    ->orWhere('full_name_folded', 'LIKE', "%{$term}%")
+                    ->orWhere('full_name_rev_folded', 'LIKE', "%{$term}%");
             });
         }
 

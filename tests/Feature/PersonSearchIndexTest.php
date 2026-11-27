@@ -25,8 +25,10 @@ use Tests\TestCase;
  * Issue #1482 later moved the FOLDED sites off the per-row expression and onto
  * stored generated columns (`f_name_folded`, `l_name_folded`,
  * `full_name_folded`, `full_name_rev_folded`) with plain trigram indexes, so
- * those sites are indexable too. The three tripwires below are the UNFOLDED
- * sites, which keep the bare-column expression indexes.
+ * those sites are indexable too. Issue #1963 moved the persons list and HR
+ * personnel searches onto those folded columns; `assertFoldedNameSearch()`
+ * pins both. The one remaining unfolded site is the hardware person
+ * autocomplete, which keeps the bare-column expression index.
  *
  * The swap is only safe because `f_name` and `l_name` are NOT NULL: `||` is
  * NULL-propagating, while `concat()` treats NULL as an empty string. Both the
@@ -87,6 +89,31 @@ class PersonSearchIndexTest extends TestCase
         $callback();
 
         return $queries;
+    }
+
+    /**
+     * The person full-name search must run on the stored folded columns
+     * (#1963, #1482) and never on the raw `f_name`/`l_name` columns.
+     *
+     * @param  list<string>  $queries
+     */
+    private function assertFoldedNameSearch(array $queries, string $label): void
+    {
+        $sql = null;
+
+        foreach ($queries as $query) {
+            if (str_contains($query, 'full_name_folded') && str_contains($query, 'LIKE')) {
+                $sql = $query;
+                break;
+            }
+        }
+
+        $this->assertNotNull($sql, "{$label}: the folded full-name search query must run");
+        $this->assertStringContainsString('full_name_folded"::text LIKE', $sql, "{$label}: must search the folded full-name column");
+        $this->assertStringContainsString('full_name_rev_folded"::text LIKE', $sql, "{$label}: must search the folded reversed-name column");
+        $this->assertStringNotContainsString('"f_name"::text LIKE', $sql, "{$label}: the raw f_name arm must be gone");
+        $this->assertStringNotContainsString('"l_name"::text LIKE', $sql, "{$label}: the raw l_name arm must be gone");
+        $this->assertStringNotContainsString("(f_name || ' ' || l_name) LIKE", $sql, "{$label}: the raw || expression arm must be gone");
     }
 
     /**
@@ -157,9 +184,9 @@ class PersonSearchIndexTest extends TestCase
         $response->assertJsonCount(0, 'data');
     }
 
-    // ==================== Tripwires: the three unfolded sites ====================
+    // ==================== Tripwire: the one unfolded site ====================
 
-    public function test_person_api_search_uses_the_pipe_operator(): void
+    public function test_person_api_search_uses_the_folded_columns(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_personnel']);
         $this->createAliRezaei($unit->id);
@@ -169,10 +196,10 @@ class PersonSearchIndexTest extends TestCase
             $this->apiGet('/api/persons?search='.urlencode(self::F_NAME), $token)->assertStatus(200);
         });
 
-        $this->assertFullNameSearchUsesOperator($queries, 'PersonController::index()', "(f_name || ' ' || l_name) LIKE");
+        $this->assertFoldedNameSearch($queries, 'PersonController::index()');
     }
 
-    public function test_hr_personnel_search_uses_the_pipe_operator(): void
+    public function test_hr_personnel_search_uses_the_folded_columns(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
         $this->createAliRezaei($unit->id);
@@ -182,7 +209,7 @@ class PersonSearchIndexTest extends TestCase
             $this->apiGet('/api/hr/personnel?search='.urlencode(self::F_NAME), $token)->assertStatus(200);
         });
 
-        $this->assertFullNameSearchUsesOperator($queries, 'HrStatsController::personnel()', "(persons.f_name || ' ' || persons.l_name) LIKE");
+        $this->assertFoldedNameSearch($queries, 'HrStatsController::personnel()');
     }
 
     public function test_hardware_person_autocomplete_uses_the_pipe_operator(): void
