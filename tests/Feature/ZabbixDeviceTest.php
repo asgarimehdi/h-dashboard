@@ -6,6 +6,7 @@ use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Database\Seeders\ZabbixDeviceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
@@ -229,6 +230,41 @@ test('creating a device bumps the zabbix_devices cache namespace', function () {
         ->assertHasNoErrors();
 
     expect($cache->getVersion('zabbix_devices'))->toBeGreaterThan($before);
+});
+
+// ── Allowlist cache (#1908) ──────────────────────────────────────────────
+
+test('registered item ids are served from cache on repeat calls', function () {
+    ZabbixDevice::factory()->create(['out_item_id' => '111']);
+
+    DB::enableQueryLog();
+    $first = ZabbixDevice::registeredItemIds();
+    $firstQueries = DB::getQueryLog();
+    DB::flushQueryLog();
+    $second = ZabbixDevice::registeredItemIds();
+
+    expect($first)->toContain('111')
+        ->and($second)->toBe($first)
+        ->and($firstQueries)->toHaveCount(1)
+        ->and(DB::getQueryLog())->toBe([]);
+});
+
+test('saving or deleting a device invalidates the cached allowlist', function () {
+    $device = ZabbixDevice::factory()->create([
+        'out_item_id' => '111',
+        'is_active' => true,
+    ]);
+
+    expect(ZabbixDevice::registeredItemIds())->toContain('111');
+
+    $device->update(['is_active' => false]);
+    expect(ZabbixDevice::registeredItemIds())->not->toContain('111');
+
+    $device->update(['is_active' => true]);
+    expect(ZabbixDevice::registeredItemIds())->toContain('111');
+
+    $device->delete();
+    expect(ZabbixDevice::registeredItemIds())->not->toContain('111');
 });
 
 // ── Display pages read from the database ─────────────────────────────────
