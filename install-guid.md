@@ -128,6 +128,21 @@ cp .env.example.pgsql .env
 nano .env
 ```
 
+> **Change the template passwords before the first `up`.** `.env.example.pgsql`
+> is a template: `DB_PASSWORD`, `DB_ROOT_PASSWORD`, `DB_DEFAULT_PASSWORD` and
+> `REDIS_PASSWORD` ship with the **same** placeholder value, and that value is
+> committed to this public repository — treat it as public, not as a secret.
+> Replace all four with values of your own; they may stay equal to each other,
+> but none may remain the template value. For an existing install, changing
+> `DB_DEFAULT_PASSWORD` does not rotate an already-seeded admin user.
+> `POSTGRES_PASSWORD` only applies on the first init of the `postgis_data`
+> volume (see §5), so change it now or not at all.
+>
+> The compose files publish every port on **127.0.0.1 only**: Postgres, Redis,
+> MySQL, pgAdmin, phpMyAdmin and phpRedisAdmin are reachable from this host and
+> not from the LAN. To expose one on purpose, change its mapping in your local
+> copy to `0.0.0.0:<host>:<container>` — do not commit that change.
+
 Key values:
 
 ```ini
