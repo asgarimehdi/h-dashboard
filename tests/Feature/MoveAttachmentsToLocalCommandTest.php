@@ -186,6 +186,117 @@ class MoveAttachmentsToLocalCommandTest extends TestCase
             ->assertExitCode(1);
 
         Storage::disk('public')->assertExists($path);
+        // #1928: the partial copy must not survive the failure, or the next
+        // run would mistake it for a completed migration.
+        $this->assertFalse($realLocal->exists($path));
+    }
+
+    /**
+     * #1928 — a size mismatch on an already-local row means an interrupted
+     * migration left a partial file on `local`. The public copy is the source
+     * of truth, so the corrupt file is replaced byte-for-byte even without
+     * `--delete-public`, and a second run reports the row as already local
+     * instead of failing forever.
+     */
+    public function test_it_repairs_a_corrupt_local_copy_from_the_public_original(): void
+    {
+        $path = 'attachments/report.pdf';
+        $full = 'pdf-bytes-complete';
+        Storage::disk('public')->put($path, $full);
+        Storage::disk('local')->put($path, substr($full, 0, 4));
+        $this->attachmentRow($path, strlen($full));
+
+        $this->artisan('attachments:move-to-local')
+            ->expectsOutputToContain('migrated: 1')
+            ->assertExitCode(0);
+
+        $this->assertSame($full, Storage::disk('local')->get($path));
+        Storage::disk('public')->assertExists($path);
+
+        $this->artisan('attachments:move-to-local')
+            ->expectsOutputToContain('already local: 1')
+            ->expectsOutputToContain('failed: 0')
+            ->assertExitCode(0);
+    }
+
+    /**
+     * #1928 — with `--delete-public`, the repair must run before the public
+     * copy is removed; otherwise the row is stuck in `failed` forever.
+     */
+    public function test_it_repairs_a_corrupt_local_copy_then_deletes_public_when_asked(): void
+    {
+        $path = 'attachments/report.pdf';
+        $full = 'pdf-bytes-complete';
+        Storage::disk('public')->put($path, $full);
+        Storage::disk('local')->put($path, substr($full, 0, 4));
+        $this->attachmentRow($path, strlen($full));
+
+        $this->artisan('attachments:move-to-local', ['--delete-public' => true])
+            ->expectsOutputToContain('migrated: 1')
+            ->assertExitCode(0);
+
+        $this->assertSame($full, Storage::disk('local')->get($path));
+        Storage::disk('public')->assertMissing($path);
+
+        $this->artisan('attachments:move-to-local', ['--delete-public' => true])
+            ->assertExitCode(0);
+    }
+
+    /**
+     * #1928 — `writeStream` returning false can leave a half-written file. It
+     * must be removed, and the next run must recover from the intact public
+     * copy.
+     */
+    public function test_a_failed_write_removes_the_partial_local_file_and_the_next_run_recovers(): void
+    {
+        $path = 'attachments/report.pdf';
+        $full = 'pdf-bytes-complete';
+        Storage::disk('public')->put($path, $full);
+        $this->attachmentRow($path, strlen($full));
+
+        $realLocal = Storage::disk('local');
+        $failingLocal = Mockery::mock($realLocal);
+        $failingLocal->shouldReceive('writeStream')
+            ->once()
+            ->andReturnUsing(function (string $target, $stream) use ($realLocal): bool {
+                $realLocal->put($target, fread($stream, 4));
+
+                return false;
+            });
+        Storage::set('local', $failingLocal);
+
+        $this->artisan('attachments:move-to-local')->assertExitCode(1);
+
+        $this->assertFalse($realLocal->exists($path));
+        Storage::disk('public')->assertExists($path);
+
+        Storage::set('local', $realLocal);
+
+        $this->artisan('attachments:move-to-local')->assertExitCode(0);
+
+        $this->assertSame($full, $realLocal->get($path));
+    }
+
+    /**
+     * #1928 — a dry run reports the repair it would perform but changes
+     * nothing: no delete, no copy.
+     */
+    public function test_dry_run_reports_a_corrupt_local_copy_without_repairing_it(): void
+    {
+        $path = 'attachments/report.pdf';
+        $full = 'pdf-bytes-complete';
+        $partial = substr($full, 0, 4);
+        Storage::disk('public')->put($path, $full);
+        Storage::disk('local')->put($path, $partial);
+        $this->attachmentRow($path, strlen($full));
+
+        $this->artisan('attachments:move-to-local', ['--dry-run' => true])
+            ->expectsOutputToContain('would re-copy')
+            ->expectsOutputToContain('migrated: 1')
+            ->assertExitCode(0);
+
+        $this->assertSame($partial, Storage::disk('local')->get($path));
+        Storage::disk('public')->assertExists($path);
     }
 
     /**
