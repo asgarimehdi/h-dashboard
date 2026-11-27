@@ -65,13 +65,23 @@ class TicketsInboxLivewireTest extends TestCase
 
     protected function createTicket(array $overrides = []): Ticket
     {
-        $unit = $overrides['unit'] ?? Unit::first();
-        $user = $overrides['user'] ?? User::first();
+        // Never default to `Unit::first()`: `RefreshDatabase` rolls back but
+        // does not truncate, so PostgreSQL is free to return any row in
+        // physical order. A ticket could then land in the *target* unit a test
+        // just created, outside the acting user's scope — the random-order
+        // flake behind `test_forward_ignores_client_supplied_target_unit_name`
+        // and `test_bulk_complete_ignores_bulk_target_unit`. Anchor the
+        // fixture on the acting user's own unit unless the test names one.
+        $user = $overrides['user'] ?? auth()->user() ?? User::query()->orderBy('id')->first();
+        $unitId = ($overrides['unit'] ?? null)?->id
+            ?? $user?->units()->orderBy('units.id')->value('units.id')
+            ?? $user?->person?->u_id
+            ?? Unit::query()->orderBy('id')->value('id');
 
         return Ticket::create(array_merge([
             'ticket_code' => 'T'.fake()->unique()->numerify('######'),
             'user_id' => $user->id,
-            'unit_id' => $unit->id,
+            'unit_id' => $unitId,
             'subject' => 'تیکت تست',
             'content' => 'محتوای تست',
             'priority' => 'normal',
