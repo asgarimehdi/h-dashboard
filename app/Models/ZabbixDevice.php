@@ -144,12 +144,31 @@ class ZabbixDevice extends Model
      *
      * Reuses `itemIds()` so the five-column list lives in exactly one place:
      * a sixth id column must be added there or its gauges will be rejected.
-     * Not cached on purpose — the table is admin-managed and tiny, and a stale
-     * allowlist would 422 a live gauge after a device is re-activated.
+     *
+     * Cached under `CACHE_NAMESPACE`: every `saved`/`deleted` fires
+     * `flushCache()` (`:75-81`) and bumps the namespace version, so after a
+     * committed write — including a re-activation or an id edit — the stale
+     * list is unreachable. A sub-second pre-commit race remains because
+     * `saved` fires inside the transaction; the 5-minute TTL bounds it. Same
+     * trade-off as the `networks`/`wireless` lists under this namespace.
      *
      * @return array<int, string>
      */
     public static function registeredItemIds(): array
+    {
+        /** @var array<int, string> $ids */
+        $ids = app(CacheInvalidationServiceInterface::class)->remember(
+            self::CACHE_NAMESPACE,
+            'registered_item_ids',
+            fn (): array => self::computeRegisteredItemIds(),
+            5,
+        );
+
+        return $ids;
+    }
+
+    /** @return array<int, string> */
+    private static function computeRegisteredItemIds(): array
     {
         $ids = [];
 
