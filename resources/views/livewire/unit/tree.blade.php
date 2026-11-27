@@ -84,6 +84,73 @@ return new class extends Component
     protected ?array $accessibleIds = null;
 
     /**
+     * Presence of in-scope children for the nodes the current render can reach
+     * but has not loaded. Non-snapshot: recomputed at most once per request.
+     *
+     * @var array<int, bool>|null
+     */
+    protected ?array $childPresence = null;
+
+    /**
+     * Toggle visibility for a node whose children are not in the lazy cache.
+     *
+     * ONE grouped query per request answers the whole render; only an id that
+     * is not in that batch falls back to the per-node existence check.
+     */
+    protected function hasChildrenFor(int $unitId): bool
+    {
+        if ($this->childPresence === null) {
+            $this->childPresence = $this->batchChildPresence();
+        }
+
+        return $this->childPresence[$unitId]
+            ?? app(UnitTreeService::class)->hasChildren($unitId, $this->accessibleIds());
+    }
+
+    /**
+     * Every node this render can show but has not loaded: the roots, plus the
+     * children of every expanded node. Lazy — a fully expanded tree never asks,
+     * so it pays nothing (pinned by the search query-count test).
+     *
+     * @return array<int, bool>
+     */
+    protected function batchChildPresence(): array
+    {
+        $candidates = [];
+
+        foreach ($this->rootUnits as $root) {
+            $candidates[(int) $root->id] = true;
+        }
+
+        foreach ($this->expanded as $expandedId) {
+            $children = $this->lazyChildren[(int) $expandedId] ?? null;
+
+            if ($children === null) {
+                continue;
+            }
+
+            foreach ($children as $child) {
+                $candidates[(int) $child->id] = true;
+            }
+        }
+
+        if ($candidates === []) {
+            return [];
+        }
+
+        $ids = array_keys($candidates);
+        $withChildren = app(UnitTreeService::class)->hasChildrenOfMany($ids, $this->accessibleIds());
+
+        $presence = [];
+
+        foreach ($ids as $id) {
+            $presence[$id] = isset($withChildren[$id]);
+        }
+
+        return $presence;
+    }
+
+    /**
      * Scope-rooted top of the tree.
      *
      * @var \Illuminate\Support\Collection<int, \App\Models\Unit>
