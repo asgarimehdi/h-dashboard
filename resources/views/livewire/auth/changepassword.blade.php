@@ -17,50 +17,54 @@ return new class extends Component {
     public function rules()
     {
         return [
-            'currentPassword' => 'required',
-            'newPassword' => 'required|min:8|different:currentPassword',
-            'newPasswordConfirmation' => 'required|same:newPassword',
+            'currentPassword' => 'required|max:255',
+            'newPassword' => 'required|max:255|min:8|different:currentPassword',
+            'newPasswordConfirmation' => 'required|max:255|same:newPassword',
         ];
     }
 
     public function changePassword(): void
     {
-        $this->validate();
+        try {
+            $this->validate();
 
-        $user = auth()->user();
+            $user = auth()->user();
 
-        // #1719: قفل per-account پیش از هر وریفای رمز فعلی.
-        $this->ensureIsNotRateLimited();
+            // #1719: قفل per-account پیش از هر وریفای رمز فعلی.
+            $this->ensureIsNotRateLimited();
 
-        // چک کردن رمز فعلی
-        if (!Hash::check($this->currentPassword, $user->password)) {
-            // #1719: فقط حدسِ ناموفقِ «رمز فعلی» بودجه را می‌سوزاند.
-            \Illuminate\Support\Facades\RateLimiter::hit($this->throttleKey(), self::THROTTLE_DECAY);
+            // چک کردن رمز فعلی
+            if (!Hash::check($this->currentPassword, $user->password)) {
+                // #1719: فقط حدسِ ناموفقِ «رمز فعلی» بودجه را می‌سوزاند.
+                \Illuminate\Support\Facades\RateLimiter::hit($this->throttleKey(), self::THROTTLE_DECAY);
 
-            throw ValidationException::withMessages([
-                'currentPassword' => 'رمز فعلی اشتباه است.',
-            ]);
+                throw ValidationException::withMessages([
+                    'currentPassword' => 'رمز فعلی اشتباه است.',
+                ]);
+            }
+
+            // #1004: بستن نشست های وبِ دیگر روی دستگاه ها، پیش از تغییر رمز. این متد
+            // رمز فعلی را وریفای می کند، پس باید پیش از ذخیرهٔ رمز جدید اجرا شود.
+            // با FQCN صدا زده می شود تا افزودنِ یک import، شمارهٔ خطِ رکوردهای
+            // phpstan-baseline این فایل را جابجا نکند.
+            \Illuminate\Support\Facades\Auth::logoutOtherDevices($this->currentPassword);
+
+            // تغییر رمز و ذخیره‌سازی
+            $user->password = Hash::make($this->newPassword);
+            $user->save();
+
+            // باطل کردن تمام توکن‌ها پس از تغییر رمز
+            $user->tokens()->delete();
+
+            // #1719: تغییر موفق، بودجهٔ همین اکشن را آزاد می‌کند.
+            \Illuminate\Support\Facades\RateLimiter::clear($this->throttleKey());
+
+            $this->success("رمز با موفقیت تغییر یافت.", position: 'toast-bottom');
+        } finally {
+            // #1912: هیچ رمز plaintextی نباید در snapshot برگردد. این ریست عمداً
+            // در همهٔ شاخه‌ها (از جمله خطای اعتبارسنجی) اجرا می‌شود.
+            $this->reset(['currentPassword', 'newPassword', 'newPasswordConfirmation']);
         }
-
-        // #1004: بستن نشست های وبِ دیگر روی دستگاه ها، پیش از تغییر رمز. این متد
-        // رمز فعلی را وریفای می کند، پس باید پیش از ذخیرهٔ رمز جدید اجرا شود.
-        // با FQCN صدا زده می شود تا افزودنِ یک import، شمارهٔ خطِ رکوردهای
-        // phpstan-baseline این فایل را جابجا نکند.
-        \Illuminate\Support\Facades\Auth::logoutOtherDevices($this->currentPassword);
-
-        // تغییر رمز و ذخیره‌سازی
-        $user->password = Hash::make($this->newPassword);
-        $user->save();
-
-        // باطل کردن تمام توکن‌ها پس از تغییر رمز
-        $user->tokens()->delete();
-
-        // #1719: تغییر موفق، بودجهٔ همین اکشن را آزاد می‌کند.
-        \Illuminate\Support\Facades\RateLimiter::clear($this->throttleKey());
-
-        // ریست کردن فرم
-        $this->reset(['currentPassword', 'newPassword', 'newPasswordConfirmation']);
-        $this->success("رمز با موفقیت تغییر یافت.", position: 'toast-bottom');
     }
 
     // #1719: ۵ حدس ناموفق رمز فعلی در هر ۱۵ دقیقه، به‌ازای هر حساب.
