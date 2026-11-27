@@ -2683,12 +2683,6 @@ parameters:
 			path: resources/views/livewire/select-context.blade.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: resources/views/livewire/select-context.blade.php
-
-		-
 			message: '#^Property Livewire\\Component@anonymous/resources/views/livewire/tickets/ticket\-comments\.blade\.php\:13\:\:\$listeners has no type specified\.$#'
 			identifier: missingType.property
 			count: 1
