@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Notification;
+use App\Models\Person;
 use App\Models\Unit;
+use App\Models\User;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Services\NotificationService;
 use Database\Seeders\PermissionSeeder;
@@ -270,6 +272,45 @@ class NotificationServiceTest extends TestCase
         NotificationService::notifyUnit($unit->id, 'test', 'اعلان واحد', 'متن تست', '/dashboard');
 
         $this->assertEquals(2, DB::table('notifications')->where('type', 'test')->count());
+    }
+
+    public function test_notify_unit_reaches_pivot_less_user_through_person_unit(): void
+    {
+        $unit = Unit::create(['name' => 'واحد هدف']);
+        $person = Person::factory()->create(['u_id' => $unit->id]);
+        $user = User::factory()->create(['n_code' => $person->n_code]);
+
+        $this->assertDatabaseMissing('user_units', ['user_id' => $user->id]);
+
+        NotificationService::notifyUnit($unit->id, 'test', 'عنوان');
+
+        $this->assertDatabaseHas('notifications', ['user_id' => $user->id, 'type' => 'test']);
+    }
+
+    public function test_notify_unit_skips_pivot_holder_whose_person_unit_is_the_target(): void
+    {
+        $target = Unit::create(['name' => 'واحد هدف']);
+        $other = Unit::create(['name' => 'واحد دیگر']);
+        $person = Person::factory()->create(['u_id' => $target->id]);
+        $user = User::factory()->create(['n_code' => $person->n_code]);
+        $user->units()->attach($other->id, ['role' => 'staff', 'is_primary' => true]);
+
+        NotificationService::notifyUnit($target->id, 'test', 'عنوان');
+
+        $this->assertDatabaseMissing('notifications', ['user_id' => $user->id]);
+    }
+
+    public function test_notify_unit_prefers_pivot_over_person_unit(): void
+    {
+        $target = Unit::create(['name' => 'واحد هدف']);
+        $other = Unit::create(['name' => 'واحد دیگر']);
+        $person = Person::factory()->create(['u_id' => $other->id]);
+        $user = User::factory()->create(['n_code' => $person->n_code]);
+        $user->units()->attach($target->id, ['role' => 'staff', 'is_primary' => true]);
+
+        NotificationService::notifyUnit($target->id, 'test', 'عنوان');
+
+        $this->assertDatabaseHas('notifications', ['user_id' => $user->id, 'type' => 'test']);
     }
 
     public function test_notify_unit_does_nothing_when_no_members(): void

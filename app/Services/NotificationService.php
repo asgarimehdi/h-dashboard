@@ -82,7 +82,19 @@ class NotificationService
 
     public static function notifyUnit(int $unitId, string $type, string $title, ?string $body = null, ?string $url = null): void
     {
-        $userIds = User::whereHas('units', fn ($q) => $q->where('units.id', $unitId))
+        // #1927: resolve recipients with the same base scope definition as
+        // AccessService::accessibleUnitIds() — a pivot row for this unit, or,
+        // only when the user has no pivot row at all, the person's HR unit.
+        // The two halves MUST stay grouped: an ungrouped orWhere would break
+        // precedence and drop the whereDoesntHave('units') condition.
+        $userIds = User::query()
+            ->where(function ($q) use ($unitId): void {
+                $q->whereHas('units', fn ($q) => $q->where('units.id', $unitId))
+                    ->orWhere(function ($q) use ($unitId): void {
+                        $q->whereDoesntHave('units')
+                            ->whereHas('person', fn ($q) => $q->where('u_id', $unitId));
+                    });
+            })
             ->pluck('id');
 
         if ($userIds->isEmpty()) {
