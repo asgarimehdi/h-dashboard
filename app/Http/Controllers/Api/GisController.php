@@ -113,7 +113,7 @@ class GisController extends Controller
 
             $this->applyBbox($query, $request);
 
-            $units = $query->limit(1000)->get();
+            $units = $query->orderBy('units.id')->limit(1000)->get();
 
             return $units->map(function ($unit) {
                 return [
@@ -196,7 +196,7 @@ class GisController extends Controller
                 $query->where('hardwares.mark', $request->boolean('mark'));
             }
 
-            $hardware = $query->limit(1000)->get();
+            $hardware = $query->orderBy('hardwares.id')->limit(1000)->get();
 
             return $hardware->map(function ($hw) {
                 return [
@@ -277,7 +277,7 @@ class GisController extends Controller
                 $query->where('status', (string) $request->status);
             }
 
-            $tickets = $query->limit(1000)->get();
+            $tickets = $query->orderBy('tickets.id')->limit(1000)->get();
 
             return $tickets->map(function ($ticket) {
                 $unit = $ticket->unit;
