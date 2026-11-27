@@ -201,11 +201,7 @@ return new class extends Component
     public function getAllowedUnitTypes()
     {
         if ($this->userUnitLevel === 'ministry') {
-            // #1934: order the dropdown by id. `where()` without an ORDER BY
-            // leaves PostgreSQL free to answer in physical heap order, which
-            // the suite's inserts/rollbacks leave unsorted — the same rows
-            // then come back in a different order from run to run.
-            return UnitType::where('id', '!=', UnitType::ROOT_ID)->orderBy('id')->get();
+            return UnitType::where('id', '!=', UnitType::ROOT_ID)->get();
         }
 
         return $this->walkAllowedUnitTypes();
@@ -239,13 +235,9 @@ return new class extends Component
 
         for ($depth = 0; $depth < self::ALLOWED_UNIT_TYPES_MAX_DEPTH && $frontier !== []; $depth++) {
             // distinct() bounds the round's own result even if a bad import
-            // ever inserts the same edge twice. #1934: order the round by id
-            // so the walk visits the same types in the same order every time
-            // — without it, which types the depth cap drops depends on the
-            // physical row order of the pivot table.
+            // ever inserts the same edge twice.
             $childUnitTypeIds = UnitTypeRelationship::whereIn('allowed_parent_unit_type_id', $frontier)
                 ->distinct()
-                ->orderBy('child_unit_type_id')
                 ->pluck('child_unit_type_id')
                 ->all();
 
@@ -266,11 +258,7 @@ return new class extends Component
             return collect();
         }
 
-        // #1934: order by id. `whereIn` over a small table takes a Seq Scan,
-        // so PostgreSQL answers in physical heap order — and the suite's
-        // inserts/rollbacks leave that heap unsorted, which is how the
-        // dropdown came back as [5, 3, 4] instead of [3, 4, 5] in CI.
-        return UnitType::whereIn('id', $allowedUnitTypeIds)->orderBy('id')->get();
+        return UnitType::whereIn('id', $allowedUnitTypeIds)->get();
     }
 
     public function updatedUnitTypeId($value): void

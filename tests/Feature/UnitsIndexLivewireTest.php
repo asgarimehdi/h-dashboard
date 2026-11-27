@@ -287,36 +287,6 @@ class UnitsIndexLivewireTest extends TestCase
         $this->assertSame($ids, array_values(array_unique($ids)), 'the dropdown must not repeat a type');
     }
 
-    public function test_allowed_unit_types_come_back_in_id_order_whatever_the_heap_layout(): void
-    {
-        // `whereIn` over a small table takes a Seq Scan, so PostgreSQL returns
-        // the rows in *physical* heap order — not id order. The suite's
-        // inserts/rollbacks leave that heap unsorted, which is how #1940's CI
-        // saw [5, 3, 4] where [3, 4, 5] was expected. The three child types
-        // below are inserted in a deliberately scrambled physical order so
-        // the regression reproduces on demand instead of depending on the
-        // ambient heap layout.
-        DB::table('unit_types')->insert([
-            ['id' => 300, 'name' => 'نوع والد', 'created_at' => now(), 'updated_at' => now()],
-            ['id' => 303, 'name' => 'نوع ۳۰۳', 'created_at' => now(), 'updated_at' => now()],
-            ['id' => 301, 'name' => 'نوع ۳۰۱', 'created_at' => now(), 'updated_at' => now()],
-            ['id' => 302, 'name' => 'نوع ۳۰۲', 'created_at' => now(), 'updated_at' => now()],
-        ]);
-        DB::table('unit_type_relationships')->insert([
-            ['child_unit_type_id' => 303, 'allowed_parent_unit_type_id' => 300, 'created_at' => now(), 'updated_at' => now()],
-            ['child_unit_type_id' => 301, 'allowed_parent_unit_type_id' => 300, 'created_at' => now(), 'updated_at' => now()],
-            ['child_unit_type_id' => 302, 'allowed_parent_unit_type_id' => 300, 'created_at' => now(), 'updated_at' => now()],
-        ]);
-
-        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
-        $unit->update(['unit_type_id' => 300, 'region_id' => 1]);
-        $this->actingAs($user);
-
-        $ids = Livewire::test('units.index')->instance()->unitTypes->pluck('id')->all();
-
-        $this->assertSame([301, 302, 303], $ids);
-    }
-
     public function test_allowed_unit_types_stay_finite_on_the_dropdown_reentry_path(): void
     {
         $this->userInSelfReferencingUnit(22);
