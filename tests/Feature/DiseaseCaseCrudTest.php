@@ -851,6 +851,10 @@ test('orphans loaded for one case never land on another', function () {
         ->call('edit', $caseA->id)
         ->set('editingId', $caseB->id)
         ->set('diagnosedAt', dc_jalali('2026-10-05'))
+        // #1879 rejects a recorded date before the diagnosed date. Switching
+        // editingId with set() (rather than edit()) leaves caseA's recorded
+        // date behind, so move it with the case under test.
+        ->set('recordedAt', dc_jalali('2026-10-05'))
         ->call('saveEdit')
         ->assertHasNoErrors();
 
