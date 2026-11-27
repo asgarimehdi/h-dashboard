@@ -108,6 +108,11 @@ class DailySeries
      * aggregate instead of re-deriving its filters. A query that matches nothing
      * yields a full-length window of zeros, never a shorter one.
      *
+     * The window is also applied *inside* the aggregate, on `$dateColumn`, so a
+     * cache miss scans only the window rather than grouping the whole history
+     * and discarding most of it afterwards (issue #1936). Callers therefore need
+     * not pre-filter by date; doing so is harmless but redundant.
+     *
      * Accepts either builder flavour; the helpers below narrow down what each
      * path needs, so neither case is handled twice.
      *
@@ -119,13 +124,23 @@ class DailySeries
         [$from, $to] = $this->window();
 
         $grammar = DB::connection()->getQueryGrammar();
-        $wrappedDate = $grammar->wrap($this->qualifiedColumn($query, $dateColumn));
+        $column = $this->qualifiedColumn($query, $dateColumn);
+        $wrappedDate = $grammar->wrap($column);
 
         // The aggregate is a subquery built from the caller's builder, so all of
         // its filters and bindings are preserved. Identifiers are code
         // constants, never request input; the window is bound as two dates.
+        //
+        // The range is put on the raw column, not on `date(...)` and not as
+        // `BETWEEN`: only the raw form is sargable, so the existing btree index
+        // on the date column bounds the scan to the window instead of walking
+        // the whole history (#1936). The upper bound is exclusive at `to + 1
+        // day` because `<= to` means `00:00:00` of the last day and would drop
+        // the whole last day.
         $perDay = $this->toBaseQuery($query)
             ->selectRaw("date({$wrappedDate}) as day, COUNT(*) as count")
+            ->where($column, '>=', $from)
+            ->where($column, '<', Carbon::parse($to)->addDay()->toDateString())
             ->groupByRaw("date({$wrappedDate})");
 
         $rows = DB::select(
