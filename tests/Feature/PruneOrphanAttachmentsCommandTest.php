@@ -105,6 +105,17 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
         return $path;
     }
 
+    /**
+     * Age a file on the fake disk. `lastModified()` reads the real mtime, so
+     * `Carbon::setTestNow()` would NOT move it — only `touch()` does.
+     */
+    private function ageFile(string $path, int $minutes): void
+    {
+        $disk = Storage::disk('local');
+
+        touch($disk->path($path), now()->subMinutes($minutes)->getTimestamp());
+    }
+
     public function test_dry_run_reports_without_deleting(): void
     {
         Storage::fake('local');
@@ -113,7 +124,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
         $this->referencedAttachment('kept.pdf');
         $orphan = $this->orphanFile('leaked.pdf');
 
-        $this->artisan('attachments:prune-orphans', ['--dry-run' => true])
+        $this->artisan('attachments:prune-orphans', ['--dry-run' => true, '--grace-minutes' => 0])
             ->expectsOutputToContain('leaked.pdf')
             ->expectsOutputToContain('Dry run')
             ->assertExitCode(0);
@@ -142,7 +153,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
         $this->referencedAttachment('kept.pdf');
         $orphan = $this->orphanFile('leaked.pdf');
 
-        $this->artisan('attachments:prune-orphans')
+        $this->artisan('attachments:prune-orphans', ['--grace-minutes' => 0])
             ->assertExitCode(0);
 
         Storage::disk('local')->assertMissing($orphan);
@@ -190,7 +201,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
         $attachment = $this->referencedAttachment('sibling.pdf');
         Attachment::whereKey($attachment->id)->update(['file_path' => 'attachments/2026/01/nested.pdf']);
 
-        $this->artisan('attachments:prune-orphans')->assertExitCode(0);
+        $this->artisan('attachments:prune-orphans', ['--grace-minutes' => 0])->assertExitCode(0);
 
         Storage::disk('local')->assertExists('attachments/2026/01/nested.pdf');
         Storage::disk('local')->assertMissing('attachments/sibling.pdf');
@@ -271,7 +282,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
             $this->orphanFile($name);
         }
 
-        $this->artisan('attachments:prune-orphans', ['--dry-run' => true])
+        $this->artisan('attachments:prune-orphans', ['--dry-run' => true, '--grace-minutes' => 0])
             ->expectsOutputToContain('Found 3 referenced file(s).')
             ->expectsOutputToContain('Found 2 unreferenced file(s).')
             ->expectsOutputToContain('attachments/leaked-a.pdf')
@@ -286,7 +297,7 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
             Storage::disk('local')->assertExists("attachments/{$name}");
         }
 
-        $this->artisan('attachments:prune-orphans')
+        $this->artisan('attachments:prune-orphans', ['--grace-minutes' => 0])
             ->expectsOutputToContain('Found 3 referenced file(s).')
             ->expectsOutputToContain('Found 2 unreferenced file(s).')
             ->expectsOutputToContain('attachments/leaked-a.pdf')
@@ -342,18 +353,107 @@ class PruneOrphanAttachmentsCommandTest extends TestCase
         // A genuine orphan must still go — the fix must not over-correct.
         $orphan = $this->orphanFile('legacy-real-orphan.pdf');
 
-        $this->artisan('attachments:prune-orphans', ['--dry-run' => true])
+        $this->artisan('attachments:prune-orphans', ['--dry-run' => true, '--grace-minutes' => 0])
             ->expectsOutputToContain('Found 3 referenced file(s).')
             ->expectsOutputToContain('Found 1 unreferenced file(s).')
             ->expectsOutputToContain('attachments/legacy-real-orphan.pdf')
             ->assertExitCode(0);
 
-        $this->artisan('attachments:prune-orphans')->assertExitCode(0);
+        $this->artisan('attachments:prune-orphans', ['--grace-minutes' => 0])->assertExitCode(0);
 
         foreach ($legacy as $real) {
             Storage::disk('local')->assertExists($real);
         }
 
         Storage::disk('local')->assertMissing($orphan);
+    }
+
+    /**
+     * Issue #1878 — an unreferenced file modified within the grace window may
+     * be an upload still in flight (the file is stored before its row exists),
+     * so the default 60-minute guard keeps it and reports it separately.
+     */
+    public function test_a_fresh_orphan_is_kept_by_default(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $fresh = $this->orphanFile('in-flight.pdf');
+
+        $this->artisan('attachments:prune-orphans')
+            ->expectsOutputToContain('Found 0 referenced file(s).')
+            ->expectsOutputToContain('Found 1 unreferenced file(s).')
+            ->expectsOutputToContain('Skipped 1 file(s) modified within the last 60 minute(s).')
+            ->expectsOutputToContain('Nothing to prune.')
+            ->doesntExpectOutputToContain('attachments/in-flight.pdf')
+            ->assertExitCode(0);
+
+        Storage::disk('local')->assertExists($fresh);
+    }
+
+    public function test_an_orphan_older_than_the_grace_window_is_deleted(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $stale = $this->orphanFile('stale.pdf');
+        $this->ageFile($stale, 61);
+
+        $this->artisan('attachments:prune-orphans')
+            ->expectsOutputToContain('Found 1 unreferenced file(s).')
+            ->doesntExpectOutputToContain('Skipped')
+            ->expectsOutputToContain('Deleted 1 file(s).')
+            ->assertExitCode(0);
+
+        Storage::disk('local')->assertMissing($stale);
+    }
+
+    public function test_dry_run_reports_fresh_files_as_skipped_not_as_orphans(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $fresh = $this->orphanFile('in-flight.pdf');
+        $stale = $this->orphanFile('stale.pdf');
+        $this->ageFile($stale, 61);
+
+        $this->artisan('attachments:prune-orphans', ['--dry-run' => true])
+            ->expectsOutputToContain('Found 2 unreferenced file(s).')
+            ->expectsOutputToContain('Skipped 1 file(s) modified within the last 60 minute(s).')
+            ->expectsOutputToContain('attachments/stale.pdf')
+            ->doesntExpectOutputToContain('attachments/in-flight.pdf')
+            ->expectsOutputToContain('Dry run')
+            ->assertExitCode(0);
+
+        Storage::disk('local')->assertExists($fresh);
+        Storage::disk('local')->assertExists($stale);
+    }
+
+    public function test_grace_minutes_zero_prunes_a_fresh_orphan(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $fresh = $this->orphanFile('in-flight.pdf');
+
+        $this->artisan('attachments:prune-orphans', ['--grace-minutes' => 0])
+            ->expectsOutputToContain('Deleted 1 file(s).')
+            ->assertExitCode(0);
+
+        Storage::disk('local')->assertMissing($fresh);
+    }
+
+    public function test_a_negative_grace_minutes_is_rejected(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $fresh = $this->orphanFile('in-flight.pdf');
+
+        $this->artisan('attachments:prune-orphans', ['--grace-minutes' => -1])
+            ->expectsOutputToContain('--grace-minutes باید عدد صحیح و دست‌کم ۰ باشد.')
+            ->assertExitCode(1);
+
+        Storage::disk('local')->assertExists($fresh);
     }
 }
