@@ -142,7 +142,7 @@ export function registerSignalGauge(Alpine) {
         return '—';
       }
       const ms = this.responseTime * 1000;
-      return ms >= 1 ? Math.round(ms) : ms.toFixed(1);
+      return ms >= 1 ? String(Math.round(ms)) : ms.toFixed(1);
     },
 
     get responseTimeColorClass() {

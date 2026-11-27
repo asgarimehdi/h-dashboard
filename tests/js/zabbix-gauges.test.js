@@ -42,17 +42,20 @@ describe('signalGauge formatting', () => {
     expect(gauge.displayFrequency).toBe('2412.5');
   });
 
-  it('pins displayResponseTime returning a string below 1ms and a number above', async () => {
-    // Known inconsistency, pinned deliberately (issue #1944 finding) — do NOT fix here.
+  it('displayResponseTime always returns a string', async () => {
     const gauge = await makeGauge();
 
     expect(gauge.displayResponseTime).toBe('—');
     gauge.responseTime = 0.0004;
     expect(gauge.displayResponseTime).toBe('0.4');
+    gauge.responseTime = 0.0009;
+    expect(gauge.displayResponseTime).toBe('0.9');
+    gauge.responseTime = 0.001;
+    expect(gauge.displayResponseTime).toBe('1');
     gauge.responseTime = 0.0042;
-    expect(gauge.displayResponseTime).toBe(4);
+    expect(gauge.displayResponseTime).toBe('4');
     gauge.responseTime = 0.012;
-    expect(gauge.displayResponseTime).toBe(12);
+    expect(gauge.displayResponseTime).toBe('12');
   });
 
   it('responseTimeColorClass follows the 3ms / 7ms thresholds', async () => {
