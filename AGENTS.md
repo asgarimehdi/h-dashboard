@@ -94,7 +94,7 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
 - **Frontend rebuild:** After frontend changes run `npm run build`.
-- **JS lint/format:** `npm run lint` + `npm run format` after touching `resources/js/`.
+- **JS lint/format:** `npm run lint` + `npm run format` after touching `resources/js/`; `npm test` runs the Vitest unit tests in `tests/js/`.
 
 ### Composer Scripts
 ```bash

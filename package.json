@@ -7,7 +7,8 @@
         "lint": "eslint resources/js",
         "format": "prettier --write \"resources/js/**/*.js\"",
         "format:check": "prettier --check \"resources/js/**/*.js\"",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "test": "vitest run"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
@@ -23,6 +24,7 @@
         "prettier": "^3.10.1",
         "tailwindcss": "^4.0.14",
         "typescript": "^7.0.2",
-        "vite": "^8.0"
+        "vite": "^8.0",
+        "vitest": "^5.1.2"
     }
 }

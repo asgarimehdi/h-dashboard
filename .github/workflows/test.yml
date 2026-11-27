@@ -136,6 +136,12 @@ jobs:
       - name: Check formatting
         run: npm run format:check
 
+      - name: Run JS unit tests
+        # Issue #1944 — Vitest behavioural tests for resources/js, kept inside
+        # the existing blocking job so the twelve-job / nine-blocking contract
+        # (DocsCiJobsGuardTest, #1506) is unchanged.
+        run: npm test
+
   test:
     name: Tests & Coverage
     runs-on: ubuntu-latest
