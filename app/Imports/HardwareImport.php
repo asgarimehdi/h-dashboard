@@ -130,15 +130,21 @@ class HardwareImport extends AbstractImportPipeline implements ToCollection, Wit
             });
         }
 
+        // #1829: `hardwares` has no unique constraint on pc_name or mac, and
+        // the query has no ORDER BY, so an overwriting assignment made a
+        // duplicate-key lookup nondeterministic between loads. Order by id and
+        // keep the first row per key (`??=`), i.e. the lowest id always wins.
+        $query->orderBy('id');
+
         $hardwares = $query->get(['id', 'pc_name', 'mac', 'n_code', 'type', 'os', 'ip_valid', 'ip_local', 'net_type', 'switch', 'port', 'shutdown', 'vlan', 'motherboard', 'cpu', 'ram', 'hdd', 'comments', 'mark', 'clean_at']);
 
         foreach ($hardwares as $hw) {
             // Index by pc_name and mac for quick lookup
             if ($hw->pc_name) {
-                $this->existingRecords['pc_name'][$hw->pc_name] = $hw;
+                $this->existingRecords['pc_name'][$hw->pc_name] ??= $hw;
             }
             if ($hw->mac) {
-                $this->existingRecords['mac'][$hw->mac] = $hw;
+                $this->existingRecords['mac'][$hw->mac] ??= $hw;
             }
         }
 
@@ -200,6 +206,19 @@ class HardwareImport extends AbstractImportPipeline implements ToCollection, Wit
         $existing = $this->findExistingRecord($data);
         $matchKey = $existing ? ($existing['key'] ?? 'unknown') : null;
 
+        // #1829: pc_name and mac resolve to two different devices. Writing
+        // either hit would give the two devices the same mac, so the row is
+        // rejected — naming both devices so the operator can fix the sheet.
+        if ($existing !== null && $existing['conflict'] !== null) {
+            $this->recordRejectedRow(
+                $rowNumber,
+                "تعارض تطبیق: pc_name «{$data['pc_name']}» به دستگاه «{$existing['record']->pc_name}» و mac «{$data['mac']}» به دستگاه «{$existing['conflict']->pc_name}» می‌رسد؛ ردیف نوشته نشد",
+                $data,
+            );
+
+            return;
+        }
+
         if ($existing) {
             // #1704: the cell is non-empty but not a date the parser accepts.
             // Writing the parsed null over a stored date would silently destroy
@@ -256,24 +275,40 @@ class HardwareImport extends AbstractImportPipeline implements ToCollection, Wit
     }
 
     /**
+     * #1829: under `both`, BOTH keys are looked up and the resolved records are
+     * compared. A row whose pc_name hits device A while its mac hits device B
+     * is ambiguous — honouring either hit would copy one device's mac onto the
+     * other — so the caller rejects it instead of guessing. Checking the keys
+     * in priority order (`if` / `elseif`) hid exactly that case.
+     *
      * @param  array<string, mixed>  $data
-     * @return array{record: Hardware, key: string|null}|null
+     * @return array{record: Hardware, key: string|null, conflict: Hardware|null}|null
      */
     protected function findExistingRecord(array $data): ?array
     {
-        $existing = null;
-        $matchKey = null;
+        /** @var array<string, Hardware> $byPcName */
+        $byPcName = $this->existingRecords['pc_name'] ?? [];
+        /** @var array<string, Hardware> $byMac */
+        $byMac = $this->existingRecords['mac'] ?? [];
 
-        if (in_array($this->compareKey, ['pc_name', 'both']) && ! empty($data['pc_name']) && isset($this->existingRecords['pc_name'][$data['pc_name']])) {
-            $existing = $this->existingRecords['pc_name'][$data['pc_name']];
-            $matchKey = 'pc_name';
-        } elseif (in_array($this->compareKey, ['mac', 'both']) && ! empty($data['mac']) && isset($this->existingRecords['mac'][$data['mac']])) {
-            $existing = $this->existingRecords['mac'][$data['mac']];
-            $matchKey = 'mac';
+        $pcHit = in_array($this->compareKey, ['pc_name', 'both'], true) && ! empty($data['pc_name'])
+            ? ($byPcName[$data['pc_name']] ?? null)
+            : null;
+
+        $macHit = in_array($this->compareKey, ['mac', 'both'], true) && ! empty($data['mac'])
+            ? ($byMac[$data['mac']] ?? null)
+            : null;
+
+        if ($pcHit !== null && $macHit !== null && $pcHit->id !== $macHit->id) {
+            return ['record' => $pcHit, 'key' => 'pc_name', 'conflict' => $macHit];
         }
 
-        if ($existing) {
-            return ['record' => $existing, 'key' => $matchKey];
+        if ($pcHit !== null) {
+            return ['record' => $pcHit, 'key' => 'pc_name', 'conflict' => null];
+        }
+
+        if ($macHit !== null) {
+            return ['record' => $macHit, 'key' => 'mac', 'conflict' => null];
         }
 
         return null;
@@ -397,6 +432,16 @@ class HardwareImport extends AbstractImportPipeline implements ToCollection, Wit
         // Find existing record by pc_name or mac
         $existing = $this->findExistingRecord($data);
         $matchKey = $existing ? ($existing['key'] ?? 'unknown') : null;
+
+        // #1829: buildPreview() already rejected this split match and the
+        // #1209 guard in applySelectedAction() keeps the row from reaching
+        // here. Should that ever change, the row must never fall through to
+        // the create branch and leave the two devices sharing one mac.
+        if ($existing !== null && $existing['conflict'] !== null) {
+            $this->importResults['skipped']++;
+
+            return;
+        }
 
         if ($existing) {
             // Check for changes
@@ -570,8 +615,10 @@ class HardwareImport extends AbstractImportPipeline implements ToCollection, Wit
      * same device.
      *
      * Under `both` a row collides when EITHER field matches the current
-     * survivor: that is what the row-by-row matcher did
-     * (findExistingRecord() tries pc_name, then mac). Replacing a survivor
+     * survivor. That is a CREATE-path rule only: the existing-record matcher
+     * does the opposite for a row whose pc_name and mac point at two
+     * different devices — findExistingRecord() reports the split match and
+     * buildPreview() rejects it (#1829). Replacing a survivor
      * also RELEASES its old keys, because the surviving row has been
      * renamed by the later sheet row: A=(p1,m1), B=(p2,m1), C=(p1,m2)
      * yields TWO rows (B renames A to p2, so C matches nothing), while

@@ -252,6 +252,124 @@ class HardwareImportEdgeCasesTest extends TestCase
         @unlink($file);
     }
 
+    // -----------------------------------------------------------
+    //  ایشو #1829: ردیف split-match (pc_name → A، mac → B) باید رد شود
+    // -----------------------------------------------------------
+
+    public function test_a_row_whose_pc_name_and_mac_point_at_two_devices_is_rejected(): void
+    {
+        $this->createPerson();
+        $a = $this->seedHardware(['pc_name' => 'PC-A', 'mac' => 'AA:BB:CC:00:00:01', 'cpu' => 'i5']);
+        $b = $this->seedHardware(['pc_name' => 'PC-B', 'mac' => 'AA:BB:CC:00:00:02', 'cpu' => 'i5']);
+
+        // تنها تفاوت این ردیف با A همان mac است، و آن mac مال B است.
+        $file = $this->writeCsv([
+            $this->row(['pc_name' => 'PC-A', 'mac' => 'AA:BB:CC:00:00:02', 'cpu' => 'i5']),
+        ]);
+
+        $preview = $this->scopedImport();
+        $preview->setCompareKey('both');
+        Excel::import($preview, $file);
+
+        $results = $preview->getImportResults();
+        $this->assertSame('error', $results['preview'][0]['status']);
+        $this->assertArrayNotHasKey('id', $results['preview'][0]);
+        $this->assertSame(0, $results['created']);
+        $this->assertSame(0, $results['updated']);
+        $this->assertSame(0, $results['skipped']);
+        $this->assertCount(1, $results['errors']);
+        $this->assertSame(2, $results['errors'][0]['row']);
+        $this->assertStringContainsString('PC-A', $results['errors'][0]['error']);
+        $this->assertStringContainsString('PC-B', $results['errors'][0]['error']);
+        $previewMessage = $results['errors'][0]['error'];
+
+        // عمداً action انتخاب می‌کنیم تا گارد #1209 ثابت شود.
+        $confirm = $this->scopedImport();
+        $confirm->setCompareKey('both');
+        $confirm->setSelectedActions(['row_2' => 'update']);
+        Excel::import($confirm, $file);
+
+        $results = $confirm->getImportResults();
+        $this->assertSame(0, $results['created']);
+        $this->assertSame(0, $results['updated']);
+        $this->assertSame(1, $results['skipped']);
+        $this->assertSame($previewMessage, $results['errors'][0]['error']);
+
+        $this->assertSame('PC-A', $a->fresh()->pc_name);
+        $this->assertSame('AA:BB:CC:00:00:01', $a->fresh()->mac);
+        $this->assertSame('PC-B', $b->fresh()->pc_name);
+        $this->assertSame('AA:BB:CC:00:00:02', $b->fresh()->mac);
+        $this->assertSame(2, Hardware::count());
+        $this->assertSame(0, HardwareAudit::where('action', 'updated')->count());
+
+        @unlink($file);
+    }
+
+    public function test_unambiguous_both_key_matches_are_unchanged(): void
+    {
+        $this->createPerson();
+        $a = $this->seedHardware(['pc_name' => 'PC-A', 'mac' => 'AA:BB:CC:00:00:01', 'cpu' => 'i5']);
+        $b = $this->seedHardware(['pc_name' => 'PC-B', 'mac' => 'AA:BB:CC:00:00:02', 'cpu' => 'i5']);
+
+        $file = $this->writeCsv([
+            $this->row(['pc_name' => 'PC-A', 'mac' => 'AA:BB:CC:00:00:01', 'cpu' => 'i5']),
+            $this->row(['pc_name' => 'PC-B', 'mac' => 'AA:BB:CC:00:00:02', 'cpu' => 'i5']),
+            $this->row(['pc_name' => 'PC-NEW-1', 'mac' => 'AA:BB:CC:00:00:02', 'cpu' => 'i5']),
+            $this->row(['pc_name' => 'PC-NEW-2', 'mac' => 'AA:BB:CC:00:00:01', 'cpu' => 'i5']),
+        ]);
+
+        $preview = $this->scopedImport();
+        $preview->setCompareKey('both');
+        Excel::import($preview, $file);
+
+        $rows = $preview->getImportResults()['preview'];
+
+        // هر دو کلید روی یک رکورد → تعارض فعال نمی‌شود.
+        $this->assertSame('unchanged', $rows[0]['status']);
+        $this->assertSame('pc_name', $rows[0]['match_key']);
+        $this->assertSame($a->id, $rows[0]['id']);
+
+        $this->assertSame('unchanged', $rows[1]['status']);
+        $this->assertSame('pc_name', $rows[1]['match_key']);
+        $this->assertSame($b->id, $rows[1]['id']);
+
+        // تک‌کلید mac + rename → مرز #1758 دست‌نخورده.
+        $this->assertSame('update', $rows[2]['status']);
+        $this->assertSame('mac', $rows[2]['match_key']);
+        $this->assertSame($b->id, $rows[2]['id']);
+        $this->assertSame(['pc_name'], array_keys($rows[2]['changes']));
+
+        $this->assertSame('update', $rows[3]['status']);
+        $this->assertSame('mac', $rows[3]['match_key']);
+        $this->assertSame($a->id, $rows[3]['id']);
+        $this->assertSame(['pc_name'], array_keys($rows[3]['changes']));
+
+        $confirm = $this->scopedImport();
+        $confirm->setCompareKey('both');
+        $confirm->setSelectedActions([
+            'row_2' => 'update',
+            'row_3' => 'update',
+            'row_4' => 'update',
+            'row_5' => 'update',
+        ]);
+        Excel::import($confirm, $file);
+
+        $results = $confirm->getImportResults();
+        $this->assertSame(0, $results['created']);
+        $this->assertSame(2, $results['updated']);
+        $this->assertSame(2, $results['skipped']);
+        $this->assertSame(4, $results['created'] + $results['updated'] + $results['skipped']);
+
+        $this->assertSame('PC-NEW-2', $a->fresh()->pc_name);
+        $this->assertSame('AA:BB:CC:00:00:01', $a->fresh()->mac);
+        $this->assertSame('PC-NEW-1', $b->fresh()->pc_name);
+        $this->assertSame('AA:BB:CC:00:00:02', $b->fresh()->mac);
+        $this->assertSame(2, Hardware::count());
+        $this->assertSame(2, HardwareAudit::where('action', 'updated')->count());
+
+        @unlink($file);
+    }
+
     public function test_detect_changes_compares_exactly_the_columns_the_upsert_writes(): void
     {
         $import = new HardwareImport;
