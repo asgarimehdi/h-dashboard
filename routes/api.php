@@ -27,8 +27,8 @@ use Laravel\Sanctum\PersonalAccessToken;
 // Login route — stricter rate limit
 Route::post('/login', function (Request $request) {
     $credentials = $request->validate([
-        'n_code' => 'required',
-        'password' => 'required',
+        'n_code' => 'required|max:10',
+        'password' => 'required|max:255',
     ]);
 
     $user = User::where('n_code', $credentials['n_code'])->first();

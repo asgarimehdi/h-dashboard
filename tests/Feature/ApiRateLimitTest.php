@@ -189,6 +189,21 @@ class ApiRateLimitTest extends TestCase
         $this->assertSame(60, $intLimits[1]->decaySeconds);
     }
 
+    public function test_limiter_clamps_oversized_n_code_to_ten_characters(): void
+    {
+        $limiter = RateLimiter::limiter('api-login');
+        $this->assertNotNull($limiter);
+
+        // The limiter runs before validation, so the raw key must be bounded
+        // to the route's max:10 rather than transliterating unbounded input.
+        $limits = $limiter(Request::create('/api/login', 'POST', [
+            'n_code' => str_repeat('9', 5000),
+        ]));
+
+        $this->assertCount(2, $limits);
+        $this->assertSame('account:9999999999', $limits[1]->key);
+    }
+
     public function test_login_rejects_invalid_credentials(): void
     {
         $response = $this->postJson('/api/login', [

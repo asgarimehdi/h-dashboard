@@ -16,7 +16,7 @@ return new class extends Component
 
     public string $title = 'Login';
 
-    #[Rule('required')]
+    #[Rule('required|max:10')]
     public string $n_code = '';
 
     // #1912: max:255 is a size cap only — a 300-char password is valid today
