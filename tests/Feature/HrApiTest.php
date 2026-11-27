@@ -10,6 +10,8 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Tests\Support\Concerns\InteractsWithApiTokens;
@@ -198,6 +200,106 @@ class HrApiTest extends TestCase
         // The child unit (خانه بهداشت) has no personnel
         $names = collect($response->json('data'))->pluck('name');
         $this->assertTrue($names->contains('خانه بهداشت'));
+    }
+
+    // === Issue #1888: vacancies are capped, narrowed and ordered ===
+
+    public function test_vacancies_are_capped_at_100_and_meta_total_is_full_count(): void
+    {
+        Cache::flush();
+
+        for ($i = 1; $i <= 120; $i++) {
+            Unit::create(['name' => sprintf('Empty %03d', $i), 'parent_id' => $this->unit->id]);
+        }
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/vacancies', $token);
+
+        $response->assertStatus(200);
+        // setUp: 'خانه بهداشت' خالی است و 'مرکز بهداشت' یک person دارد.
+        // ۱ خالی + ۱۲۰ تازه = ۱۲۱ خالی در اسکوپ، ولی data حداکثر ۱۰۰.
+        $this->assertCount(100, $response->json('data'));
+        $this->assertSame(121, $response->json('meta.total'));
+        $this->assertSame(['total'], array_keys($response->json('meta')));
+    }
+
+    public function test_vacancies_payload_rows_have_exactly_id_name_parent_id(): void
+    {
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/vacancies', $token);
+
+        $response->assertStatus(200);
+        $rows = $response->json('data');
+        $this->assertNotEmpty($rows);
+        foreach ($rows as $row) {
+            $this->assertSame(['id', 'name', 'parent_id'], array_keys($row));
+        }
+    }
+
+    public function test_vacancies_exclude_units_with_personnel_and_out_of_scope_units(): void
+    {
+        Cache::flush();
+        Unit::create(['name' => 'Out Of Scope']); // top-level، فرزند واحد کاربر نیست
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/vacancies', $token);
+
+        $names = collect($response->json('data'))->pluck('name');
+        $this->assertTrue($names->contains('خانه بهداشت'));
+        $this->assertFalse($names->contains('مرکز بهداشت'));   // person دارد
+        $this->assertFalse($names->contains('Out Of Scope'));  // خارج از اسکوپ
+    }
+
+    public function test_vacancies_are_ordered_by_name_then_id(): void
+    {
+        Cache::flush();
+        Unit::create(['name' => 'ZZZ', 'parent_id' => $this->unit->id]);
+        $firstDup = Unit::create(['name' => 'DUP', 'parent_id' => $this->unit->id]);
+        Unit::create(['name' => 'AAA', 'parent_id' => $this->unit->id]);
+        $secondDup = Unit::create(['name' => 'DUP', 'parent_id' => $this->unit->id]);
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $response = $this->apiGet('/api/hr/vacancies', $token);
+
+        $rows = collect($response->json('data'))
+            ->filter(fn (array $row): bool => in_array($row['name'], ['AAA', 'DUP', 'ZZZ'], true))
+            ->values();
+
+        $this->assertSame(['AAA', 'DUP', 'DUP', 'ZZZ'], $rows->pluck('name')->all());
+        $this->assertSame(
+            [$firstDup->id, $secondDup->id],
+            $rows->where('name', 'DUP')->pluck('id')->values()->all()
+        );
+    }
+
+    public function test_vacancies_query_is_narrow_ordered_and_bounded(): void
+    {
+        Cache::flush();
+        for ($i = 1; $i <= 5; $i++) {
+            Unit::create(['name' => sprintf('Empty %02d', $i), 'parent_id' => $this->unit->id]);
+        }
+
+        $sql = [];
+        DB::listen(function ($query) use (&$sql): void {
+            $sql[] = $query->sql;
+        });
+
+        $token = $this->createApiToken($this->user, ['hr:read']);
+        $this->apiGet('/api/hr/vacancies', $token);
+
+        $vacancySql = collect($sql)->first(
+            fn (string $q): bool => str_contains($q, 'from "units"')
+                && str_contains($q, 'not exists')
+                && str_contains($q, 'limit 100')
+        );
+
+        $this->assertNotNull($vacancySql, 'Vacancies select must be capped in SQL.');
+        // SQL واقعی (تولیدشده با همین کد روی beta):
+        // select "id", "name", "parent_id" from "units" where "id" in (?, ?)
+        //   and not exists (select * from "persons" where "units"."id" = "persons"."u_id")
+        //   order by "name" asc, "id" asc limit 100
+        $this->assertStringStartsWith('select "id", "name", "parent_id" from "units"', $vacancySql);
+        $this->assertStringContainsString('order by "name" asc, "id" asc', $vacancySql);
     }
 
     public function test_personnel_list_with_filters(): void

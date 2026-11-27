@@ -116,19 +116,40 @@ class HrStatsController extends Controller
 
         $scopeHash = ScopeCacheKey::hash($accessibleIds);
 
-        $units = app(CacheInvalidationServiceInterface::class)->remember('hr_stats', $scopeHash, function () use ($accessibleIds) {
-            return Unit::whereIn('id', $accessibleIds)
-                ->whereDoesntHave('person')
-                ->get();
-        }, 10, ['segment' => 'vacancies']);
+        // Issue #1888: hydrate only the three columns the response needs, cap the
+        // rows in SQL, and keep `meta.total` as the full count of empty units so
+        // its meaning does not change. The Livewire twin does the same at a
+        // widget-sized cap (10); this is a data endpoint, so the repo-wide API
+        // ceiling of 100 (PerPage) applies instead. `units.name` is not unique,
+        // hence the `id` tie-breaker for a deterministic cap boundary.
+        /** @var array{total: int, units: array<int, array{id: int, name: string, parent_id: int|null}>} $cached */
+        $cached = app(CacheInvalidationServiceInterface::class)->remember('hr_stats', $scopeHash, function () use ($accessibleIds) {
+            $base = Unit::query()
+                ->whereIn('id', $accessibleIds)
+                ->whereDoesntHave('person');
+
+            $total = (clone $base)->count();
+
+            $units = $base
+                ->select(['id', 'name', 'parent_id'])
+                ->orderBy('name')
+                ->orderBy('id')
+                ->limit(100)
+                ->get()
+                ->map(fn (Unit $unit): array => [
+                    'id' => $unit->id,
+                    'name' => $unit->name,
+                    'parent_id' => $unit->parent_id,
+                ])
+                ->values()
+                ->all();
+
+            return ['total' => $total, 'units' => $units];
+        }, 10, ['segment' => 'vacancies_v2']);
 
         return response()->json([
-            'data' => $units->map(fn ($u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'parent_id' => $u->parent_id,
-            ]),
-            'meta' => ['total' => $units->count()],
+            'data' => $cached['units'],
+            'meta' => ['total' => $cached['total']],
         ]);
     }
 
