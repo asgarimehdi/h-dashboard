@@ -131,21 +131,21 @@ class ExcelFormulaEscapeTest extends TestCase
         $this->assertNotContains(self::PAYLOAD, $row);
     }
 
-    public function test_audits_export_escapes_user_agent_payload_in_map(): void
+    public function test_audits_export_escapes_formula_payload_in_map(): void
     {
         ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
         $this->actingAs($user);
 
         $hardware = Hardware::factory()->create(['n_code' => $user->n_code]);
 
+        // #1925: operator IP/user-agent are no longer export columns; the
+        // formula payload rides the `changes` summary instead.
         $audit = HardwareAudit::create([
             'hardware_id' => $hardware->id,
             'user_id' => $user->id,
-            'action' => 'updated',
-            'changes' => [['field' => 'cpu', 'old' => 'a', 'new' => self::PAYLOAD]],
+            'action' => 'bulk_delete',
+            'changes' => [self::PAYLOAD],
             'source' => 'web',
-            'ip_address' => '127.0.0.1',
-            'user_agent' => self::PAYLOAD,
         ]);
 
         $export = new HardwareAuditsExport(HardwareAudit::where('id', $audit->id));
@@ -194,33 +194,34 @@ class ExcelFormulaEscapeTest extends TestCase
 
         $hardware = Hardware::factory()->create(['n_code' => $user->n_code]);
 
+        // #1925: operator IP/user-agent are no longer export columns, so the
+        // payload rides the `changes` summary — the remaining attacker-
+        // controlled cell.
         HardwareAudit::create([
             'hardware_id' => $hardware->id,
             'user_id' => $user->id,
-            'action' => 'updated',
-            'changes' => [['field' => 'cpu', 'old' => 'a', 'new' => self::PAYLOAD]],
+            'action' => 'bulk_delete',
+            'changes' => [self::PAYLOAD],
             'source' => 'web',
-            'ip_address' => '127.0.0.1',
-            'user_agent' => self::PAYLOAD,
         ]);
 
         $token = $user->createToken('test-token', ['hardware:read'])->plainTextToken;
         $headers = ['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json'];
 
         // `Hardware::factory()` fires HardwareAuditObserver::created, so this
-        // hardware has TWO audit rows: the observer's (user_agent = the test
-        // client UA) and the payload row above. Both land in the same second —
-        // `hardware_audits.created_at` is `timestamp(0)` — and the export sorts
-        // by `latest('created_at')`, so their relative order is undefined. A
-        // hardcoded cell address therefore reads whichever row Postgres
-        // happened to place first, which is what made this test flake. Locate
-        // the payload row by its own content instead, so the assertion is
-        // about the escaping and not about row order.
-        $userAgentColumn = array_search('کاربر آژنت', (new HardwareAuditsExport(HardwareAudit::query()))->headings(), true);
+        // hardware has TWO audit rows: the observer's and the payload row
+        // above. Both land in the same second — `hardware_audits.created_at`
+        // is `timestamp(0)` — and the export sorts by `latest('created_at')`,
+        // so their relative order is undefined. A hardcoded cell address
+        // therefore reads whichever row Postgres happened to place first,
+        // which is what made this test flake. Locate the payload row by its
+        // own content instead, so the assertion is about the escaping and not
+        // about row order.
+        $changesColumn = array_search('تغییرات', (new HardwareAuditsExport(HardwareAudit::query()))->headings(), true);
 
-        $this->assertNotFalse($userAgentColumn, 'headings() lost the user_agent column');
+        $this->assertNotFalse($changesColumn, 'headings() lost the changes column');
 
-        // xlsx: the stored user_agent cell must bind as string, not formula.
+        // xlsx: the stored changes cell must bind as string, not formula.
         $xlsx = $this->withHeaders($headers)
             ->getJson("/api/hardware/{$hardware->id}/audits/export");
         $xlsx->assertStatus(200);
@@ -229,24 +230,24 @@ class ExcelFormulaEscapeTest extends TestCase
         $spreadsheet = IOFactory::load($tmp);
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Scan the user_agent column only — column A is the audit id, so a
+        // Scan the changes column only — column A is the audit id, so a
         // whole-row scan would match on the wrong thing.
-        $letter = Coordinate::stringFromColumnIndex($userAgentColumn + 1);
-        $userAgents = [];
+        $letter = Coordinate::stringFromColumnIndex($changesColumn + 1);
+        $summaries = [];
         for ($r = 2; $r <= $sheet->getHighestDataRow(); $r++) {
             $value = $sheet->getCell($letter.$r)->getValue();
-            $userAgents[$r] = $value === null ? '' : (string) $value;
+            $summaries[$r] = $value === null ? '' : (string) $value;
         }
 
         $this->assertTrue(
-            in_array("'".self::PAYLOAD, $userAgents, true),
-            'The exported sheet has no row carrying the escaped user_agent; got: '
-                .json_encode($userAgents)
+            in_array("'".self::PAYLOAD, $summaries, true),
+            'The exported sheet has no row carrying the escaped payload; got: '
+                .json_encode($summaries)
         );
 
         // Assert on the cell that actually carries the payload, whatever row
         // the tie-breaking left it in.
-        $row = array_search("'".self::PAYLOAD, $userAgents, true);
+        $row = array_search("'".self::PAYLOAD, $summaries, true);
         $cell = $sheet->getCell($letter.$row);
         $this->assertSame(DataType::TYPE_STRING, $cell->getDataType());
         $this->assertSame("'".self::PAYLOAD, $cell->getValue());
@@ -307,14 +308,14 @@ class ExcelFormulaEscapeTest extends TestCase
         $values = ['+2+2', '-1+2', '@SUM(1+1)', "\t=1+1", "\r=1+1"];
 
         foreach ($values as $value) {
+            // #1925: the payload rides the changes summary now that operator
+            // IP/user-agent are not export columns.
             HardwareAudit::create([
                 'hardware_id' => $hardware->id,
                 'user_id' => $user->id,
-                'action' => 'updated',
-                'changes' => [['field' => 'cpu', 'old' => 'a', 'new' => $value]],
+                'action' => 'bulk_delete',
+                'changes' => [$value],
                 'source' => 'web',
-                'ip_address' => '127.0.0.1',
-                'user_agent' => $value,
             ]);
         }
 
@@ -358,11 +359,9 @@ class ExcelFormulaEscapeTest extends TestCase
             HardwareAudit::create([
                 'hardware_id' => $hardware->id,
                 'user_id' => $user->id,
-                'action' => 'updated',
-                'changes' => [['field' => 'cpu', 'old' => 'a', 'new' => $value]],
+                'action' => 'bulk_delete',
+                'changes' => [$value],
                 'source' => 'web',
-                'ip_address' => '127.0.0.1',
-                'user_agent' => $value,
             ]);
         }
 
@@ -378,9 +377,9 @@ class ExcelFormulaEscapeTest extends TestCase
         $spreadsheet = IOFactory::load($tmp);
         $sheet = $spreadsheet->getActiveSheet();
 
-        $userAgentColumn = array_search('کاربر آژنت', (new HardwareAuditsExport(HardwareAudit::query()))->headings(), true);
-        $this->assertNotFalse($userAgentColumn, 'headings() lost the user_agent column');
-        $letter = Coordinate::stringFromColumnIndex($userAgentColumn + 1);
+        $changesColumn = array_search('تغییرات', (new HardwareAuditsExport(HardwareAudit::query()))->headings(), true);
+        $this->assertNotFalse($changesColumn, 'headings() lost the changes column');
+        $letter = Coordinate::stringFromColumnIndex($changesColumn + 1);
 
         $cells = [];
         for ($r = 2; $r <= $sheet->getHighestDataRow(); $r++) {

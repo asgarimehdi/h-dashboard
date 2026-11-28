@@ -258,6 +258,38 @@ class HardwareAuditsExportTest extends TestCase
         $this->assertSame('', $this->summaryOf([], 'bulk_delete'));
     }
 
+    public function test_headings_omit_operator_ip_and_user_agent(): void
+    {
+        // #1925: the export must not carry operator network identifiers.
+        $this->assertSame(
+            ['شناسه', 'عملیات', 'منبع', 'تغییرات', 'تاریخ (میلادی)', 'تاریخ (شمسی)', 'کاربر (کد ملی)', 'کاربر (نام)'],
+            (new HardwareAuditsExport(HardwareAudit::query()))->headings(),
+        );
+    }
+
+    public function test_map_omits_operator_ip_and_user_agent_and_keeps_column_order(): void
+    {
+        $audit = $this->storedAudit('bulk_delete', ['+2+2'], 'web', [
+            'ip_address' => '10.0.0.1',
+            'user_agent' => 'UA/1.0',
+        ]);
+
+        $row = $this->export()->map($audit);
+
+        $this->assertCount(8, $row);
+        $this->assertSame($audit->id, $row[0]);
+        $this->assertSame('حذف گروهی', $row[1]);
+        $this->assertSame('وب', $row[2]);
+        $this->assertSame('+2+2', $row[3]);
+        $this->assertSame($audit->created_at?->toIso8601String(), $row[4]);
+        $this->assertMatchesRegularExpression('#^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}$#', (string) $row[5]);
+        $this->assertSame('', $row[6]);
+        $this->assertSame('', $row[7]);
+
+        $this->assertNotContains('10.0.0.1', $row);
+        $this->assertNotContains('UA/1.0', $row);
+    }
+
     public function test_export_actually_writes_a_file_with_a_map_shaped_row(): void
     {
         $this->storedAudit('updated', [
@@ -335,8 +367,8 @@ class HardwareAuditsExportTest extends TestCase
 
         $mapped = $this->export()->map($audit);
 
-        $this->assertSame('', $mapped[8]); // کاربر (کد ملی)
-        $this->assertSame('', $mapped[9]); // کاربر (نام)
+        $this->assertSame('', $mapped[6]); // کاربر (کد ملی)
+        $this->assertSame('', $mapped[7]); // کاربر (نام)
     }
 
     // ==================== Formula escaping (#886) ====================
@@ -380,17 +412,6 @@ class HardwareAuditsExportTest extends TestCase
     }
 
     // ==================== CSV-only triggers (#1766) ====================
-
-    public function test_csv_mode_escapes_triggers_but_xlsx_mode_does_not(): void
-    {
-        // Column 5 is 'کاربر آژنت' (user_agent).
-        $audit = $this->storedAudit('updated', [
-            ['field' => 'cpu', 'old' => 'a', 'new' => 'b'],
-        ], 'web', ['user_agent' => '+2+2']);
-
-        $this->assertSame('+2+2', $this->export()->map($audit)[5]);
-        $this->assertSame("'+2+2", $this->csvExport()->map($audit)[5]);
-    }
 
     public function test_csv_mode_escapes_a_bare_scalar_changes_list(): void
     {

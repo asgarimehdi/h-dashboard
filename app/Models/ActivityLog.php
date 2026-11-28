@@ -44,6 +44,17 @@ class ActivityLog extends Model
         'new_values' => 'array',
     ];
 
+    /**
+     * Operator network identifiers never leave the app through model
+     * serialization. They stay readable as attributes for the admin-only web
+     * activity-log modal. Defense-in-depth backstop: no API route serializes
+     * this model today.
+     */
+    protected $hidden = [
+        'ip_address',
+        'user_agent',
+    ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

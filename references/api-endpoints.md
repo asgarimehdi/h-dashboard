@@ -55,7 +55,7 @@ All `/api/*` routes require `auth:sanctum` (Bearer token) **and a token ability*
 | POST | `/api/hardware/bulk-mark` | `{ids: [...], mark: true/false}` — at most 500 ids; more → 422 (#1778) |
 | POST | `/api/hardware/bulk-delete` | `{ids: [...]}` — at most 500 ids; more → 422 (#1778) |
 | GET | `/api/hardware/{hardware}/audits` | Paginated audit trail — filters: `field`, `user_id`, `date_from`, `date_to`, `action`, `source`, `per_page` (max 50) |
-| GET | `/api/hardware/{hardware}/audits/export` | Export audit trail as Excel/CSV (compliance report, Jalali dates) |
+| GET | `/api/hardware/{hardware}/audits/export` | Export audit trail as Excel/CSV (compliance report, Jalali dates, **without operator IP/user-agent**) |
 | GET | `/api/hardware/{hardware}/audits/{audit}` | Single audit record with full field diff + Persian labels |
 | POST | `/api/hardware/{hardware}/audits/{audit}/rollback` | `{field: ...}` — restore a field to its previous value; creates a new `rollback` audit entry |
 
@@ -80,7 +80,9 @@ Unified field-level audit trail (merged with the old `/history` system; `hardwar
 - `field` (filter by changed field), `user_id`, `date_from`, `date_to`
 - `action` (created/updated/deleted/bulk_mark/bulk_delete/rollback), `source` (web/api/import/bulk)
 
-**Response:** Paginated audits with user info (n_code, name), source, IP, ISO + Jalali timestamps, and field-level changes.
+**Response:** Paginated audits with user info (n_code, name), source, ISO + Jalali timestamps, and field-level changes.
+
+**Privacy (#1925):** Operator `ip_address`/`user_agent` are never returned by any `/api/*` endpoint. They remain visible only in the hardware audit modal on the web (`manage_hardware`) and the activity-log page (`manage_users`).
 
 **Scope:** Respects organizational scope — users only see audits for hardware in their accessible units (403 otherwise).
 

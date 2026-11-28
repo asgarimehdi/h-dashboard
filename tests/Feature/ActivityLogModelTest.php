@@ -109,6 +109,29 @@ class ActivityLogModelTest extends TestCase
         $this->assertNull($log->subject_id);
     }
 
+    public function test_activity_log_hides_operator_ip_and_user_agent_when_serialized(): void
+    {
+        // #1925: backstop only — no API route serializes ActivityLog today, but
+        // any future one must not leak operator network identifiers.
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        $log = ActivityLog::create([
+            'user_id' => $user->id,
+            'type' => 'login',
+            'description' => 'ورود',
+            'ip_address' => '10.0.0.1',
+            'user_agent' => 'Test/1.0',
+        ]);
+
+        $this->assertArrayNotHasKey('ip_address', $log->toArray());
+        $this->assertArrayNotHasKey('user_agent', $log->toArray());
+        $this->assertArrayHasKey('ip_address', $log->getAttributes());
+        $this->assertArrayHasKey('user_agent', $log->getAttributes());
+        $this->assertStringNotContainsString('10.0.0.1', json_encode($log));
+        $this->assertStringNotContainsString('Test/1.0', json_encode($log));
+    }
+
     public function test_activity_log_fillable(): void
     {
         ['user' => $user] = $this->createUserWithUnit();
