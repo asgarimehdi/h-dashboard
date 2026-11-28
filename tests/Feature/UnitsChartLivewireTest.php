@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Person;
 use App\Models\Unit;
+use App\Models\UnitType;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
@@ -205,6 +207,81 @@ class UnitsChartLivewireTest extends TestCase
         // Should NOT select the unauthorized unit
         $selectedUnit = $component->get('selectedUnit');
         $this->assertNull($selectedUnit);
+    }
+
+    // ==================== Tree cache (#1999) ====================
+
+    /**
+     * A toggle round-trip must not rebuild the tree: hydrate() reads the
+     * versioned `unit_hierarchy` cache, so the `units` table is untouched.
+     *
+     * The CTE is already cached by descendantIds(), so counting only
+     * `with recursive` would pass before the fix — count the table instead.
+     */
+    public function test_toggle_round_trip_does_not_query_the_unit_tree(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        Unit::create(['name' => 'زیرمجموعه شمارش', 'parent_id' => $unit->id]);
+
+        // mount warms both the scope cache and the tree cache.
+        $component = Livewire::test('units.chart')->assertStatus(200);
+
+        $unitQueries = 0;
+        DB::listen(function ($query) use (&$unitQueries): void {
+            if (str_contains($query->sql, '"units"')) {
+                $unitQueries++;
+            }
+        });
+
+        $component->call('toggle', (string) $unit->id);
+
+        $this->assertSame(0, $unitQueries, "Unit-table queries in one toggle round-trip: {$unitQueries}");
+    }
+
+    /**
+     * A search round-trip must not re-run the tree fetch, so no
+     * `unit_types` eager-load happens. The LIKE query on `units` is the
+     * search itself and is allowed.
+     */
+    public function test_search_round_trip_does_not_reload_unit_types(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $type = UnitType::create(['name' => 'شبکه بهداشت']);
+        Unit::create(['name' => 'شبکه جستجو', 'parent_id' => $unit->id, 'unit_type_id' => $type->id]);
+
+        $component = Livewire::test('units.chart');
+
+        $typeQueries = 0;
+        DB::listen(function ($query) use (&$typeQueries): void {
+            if (str_contains($query->sql, '"unit_types"')) {
+                $typeQueries++;
+            }
+        });
+
+        $component->set('search', 'شبکه جستجو');
+
+        $this->assertSame(0, $typeQueries, "unit_types eager-loads in one search round-trip: {$typeQueries}");
+    }
+
+    /**
+     * The cached tree carries the `unit_hierarchy` version in its key, so a
+     * unit write (create/update/delete) makes it unreachable.
+     */
+    public function test_tree_cache_is_invalidated_by_a_unit_write(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $this->actingAs($user);
+
+        $component = Livewire::test('units.chart'); // warms the tree cache
+
+        // Unit::created → AppServiceProvider → increment('unit_hierarchy')
+        Unit::create(['name' => 'واحد تازه‌ساخته', 'parent_id' => $unit->id]);
+
+        $component->refresh()->assertSee('واحد تازه‌ساخته');
     }
 
     // ==================== Edge cases ====================

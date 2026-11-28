@@ -44,8 +44,11 @@ return new class extends Component
     }
 
     /**
-     * Livewire restores Eloquent models by key only, so the in-memory
-     * childrenRecursive tree from buildTree() does not survive toggle().
+     * Livewire restores Eloquent models by key only (ModelSynth stores
+     * class+key, never attributes/relations), so the childrenRecursive tree
+     * from buildTree() does not survive toggle(). loadData() reattaches it —
+     * now from the versioned tree cache, so a round-trip costs no unit-table
+     * query (#1999).
      */
     public function hydrate(): void
     {
@@ -71,16 +74,15 @@ return new class extends Component
         return $ids;
     }
 
+    /**
+     * Scope-rooted tree. Cheap after the first call: treeForScope() is a
+     * versioned cache read keyed by the accessible-id SET (#1999).
+     */
     public function loadData(): void
     {
-        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
-
-        $rootIds = Unit::whereNull('parent_id')
-            ->whereIn('id', $accessibleIds)
-            ->pluck('id')
-            ->all();
-
-        $this->rootUnits = Unit::buildTree($rootIds, $accessibleIds);
+        $this->rootUnits = Unit::treeForScope(
+            app(AccessService::class)->accessibleUnitIds()
+        );
     }
 
     public function updatedSearch(): void
