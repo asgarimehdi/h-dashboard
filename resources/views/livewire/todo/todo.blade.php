@@ -164,7 +164,15 @@ return new class extends Component
 
             // Apply date range filter when available
             if ($this->calendarStart) {
-                $todoQuery->where('start_at', '>=', $this->calendarStart);
+                $windowStart = $this->calendarStart;
+                // Issue #1871: a todo is visible in every window its range
+                // overlaps, not only the window it starts in. A todo with no
+                // end is a point event and stays in its start window only —
+                // without that arm it would leak into every later month.
+                $todoQuery->where(function ($q) use ($windowStart) {
+                    $q->where(fn ($point) => $point->whereNull('end_at')->where('start_at', '>=', $windowStart))
+                        ->orWhere('end_at', '>=', $windowStart);
+                });
                 $ticketQuery->where('created_at', '>=', $this->calendarStart);
             }
             if ($this->calendarEnd) {
