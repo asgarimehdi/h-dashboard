@@ -78,30 +78,36 @@ return new class extends Component
     }
 
     /**
-     * The scoped unit list both picker computeds below build from — one
-     * query per RENDER (not one per picker): rendered shares today resolve
-     * through all-props for the chips AND all-units-tree for the modals
-     * within the same rebuild pass. Memoized into a PRIVATE property, so it
-     * behaves like a computed's per-request cache without ever touching the
-     * snapshot (Livewire 4 dehydrates public properties only — #1040 keeps
-     * the model list out of the payload). Re-evaluated fresh the moment the
-     * first picker build touches it each request, so it always reads this
-     * request's `accessibleUnitIds()`.
+     * The scoped unit rows both picker computeds below build from (#1992).
      *
-     * @var \Illuminate\Database\Eloquent\Collection<int, Unit>|null
+     * View data: it only changes when a Unit/UnitType is written, so it lives
+     * in the versioned `unit_hierarchy` cache (the #1715 pattern) and is not
+     * re-hydrated on every round-trip. `unit_type_id` must stay in the SELECT:
+     * `unitType()` is a belongsTo on that FK, so dropping it nulls the relation
+     * for every row (kargozini/person.blade.php:400-403).
+     *
+     * @var list<array{id: int, name: string, parent_id: int|null, unit_type_name: string|null}>|null
      */
-    private ?\Illuminate\Database\Eloquent\Collection $scopedUnitsCache = null;
+    private ?array $scopedUnitsCache = null;
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Unit>
+     * @return list<array{id: int, name: string, parent_id: int|null, unit_type_name: string|null}>
      */
-    private function scopedAccessibleUnits(): \Illuminate\Database\Eloquent\Collection
+    private function scopedAccessibleUnits(): array
     {
-        if ($this->scopedUnitsCache === null) {
-            $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+        if ($this->scopedUnitsCache !== null) {
+            return $this->scopedUnitsCache;
+        }
 
-            $this->scopedUnitsCache = Unit::query()
-                ->with('unitType')
+        $accessibleIds = app(AccessService::class)->accessibleUnitIds();
+
+        /** @var list<array{id: int, name: string, parent_id: int|null, unit_type_name: string|null}> $rows */
+        $rows = app(\App\Services\CacheInvalidationServiceInterface::class)->remember(
+            'unit_hierarchy',
+            \App\Support\ScopeCacheKey::hash($accessibleIds),
+            fn (): array => Unit::query()
+                ->select(['id', 'name', 'parent_id', 'unit_type_id'])
+                ->with('unitType:id,name')
                 // #849: this picker is the WRITE target list, so it may only
                 // offer units inside the actor's reachable set. The whereIn is
                 // unconditional — an empty scope renders an empty picker (0 = 1),
@@ -109,10 +115,19 @@ return new class extends Component
                 ->whereIn('id', $accessibleIds)
                 ->where('is_active', true)
                 ->orderBy('name')
-                ->get();
-        }
+                ->get()
+                ->map(fn (Unit $unit): array => [
+                    'id' => (int) $unit->id,
+                    'name' => (string) $unit->name,
+                    'parent_id' => $unit->parent_id === null ? null : (int) $unit->parent_id,
+                    'unit_type_name' => $unit->unitType?->name,
+                ])
+                ->all(),
+            60,
+            ['view' => 'users.index.unit-picker', 'active_only' => true],
+        );
 
-        return $this->scopedUnitsCache;
+        return $this->scopedUnitsCache = $rows;
     }
 
     /**
@@ -124,9 +139,13 @@ return new class extends Component
     #[\Livewire\Attributes\Computed]
     public function allUnits(): array
     {
-        $units = $this->scopedAccessibleUnits();
+        $out = [];
 
-        return $units->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->all();
+        foreach ($this->scopedAccessibleUnits() as $row) {
+            $out[] = ['id' => $row['id'], 'name' => $row['name']];
+        }
+
+        return $out;
     }
 
     /**
@@ -140,14 +159,7 @@ return new class extends Component
     #[\Livewire\Attributes\Computed]
     public function allUnitsTree(): array
     {
-        $units = $this->scopedAccessibleUnits();
-
-        return $units->map(fn ($u) => [
-            'id' => $u->id,
-            'name' => $u->name,
-            'parent_id' => $u->parent_id,
-            'unit_type_name' => $u->unitType?->name,
-        ])->all();
+        return $this->scopedAccessibleUnits();
     }
 
     /**
@@ -686,12 +698,16 @@ return new class extends Component
     public function with(): array
     {
         // `$this->allUnits()` is the computed property, not public state — the
-        // chips read from the per-request list.
-        $selectedUnitNames = collect($this->allUnits())
-            ->whereIn('id', $this->unit_ids)
-            ->pluck('name')
-            ->values()
-            ->all();
+        // chips read from the per-request list. With no unit selected the chips
+        // are empty by definition, so skip the picker cache read entirely on
+        // that hot path (#1992).
+        $selectedUnitNames = $this->unit_ids === []
+            ? []
+            : collect($this->allUnits())
+                ->whereIn('id', $this->unit_ids)
+                ->pluck('name')
+                ->values()
+                ->all();
 
         return [
             'users' => $this->users(),
