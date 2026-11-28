@@ -23,8 +23,9 @@ use Morilog\Jalali\Jalalian;
  *
  * The national code is canonicalized here and nowhere else: Persian/Arabic
  * digits become Latin and the value keeps its leading zeros (the column is
- * `string(10)`). Names are stored as typed — the search folds the COLUMN at
- * query time (`foldSeparatorsSql()`), so no `saving` hook rewrites them.
+ * `string(10)`). Names are stored as typed — the search compares the stored
+ * folded columns (`patients.*_folded`, generated from `foldSeparatorsSql()` by
+ * the #1971 migration), so no `saving` hook rewrites them.
  *
  * The input is Jalali (`birth_date_jalali`); `create()` validates the
  * NORMALIZED copy of the payload with `validationRules()` (#1300) — rules are
