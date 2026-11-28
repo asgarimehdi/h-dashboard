@@ -94,12 +94,12 @@ Each line is the whole rule; the link holds the detail and the evidence.
 - **Tinker:** `php artisan tinker --execute '...'` — single quotes to prevent shell expansion. Prefer `database-query`/`database-schema` Boost MCP over raw SQL.
 - **Artisan:** New migrations use `YYYY_MM_DD_000001_description.php` (sequential daily counter); pass `--no-interaction`.
 - **Frontend rebuild:** After frontend changes run `npm run build`.
-- **JS lint/format:** `npm run lint` + `npm run format` after touching `resources/js/`; `npm test` runs the Vitest unit tests in `tests/js/`.
+- **JS lint/format:** `npm run lint` + `npm run format` after touching `resources/js/`; `npm test` runs the Vitest unit tests in `tests/js/`. `composer verify` also runs `npm run lint` + `format:check` + `tsc -p tsconfig.js.json` + the `// @ts-check` ratchet (#1886); fix formatting with `npm run format`.
 
 ### Composer Scripts
 ```bash
 composer test         # ensure-test-app-key (only if .env.testing has none) + config:clear + route:clear + XDEBUG_MODE=off php artisan test
-composer verify       # FULL gates: preflight + APP_KEY + view:clear + pint --test + phpstan + suite  ← run before push
+composer verify       # FULL gates: preflight + APP_KEY + view:clear + pint --test + JS (lint/format:check/tsc/ratchet) + phpstan + suite  ← run before push
 composer verify tests/Feature/TodoLivewireTest.php   # same FULL gates; only the *test* step is narrowed
 composer verify:fast <path>   # local TDD loop: Pint on <path> only, PHPStan skipped — NOT CI-equivalent
 composer dev          # concurrently: php artisan serve + queue:listen + npm run dev

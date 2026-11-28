@@ -6,6 +6,10 @@
 # 1b. APP_KEY   — fails if a tracked env file commits a real APP_KEY (#953)
 # 2. caches     — `composer test` already clears config/routes; view:clear is
 #                 the one CI does that composer test does not, so add it here
+# 2b. js gates  — CI's `js-lint` + `js-typecheck` code checks (eslint,
+#                 prettier --check, `tsc -p tsconfig.js.json`, the
+#                 `// @ts-check` ratchet) via scripts/js-gates.sh. The npm
+#                 audit step is NOT reproduced: live advisory DB + network.
 # 3. pint       — `pint --test`, the exact command CI's lint job runs
 #                 (--fast narrows it to the paths given on the command line)
 # 3b. dead files— no test file may run zero tests (issue #935)
@@ -16,9 +20,10 @@
 #                 (--fast SKIPS this; the banner says so)
 # 5. pest       — the full suite, or the paths given as arguments
 #
-# This reproduces the CI *test job*, not its coverage gate: CI also runs
-# `--parallel --coverage --min=80`, which needs pcov and a parallel-capable
-# machine. Coverage is deliberately not gated locally.
+# This reproduces the CI *test job* plus the code checks of the *js-lint* and
+# *js-typecheck* jobs — not the coverage gate and not the dependency audits:
+# CI also runs `--parallel --coverage --min=80`, which needs pcov and a
+# parallel-capable machine. Coverage is deliberately not gated locally.
 #
 # Usage:
 #   composer verify                      # everything (full gates)
@@ -58,6 +63,7 @@ if [ "$FAST" -eq 1 ]; then
     echo "⚡ FAST MODE — LOCAL ONLY, NOT CI-EQUIVALENT"
     echo "   Pint:    ${*}"
     echo "   PHPStan: SKIPPED"
+    echo "   JS:      full (--fast narrows only Pint and skips PHPStan)"
     echo "   Run \`composer verify\` (no --fast) before pushing."
 fi
 
@@ -103,6 +109,17 @@ fi
 #    no-op, which reads as ~75 unrelated failures.
 step "Clearing caches"
 php artisan view:clear
+
+# 2b. JavaScript gates (issue #1886). CI's `js-lint` and `js-typecheck` jobs are
+#     blocking, but until #1886 nothing local reproduced them: a JS-only change
+#     passed verify, pre-commit and pre-push and failed only in CI. Placed before
+#     Pint because these cost ~2 s against Pint's ~27 s — cheap first, fail fast.
+step "JS gates (lint, format, types)"
+if ! bash scripts/js-gates.sh --install; then
+    echo ""
+    echo "✗ JS gates. Fix formatting with: npm run format"
+    exit 1
+fi
 
 # 3. Code style. The default is CI's lint job exactly: `pint --test` over the
 #    whole repo. --fast narrows it to the paths given on the command line and
@@ -186,5 +203,5 @@ if [ "$FAST" -eq 1 ]; then
     echo "⚡ verify:fast passed — PHPStan was SKIPPED and Pint only saw: $*"
     echo "   NOT CI-equivalent. Run \`composer verify\` before pushing."
 else
-    echo "✅ verify passed — this matches CI's test job. Coverage is still CI-only."
+    echo "✅ verify passed — CI's test job + the JS gates. Coverage and the dependency audits are still CI-only."
 fi

@@ -6,40 +6,69 @@
 # The full test suite is deliberately NOT run here — it takes minutes, and a
 # push gate that slow is a push people cancel. Tests are opt-in:
 #   VERIFY_TESTS="tests/Feature/TodoLivewireTest.php" git push
+#
+# JS gates (#1886) run only when the pushed range touches resources/js or the
+# JS toolchain files, and they never install dependencies (no network here, and
+# `npm ci` would delete node_modules mid-push); a stale install skips loudly.
 set -euo pipefail
 
 # git hands a pre-push hook "<local ref> <local sha> <remote ref> <remote sha>"
 # on stdin — one line per ref being pushed. The INDEX is always empty at this
 # point, so "git diff --cached" cannot answer "what is being pushed"; it only
 # ever reported nothing, and the gate silently never ran.
-pushed_php_files() {
-    local remote_sha=""
+#
+# stdin is consumed exactly ONCE: git hands one line per ref on stdin, and a
+# second `while read` on the same pipe would see EOF and silently report "no
+# files changed". Both the PHP and the JS question are asked of this buffer.
+PUSHED_REFS="$(cat)"
 
-    while read -r _local_ref _local_sha _remote_ref remote_sha_in; do
-        remote_sha=$remote_sha_in
-    done
+remote_sha=""
+while read -r _local_ref _local_sha _remote_ref remote_sha_in; do
+    remote_sha=$remote_sha_in
+done <<< "$PUSHED_REFS"
 
-    # A new branch has no remote sha to compare against: everything is new.
+# $@ = pathspecs. A new branch has no remote sha to compare against, so this
+# returns nothing — a known hole (#1886 follow-up), left alone here because
+# changing it changes PHPStan's behaviour.
+pushed_files() {
     if [ -z "$remote_sha" ] || [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
         return 0
     fi
 
-    git diff --name-only "${remote_sha}..HEAD" -- '*.php'
+    git diff --name-only "${remote_sha}..HEAD" -- "$@"
+}
+
+pushed_php_files() {
+    pushed_files '*.php'
 }
 
 PHP_FILES=$(pushed_php_files | sort -u)
+JS_FILES=$(pushed_files 'resources/js/*.js' 'package.json' 'package-lock.json' \
+    'eslint.config.js' 'tsconfig.json' 'tsconfig.js.json' | sort -u)
 
-if [ -z "$PHP_FILES" ]; then
-    echo "No PHP changes in the pushed range — skipping PHPStan."
+if [ -z "$PHP_FILES" ] && [ -z "$JS_FILES" ]; then
+    echo "No PHP or JS changes in the pushed range — skipping PHPStan and the JS gates."
     exit 0
 fi
 
-echo "PHPStan (full analysis) — $(printf '%s\n' "$PHP_FILES" | wc -l) PHP file(s) in the push..."
+if [ -n "$PHP_FILES" ]; then
+    echo "PHPStan (full analysis) — $(printf '%s\n' "$PHP_FILES" | wc -l) PHP file(s) in the push..."
 
-# Xdebug in develop mode turns PHPStan's own diagnostics into fatals.
-export XDEBUG_MODE=off
+    # Xdebug in develop mode turns PHPStan's own diagnostics into fatals.
+    export XDEBUG_MODE=off
 
-vendor/bin/phpstan analyse --no-progress
+    vendor/bin/phpstan analyse --no-progress
+else
+    echo "No PHP changes in the pushed range — skipping PHPStan."
+fi
+
+# The four CI-blocking JS checks, from the one shared script (scripts/js-gates.sh)
+# so a CI change is made in one place. --no-install: a hook never runs `npm ci`.
+if [ -n "$JS_FILES" ]; then
+    echo ""
+    echo "JS gates — $(printf '%s\n' "$JS_FILES" | wc -l) JS/package file(s) in the push..."
+    bash scripts/js-gates.sh --no-install
+fi
 
 # Opt-in tests: named by the developer, never guessed. A heuristic that maps
 # app/ files to tests/ does not exist here — Livewire components have no PHP
@@ -50,4 +79,4 @@ if [ -n "${VERIFY_TESTS:-}" ]; then
     composer test -- $VERIFY_TESTS
 fi
 
-echo "✅ PHPStan clean."
+echo "✅ Local gates clean."
