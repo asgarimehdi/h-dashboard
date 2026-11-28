@@ -14,6 +14,7 @@ use App\Support\ActorLabel;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
 
@@ -391,6 +392,17 @@ trait TicketsInboxFlow
             $this->dispatch('swal', ['title' => 'تیکت با موفقیت ارجاع شد', 'icon' => 'success']);
             $this->closeDetail();
         } catch (\Exception $e) {
+            // #1980: a failed forward used to vanish — no report, no log. The
+            // operator keeps the generic toast; the details go to log + Sentry.
+            report($e);
+            Log::error('TicketsInboxFlow::forward failed', [
+                'ticket_id' => $ticket->id,
+                'action' => 'forward',
+                'user_id' => auth()->id(),
+                'target_unit_id' => $this->targetUnitId,
+                'exception' => $e,
+            ]);
+
             $this->dispatch('swal', ['title' => 'خطا در انجام عملیات', 'icon' => 'error']);
         }
     }
@@ -810,7 +822,19 @@ trait TicketsInboxFlow
                 $startedTransaction = false;
             }
 
-            $this->addError('completionNote', 'خطایی در ثبت عملیات رخ داد: '.$e->getMessage());
+            // #1980: report + a structured log; the user gets a generic message.
+            // `committed` tells a lost write apart from a post-commit UI failure
+            // (:786-799 runs inside this try).
+            report($e);
+            Log::error('TicketsInboxFlow::submitAction failed', [
+                'ticket_id' => $ticket->id,
+                'action' => $actionType, // completed | forwarded
+                'user_id' => auth()->id(),
+                'committed' => $committed,
+                'exception' => $e,
+            ]);
+
+            $this->addError('completionNote', 'خطایی در ثبت عملیات رخ داد. لطفاً دوباره تلاش کنید.');
         } finally {
             // Every non-committing exit — the five early returns, the catch, and
             // a future `throw` — lands here. One cleanup point, not seven.

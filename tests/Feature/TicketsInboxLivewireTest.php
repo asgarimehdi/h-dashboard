@@ -16,6 +16,8 @@ use Illuminate\Database\DatabaseManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -1033,6 +1035,50 @@ class TicketsInboxLivewireTest extends TestCase
             'ticket_id' => $ticket->id,
             'action' => 'forwarded',
         ]);
+    }
+
+    public function test_forward_failure_is_reported_and_shows_generic_toast(): void
+    {
+        // #1980: the catch used to swallow the exception with no report/log.
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $target = $this->createTargetUnit();
+        $ticket = $this->createTicket(['status' => 'created']);
+        $originalUnitId = $ticket->unit_id;
+
+        // Failure seam of TicketsInboxAttachmentAtomicityTest: a model event,
+        // never a raw SQL error (RefreshDatabase → SAVEPOINT).
+        TaskActivity::creating(function (): void {
+            throw new \RuntimeException('boom-forward');
+        });
+
+        Exceptions::fake();
+        Log::spy();
+
+        Livewire::test('tickets.inbox')
+            ->call('showTicket', $ticket->id)
+            ->set('targetUnitId', $target->id)
+            ->set('targetUnitName', $target->name)
+            ->set('forwardNote', 'یادداشت تست')
+            ->call('forward')
+            ->assertDispatched('swal', fn ($name, $params) => ($params[0]['title'] ?? '') === 'خطا در انجام عملیات');
+
+        Exceptions::assertReported(\RuntimeException::class);
+        Exceptions::assertReportedCount(1);
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->with('TicketsInboxFlow::forward failed', \Mockery::on(function (array $context) use ($ticket): bool {
+                return $context['ticket_id'] === $ticket->id
+                    && $context['action'] === 'forward'
+                    && $context['exception'] instanceof \RuntimeException;
+            }));
+
+        $ticket->refresh();
+        $this->assertSame('created', $ticket->status);
+        $this->assertSame($originalUnitId, $ticket->unit_id);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $ticket->id]);
     }
 
     // =====================================================================
@@ -2439,6 +2485,52 @@ class TicketsInboxLivewireTest extends TestCase
             'ticket_id' => $ticket->id,
             'action' => 'completed',
         ]);
+    }
+
+    public function test_submit_action_completion_failure_is_reported_and_shows_generic_message(): void
+    {
+        // #1980: no report/log, and the raw exception message was shown to the user.
+        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket([
+            'status' => 'accepted',
+            'current_assignee_id' => $user->id,
+        ]);
+
+        TaskActivity::creating(function (): void {
+            throw new \RuntimeException('boom-complete');
+        });
+
+        Exceptions::fake();
+        Log::spy();
+
+        $component = Livewire::test('tickets.inbox')
+            ->call('openCompletionModal', $ticket->id)
+            ->set('completionNote', 'گزارش نهایی تست')
+            ->call('submitAction');
+
+        $component->assertHasErrors('completionNote');
+
+        Exceptions::assertReported(\RuntimeException::class);
+        Exceptions::assertReportedCount(1);
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->with('TicketsInboxFlow::submitAction failed', \Mockery::on(function (array $context) use ($ticket): bool {
+                return $context['ticket_id'] === $ticket->id
+                    && $context['action'] === 'completed'
+                    && $context['committed'] === false;
+            }));
+
+        $message = (string) $component->errors()->first('completionNote');
+        $this->assertSame('خطایی در ثبت عملیات رخ داد. لطفاً دوباره تلاش کنید.', $message);
+        $this->assertStringNotContainsString('boom-complete', $message);
+
+        $ticket->refresh();
+        $this->assertSame('accepted', $ticket->status);
+        $this->assertNull($ticket->completed_at);
+        $this->assertDatabaseMissing('task_activities', ['ticket_id' => $ticket->id]);
     }
 
     public function test_submit_action_validates_completion_note(): void
