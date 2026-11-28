@@ -33,7 +33,13 @@ Health Dashboard is a Laravel application for managing hospital/healthcare cente
 
 ### Quick Start
 
-**Prerequisites:** Docker, PHP 8.4, Composer, Node.js 24+
+**Prerequisites:** Docker, Composer, Node.js 24+, and PHP 8.4+ (CI and
+`install-guid.md` §2 use 8.5) with `mbstring`, `xml` (dom), `curl`, `zip` and
+`gd` — `composer install` refuses to resolve dependencies without them (`gd` is
+phpspreadsheet's hard requirement) — plus `pdo_pgsql` and `redis` (phpredis) at
+runtime: without `redis` the app cannot reach Redis at all (cache, session,
+queue). The full system-package list, including nginx/FPM/OPcache for a
+production host, is in [`install-guid.md` §2](install-guid.md).
 
 ```bash
 # 1. Clone
@@ -66,8 +72,29 @@ php artisan migrate --seed
 # 6. Build frontend
 npm run build
 
-# 7. Start development server
-php artisan serve
+# 7. Start the app: server + Vite + ONE queue worker on the default `redis`
+#    queue. `php artisan serve` alone starts no worker at all — queued jobs
+#    then never run.
+composer dev
+```
+
+```bash
+# 8. Start the rest of the background work — each command in its own terminal.
+#    Nothing below fails loudly if skipped: the work is queued and never run.
+#    - no scheduler      → Zabbix sync, `reports:generate-daily` and the
+#                          nightly archives never run
+#    - no redis-reports  → confirmed hardware/person imports
+#                          (`ImportHardwareJob`, `ImportPersonsJob`) stay in
+#                          `queues:reports`
+#    - no redis-maintenance → the Tools page retention jobs
+#                          (`ArchiveActivityLogsJob`, `CleanNotificationsJob`)
+#                          stay in `queues:maintenance`
+php artisan schedule:work
+php artisan queue:work redis-reports
+php artisan queue:work redis-maintenance
+
+#    Production uses the systemd units and a `schedule:run` cron instead of
+#    `schedule:work` — see install-guid.md §11.
 ```
 
 ### Testing
@@ -108,7 +135,13 @@ composer test
 
 ### نصب و راه‌اندازی
 
-پیش‌نیاز: Docker، PHP 8.4، Composer، Node.js 24+
+پیش‌نیاز: Docker، Composer، Node.js 24+ و PHP 8.4+ (CI و `install-guid.md` §2 از
+8.5 استفاده می‌کنند) با اکستنشن‌های `mbstring`، `xml` (dom)، `curl`، `zip` و
+`gd` — بدون این‌ها `composer install` وابستگی‌ها را resolve نمی‌کند (`gd` نیازِ
+سختِ phpspreadsheet است) — به‌علاوهٔ `pdo_pgsql` و `redis` (phpredis) در زمان
+اجرا: بدون `redis` اپ اصلاً به Redis دسترسی ندارد (cache، session و queue).
+فهرست کامل بسته‌های سیستمی، شامل nginx/FPM/OPcache برای سرور production:
+[`install-guid.md` §2](install-guid.md).
 
 ```bash
 # ۱. کلون کردن مخزن
@@ -141,8 +174,26 @@ php artisan migrate --seed
 # ۶. بیلد فرانت‌اند
 npm run build
 
-# ۷. اجرای سرور توسعه
-php artisan serve
+# ۷. اجرای اپ: سرور + Vite + یک worker روی صف پیش‌فرض `redis`.
+#    `php artisan serve` تنها هیچ worker‌ای بالا نمی‌آورد و کارهای صف‌شده
+#    هرگز اجرا نمی‌شوند.
+composer dev
+```
+
+```bash
+# ۸. بقیهٔ کارهای پس‌زمینه — هر دستور در یک ترمینال جدا. اگر اجرا نشوند هیچ
+#    خطایی دیده نمی‌شود؛ کار در صف می‌ماند:
+#    - بدون scheduler: سینک Zabbix، `reports:generate-daily` و آرشیوهای شبانه
+#    - بدون worker `redis-reports`: ایمپورت‌های تأییدشدهٔ سخت‌افزار/پرسنل
+#      (`ImportHardwareJob`، `ImportPersonsJob`) در `queues:reports`
+#    - بدون worker `redis-maintenance`: کارهای نگهداری صفحهٔ ابزارها در
+#      `queues:maintenance`
+php artisan schedule:work
+php artisan queue:work redis-reports
+php artisan queue:work redis-maintenance
+
+#    در production به‌جای `schedule:work` از unit‌های systemd و cron
+#    `schedule:run` استفاده می‌شود — install-guid.md §11.
 ```
 
 ### تست‌ها
