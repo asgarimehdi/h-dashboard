@@ -31,11 +31,13 @@ class UnitApiTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Issue #1880: internal generated search column. `geom` is NOT in this list
-     * — the Gate kept it in the payload for this PR (issue scope is folded
-     * columns only), so the tests assert it is still present.
+     * Issue #1880: internal generated search column.
+     *
+     * Issue #1954: the raw PostGIS `geom` column is also excluded from every
+     * Unit payload (nothing in the app writes it; the documented geometry path
+     * is `GET /api/gis/units`, which selects lat/lng explicitly).
      */
-    private const INTERNAL = ['name_folded'];
+    private const INTERNAL = ['name_folded', 'geom'];
 
     protected function setUp(): void
     {
@@ -608,7 +610,6 @@ class UnitApiTest extends TestCase
         foreach (self::INTERNAL as $key) {
             $this->assertArrayNotHasKey($key, $item);
         }
-        $this->assertArrayHasKey('geom', $item);
 
         foreach (['id', 'name', 'region_id', 'parent_id', 'unit_type_id', 'lat', 'lng', 'description', 'boundary_id', 'is_active', 'can_receive_tickets', 'created_at', 'updated_at', 'unit_type'] as $key) {
             $this->assertArrayHasKey($key, $item);
@@ -628,7 +629,6 @@ class UnitApiTest extends TestCase
         foreach (self::INTERNAL as $key) {
             $this->assertArrayNotHasKey($key, $data);
         }
-        $this->assertArrayHasKey('geom', $data);
 
         foreach (['id', 'name', 'region_id', 'parent_id', 'unit_type_id', 'lat', 'lng', 'description', 'boundary_id', 'is_active', 'can_receive_tickets', 'created_at', 'updated_at', 'unit_type', 'region', 'parent'] as $key) {
             $this->assertArrayHasKey($key, $data);
@@ -648,7 +648,6 @@ class UnitApiTest extends TestCase
         foreach (self::INTERNAL as $key) {
             $this->assertArrayNotHasKey($key, $data);
         }
-        $this->assertArrayHasKey('geom', $data);
 
         $this->assertSame('Updated Unit', $data['name']);
         $this->assertArrayHasKey('is_active', $data);
