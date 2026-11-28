@@ -6,6 +6,17 @@ use Illuminate\Support\Facades\Http;
 
 class ZabbixService
 {
+    /**
+     * حداکثر ردیف خام history که برای هر item در هر درخواست کشیده می‌شود.
+     *
+     * بزرگ‌ترین پنجره‌ی قابل انتخاب ۲۴ ساعت است (TrafficController:34).
+     * با interval ۳۰s این ۲٬۸۸۰ ردیف و با ۶۰s فقط ۱٬۴۴۰ ردیف است؛ سقف ۵٬۰۰۰
+     * کل پنجره را برای هر interval ≥ ۱۷.۳s پوشش می‌دهد و در intervalهای
+     * غیرعادی (مثلاً ۱s ⇒ ۸۶٬۴۰۰ ردیف) هزینه را به «جدیدترین برش پیوسته»
+     * محدود می‌کند.
+     */
+    private const TRAFFIC_MAX_SAMPLES = 5000;
+
     protected string $url;
 
     protected string $auth;
@@ -22,11 +33,12 @@ class ZabbixService
         $timeFrom = $now - $duration; // استفاده از duration
 
         $response = $this->request('history.get', [
-            'output' => 'extend',
+            'output' => ['clock', 'value'], // itemid/ns استفاده نمی‌شوند
             'history' => 3,
             'itemids' => $itemId,
             'sortfield' => 'clock',
-            'sortorder' => 'ASC',
+            'sortorder' => 'DESC', // تا limit جدیدترین‌ها را نگه دارد
+            'limit' => self::TRAFFIC_MAX_SAMPLES,
             'time_from' => $timeFrom,
             'time_till' => $now,
         ]);
@@ -35,7 +47,10 @@ class ZabbixService
             return [];
         }
 
-        $history = collect($response['result']);
+        // DESC برگردانده می‌شود؛ به ASC برمی‌گردانیم تا حلقه‌ی diff و ترتیب x
+        // دقیقاً مثل قبل بماند. (Zabbix فقط در DESC سقف را با chunking زمانی
+        // اعمال می‌کند — CHistory::get.)
+        $history = collect($response['result'])->reverse()->values();
         $points = [];
 
         for ($i = 1; $i < $history->count(); $i++) {
