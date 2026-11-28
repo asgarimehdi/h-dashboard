@@ -224,6 +224,44 @@ class WirelessGaugeRateLimitTest extends TestCase
         $this->assertSame('60000', $matches[1] ?? null, 'The traffic poll must stay at 60 s.');
     }
 
+    public function test_the_gauge_poller_stops_the_previous_timer_before_the_early_return(): void
+    {
+        // #1890: leaving /it/wireless must stop the shared 30 s poller. The clear
+        // used to sit AFTER the `#wireless-item-ids` guard, so a wire:navigate to
+        // any other page returned early and left the interval running there —
+        // 2 requests/min to /api/zabbix/multi-latest, on every page, forever.
+        $source = $this->jsSource('zabbix-gauges.js');
+
+        $start = strpos($source, 'export function setupZabbixPoller');
+        $this->assertNotFalse($start, 'setupZabbixPoller is gone; re-point this test.');
+
+        // Scope every offset to the poller body: the auth-latch catch block also
+        // clears `state.timer`, and a file-wide first-match would be ambiguous.
+        $body = substr($source, $start);
+
+        $init = strpos($body, 'ensureGaugeState()');
+        $clear = strpos($body, 'clearInterval(state.timer)');
+        $guard = strpos($body, 'if (!block)');
+
+        $this->assertNotFalse($init, 'The poller must obtain the shared state.');
+        $this->assertNotFalse($clear, 'The poller must clear its previous timer.');
+        $this->assertNotFalse($guard, 'The #wireless-item-ids guard is gone; re-point this test.');
+
+        $this->assertLessThan(
+            $clear,
+            $init,
+            '`state` must be defined before the timer clear (a clear above the guard without this is a TDZ ReferenceError).'
+        );
+        $this->assertLessThan(
+            $guard,
+            $clear,
+            'The previous timer must be cleared BEFORE the early return, or it keeps polling on every other page (#1890).'
+        );
+
+        // The budget contract is unchanged: one interval, still 30 s.
+        $this->assertSame(1, substr_count($body, 'setInterval(load, REFRESH_MS)'));
+    }
+
     // ==================== Helpers ====================
 
     /**
