@@ -37,11 +37,12 @@ class ZabbixServiceTest extends TestCase
 
     public function test_get_interface_traffic_calculates_rate_correctly()
     {
+        // Zabbix returns newest first because the service asks for DESC.
         Http::fake([
             'http://zabbix.local/api_json_rpc.php' => Http::response([
                 'result' => [
+                    ['value' => 5000000, 'clock' => 1600000060], // 4M diff, 60s diff
                     ['value' => 1000000, 'clock' => 1600000000],
-                    ['value' => 5000000, 'clock' => 1600000060], // 4s diff, 4M diff
                 ],
                 'error' => null,
                 'id' => 1,
@@ -54,6 +55,41 @@ class ZabbixServiceTest extends TestCase
         // Rate = (5M - 1M) / (60s) / 1e6 = 4/60 = 0.066...
         $this->assertCount(1, $result);
         $this->assertEquals(0.07, $result[0]['y']); // rounded to 2 decimals
+        $this->assertEquals(1600000060000, $result[0]['x']); // DESC response restored to ASC
+    }
+
+    public function test_get_interface_traffic_bounds_the_history_window()
+    {
+        Http::fake([
+            'http://zabbix.local/api_json_rpc.php' => Http::response([
+                'result' => [
+                    ['value' => 5000000, 'clock' => 1600000060],
+                    ['value' => 1000000, 'clock' => 1600000000],
+                ],
+                'error' => null,
+                'id' => 1,
+            ], 200),
+        ]);
+
+        $service = new ZabbixService;
+        $service->getInterfaceTraffic('item-123', 86400);
+
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            if (($data['method'] ?? null) !== 'history.get') {
+                return false;
+            }
+
+            $params = $data['params'];
+
+            return $params['limit'] === 5000
+                && $params['sortorder'] === 'DESC'
+                && $params['output'] === ['clock', 'value']
+                && $params['history'] === 3
+                && $params['sortfield'] === 'clock'
+                && $params['time_till'] - $params['time_from'] === 86400;
+        });
     }
 
     public function test_get_interface_traffic_returns_empty_on_single_sample()
