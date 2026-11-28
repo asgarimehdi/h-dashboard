@@ -204,4 +204,68 @@ class AccessServiceTest extends TestCase
         $cteQueries = array_filter($queries, fn ($q) => str_contains($q['query'] ?? '', 'WITH RECURSIVE unit_tree'));
         $this->assertCount(0, $cteQueries, 'No new CTE query should run for different baseUnitIds order');
     }
+
+    /**
+     * #1972: the worker entry point must ignore the session unit — a worker has
+     * no session while a test still holds the dispatch-time `current_unit_id`.
+     * #1830: the base comes from `user_units` only; the person's HR unit is an
+     * HR field, not an access grant, so it must not leak into the scope either.
+     */
+    public function test_fresh_accessible_unit_ids_ignores_the_session_unit(): void
+    {
+        $sessionUnit = Unit::create(['name' => 'Session Unit']);
+        $pivotParent = Unit::create(['name' => 'Pivot Parent']);
+        $pivotChild = Unit::create(['name' => 'Pivot Child', 'parent_id' => $pivotParent->id]);
+        $hrUnit = Unit::create(['name' => 'HR Unit']);
+
+        $user = $this->makeUserInUnit($hrUnit);
+        $user->units()->attach($pivotParent->id, ['role' => 'staff', 'is_primary' => true]);
+        Session::put('current_unit_id', $sessionUnit->id);
+
+        $ids = app(AccessService::class)->freshAccessibleUnitIds($user);
+        sort($ids);
+
+        $this->assertSame([$pivotParent->id, $pivotChild->id], $ids);
+        $this->assertNotContains($sessionUnit->id, $ids);
+        $this->assertNotContains($hrUnit->id, $ids);
+    }
+
+    /**
+     * #1972: the pivot wins over the person's HR unit, exactly as in
+     * `accessibleUnitIds()`.
+     */
+    public function test_fresh_accessible_unit_ids_prefers_the_unit_pivot_over_the_hr_unit(): void
+    {
+        $hrUnit = Unit::create(['name' => 'HR Unit']);
+        $pivotUnit = Unit::create(['name' => 'Pivot Unit']);
+
+        $user = $this->makeUserInUnit($hrUnit);
+        $user->units()->attach($pivotUnit->id, ['role' => 'staff', 'is_primary' => true]);
+
+        $ids = app(AccessService::class)->freshAccessibleUnitIds($user);
+
+        $this->assertContains($pivotUnit->id, $ids);
+        $this->assertNotContains($hrUnit->id, $ids);
+    }
+
+    /**
+     * #1972: the dangerous failure mode is a silent widen in the worker path.
+     * A user with no base at all must get `[]` — never every unit.
+     *
+     * A persisted person-less user cannot exist: `users.n_code` has a
+     * `restrict` FK to `persons` and `persons.u_id` is NOT NULL, so this
+     * defensive branch is exercised with an unsaved model (no `user_units`
+     * rows, no matching person) — the same two lookups the method performs.
+     */
+    public function test_fresh_accessible_unit_ids_is_fail_closed_without_a_base(): void
+    {
+        Unit::create(['name' => 'Unrelated Unit']);
+
+        $user = new User(['n_code' => (string) fake()->unique()->numerify('##########')]);
+
+        $this->assertNull($user->person);
+        $this->assertSame([], app(AccessService::class)->freshAccessibleUnitIds($user));
+        // The units exist; the empty scope is "in scope of nothing", not "no data".
+        $this->assertNotEmpty(app(AccessService::class)->allUnitIds());
+    }
 }

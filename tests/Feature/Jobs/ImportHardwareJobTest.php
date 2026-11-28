@@ -354,6 +354,50 @@ class ImportHardwareJobTest extends TestCase
     }
 
     /**
+     * #1972 / #1830: the person's HR unit is not an access grant — `user_units`
+     * membership is the sole source of scope. A worker whose actor has no pivot
+     * row must refuse the sheet instead of writing into the HR unit, even
+     * though the test session still holds the dispatch-time `current_unit_id`.
+     */
+    public function test_job_aborts_when_the_only_unit_link_is_the_person_hr_unit(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['manage_hardware']);
+
+        $rowPerson = Person::factory()->create(['u_id' => $unit->id]);
+
+        $token = 'hr-only-token';
+        $this->assertTrue(ImportStatus::claim($user->id, $token));
+
+        Storage::disk('local')->put('imports/hr-only.csv', $this->hardwareCsv($rowPerson->n_code, 'PC-HR-ONLY'));
+
+        Log::spy();
+
+        $user->units()->detach($unit->id);
+
+        (new ImportHardwareJob(
+            path: 'imports/hr-only.csv',
+            compareKey: 'pc_name',
+            selectedActions: ['row_2' => 'create'],
+            accessibleUnitIds: [$unit->id],
+            userId: $user->id,
+            statusToken: $token,
+        ))->handle();
+
+        $this->assertDatabaseMissing('hardwares', ['pc_name' => 'PC-HR-ONLY']);
+        $this->assertSame(0, HardwareAudit::count());
+        Storage::disk('local')->assertMissing('imports/hr-only.csv');
+
+        $result = ImportStatus::read($user->id, $token);
+        $this->assertNotNull($result);
+        $this->assertSame('failed', $result['state']);
+        $this->assertTrue(ImportStatus::claim($user->id, 'next-token'));
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(fn (string $message, array $context) => ($context['reason'] ?? null) === 'scope_empty');
+    }
+
+    /**
      * #1639: `userId === null` fails closed — there is no actor to authorize,
      * so nothing is written and there is no claim/token to publish to.
      */

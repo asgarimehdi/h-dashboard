@@ -2,8 +2,8 @@
 
 namespace App\Jobs\Concerns;
 
-use App\Models\Unit;
 use App\Models\User;
+use App\Services\AccessService;
 use App\Support\ImportStatus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -13,10 +13,12 @@ use Illuminate\Support\Facades\Storage;
  * from dispatch time. A worker has no session and no auth user, so the
  * snapshot must be re-validated against the database before it writes.
  *
- * Deliberately session-free and cache-free: a worker's session is empty while
- * a test still holds the dispatch-time `current_unit_id`, so resolving through
- * `AccessService::accessibleUnitIds()` would behave differently in the two
- * contexts — exactly where the security assertion lives.
+ * #1972: the re-check resolves the actor's scope through the shared
+ * `AccessService::freshAccessibleUnitIds()` entry point, which is
+ * session-free by construction (no session, no memo, no `accessible_units:`
+ * cache). The web path and the worker path therefore use one base-unit rule,
+ * and a test that still holds the dispatch-time `current_unit_id` in its
+ * session cannot mask a worker that would see an empty scope in production.
  */
 trait RevalidatesImportActor
 {
@@ -52,7 +54,7 @@ trait RevalidatesImportActor
         } elseif ($captured === []) {
             $reason = 'scope_empty';
         } else {
-            $scope = array_values(array_intersect($captured, $this->freshAccessibleUnitIds($user)));
+            $scope = array_values(array_intersect($captured, app(AccessService::class)->freshAccessibleUnitIds($user)));
 
             if ($scope === []) {
                 $reason = 'scope_empty';
@@ -68,28 +70,6 @@ trait RevalidatesImportActor
         $this->abortUnauthorizedImport($reason, $userId, $statusToken, $path);
 
         return null;
-    }
-
-    /**
-     * Mirror of AccessService::accessibleUnitIds() minus the session base and
-     * the caches: in a worker the base is the user_units rows, falling back to
-     * the person's HR unit.
-     *
-     * @return array<int, int>
-     */
-    private function freshAccessibleUnitIds(User $user): array
-    {
-        $base = array_map('intval', $user->units()->pluck('units.id')->all());
-
-        if ($base === [] && ($personUnitId = $user->person?->u_id) !== null) {
-            $base = [(int) $personUnitId];
-        }
-
-        if ($base === []) {
-            return [];
-        }
-
-        return array_map('intval', Unit::descendantIds($base)->toArray());
     }
 
     private function abortUnauthorizedImport(string $reason, ?int $userId, ?string $statusToken, string $path): void
