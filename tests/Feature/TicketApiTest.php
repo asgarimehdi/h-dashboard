@@ -1019,8 +1019,10 @@ class TicketApiTest extends TestCase
     /**
      * Issue #1276 — attachments left the public disk, so the app can no longer
      * build `baseUrl + '/storage/' + file_path`. The detail payload carries an
-     * absolute API download URL instead; `file_path` stays for compatibility
-     * (deprecated, not removed).
+     * absolute API download URL instead.
+     *
+     * Issue #1953 — `file_path` is no longer part of the payload; the key set
+     * is an explicit allowlist and the private-disk layout must not leak.
      */
     public function test_api_detail_exposes_the_attachment_download_url(): void
     {
@@ -1046,7 +1048,16 @@ class TicketApiTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('data.attachments.0.id', $attachment->id)
             ->assertJsonPath('data.attachments.0.url', $url)
-            ->assertJsonPath('data.attachments.0.file_path', 'attachments/report.pdf');
+            ->assertJsonPath('data.attachments.0.file_name', 'report.pdf')
+            ->assertJsonMissingPath('data.attachments.0.file_path');
+
+        $this->assertEqualsCanonicalizing(
+            [
+                'id', 'ticket_id', 'user_id', 'file_name', 'file_size',
+                'activity_id', 'created_at', 'updated_at', 'url',
+            ],
+            array_keys($response->json('data.attachments.0')),
+        );
 
         // The app's URL must be the token-authenticated API route, never the
         // web route (which `unit_context` redirects for a sessionless token).
