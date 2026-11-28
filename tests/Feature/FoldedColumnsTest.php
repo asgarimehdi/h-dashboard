@@ -61,6 +61,10 @@ class FoldedColumnsTest extends TestCase
             'persons.full_name_rev_folded' => ['persons', 'full_name_rev_folded', "(l_name || ' ' || f_name)"],
             'units.name_folded' => ['units', 'name_folded', 'name'],
             'semats.name_folded' => ['semats', 'name_folded', 'name'],
+            'patients.first_name_folded' => ['patients', 'first_name_folded', 'first_name'],
+            'patients.last_name_folded' => ['patients', 'last_name_folded', 'last_name'],
+            'patients.full_name_folded' => ['patients', 'full_name_folded', "(first_name || ' ' || last_name)"],
+            'patients.full_name_rev_folded' => ['patients', 'full_name_rev_folded', "(last_name || ' ' || first_name)"],
         ];
     }
 
@@ -132,6 +136,22 @@ class FoldedColumnsTest extends TestCase
             's_id' => 1,
             'r_id' => 1,
             'u_id' => $unitId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * A patient row inserted WITHOUT the model/service, so no Eloquent hook
+     * could be responsible for the folded values (#1971).
+     */
+    private function insertRawPatient(string $kodMelli, string $firstName, string $lastName): void
+    {
+        DB::table('patients')->insert([
+            'kod_melli' => $kodMelli,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'gender' => 'male',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -214,7 +234,6 @@ class FoldedColumnsTest extends TestCase
     }
 
     // ==================== 3. Result parity ====================
-
     /**
      * The behavioural gate a plan-shape test cannot give: on the same fixture,
      * the old per-row fold and the new stored columns must select the identical
@@ -287,8 +306,86 @@ class FoldedColumnsTest extends TestCase
         );
     }
 
-    // ==================== 4. Plan pins ====================
+    /**
+     * Issue #1971 — the patient registry and the disease-case list folded the
+     * patient name columns at query time; `patients` was created after #1482
+     * and never got folded columns. Same behavioural gate: identical id sets
+     * for every tricky spelling, including a reversed term that only the
+     * `full_name_rev_folded` arm can serve.
+     */
+    public function test_the_patient_folded_columns_return_the_same_rows_as_the_old_predicate(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Generated columns rely on PostgreSQL IMMUTABLE expressions.');
+        }
 
+        $fixtures = [
+            ['علي', "رضائي\u{200C}پور"],   // Arabic Yeh + ZWNJ
+            ['رضائی', 'پور'],
+            ['أحمد', 'حسین  آباد'],         // Arabic Alef with Hamza + double space
+            ['۱۲۳', 'تست'],                 // Persian digits
+            ['علی', 'رضایی'],
+            ['محمد', 'رضا'],
+        ];
+
+        foreach ($fixtures as $index => [$fName, $lName]) {
+            $this->insertRawPatient((string) (3000000000 + $index), $fName, $lName);
+        }
+
+        $normalizer = $this->normalizer();
+
+        $terms = [
+            'علي',            // Arabic Yeh typed, Persian Yeh stored
+            'علی',
+            'رضائي پور',      // ZWNJ broken into a space
+            'رضائی پور',
+            'أحمد',
+            'احمد',
+            '۱۲۳',
+            '123',
+            'حسین آباد',      // stored with a double space
+            'رضایی',
+            'پور علي',        // reversed: only full_name_rev_folded can match
+        ];
+
+        foreach ($terms as $term) {
+            $folded = $normalizer->foldedTerm($term);
+
+            $old = DB::table('patients')
+                ->whereRaw($normalizer->foldSeparatorsSql('first_name').' LIKE ?', ["%{$folded}%"])
+                ->orWhereRaw($normalizer->foldSeparatorsSql('last_name').' LIKE ?', ["%{$folded}%"])
+                ->orWhereRaw($normalizer->foldSeparatorsSql("CONCAT(first_name, ' ', last_name)").' LIKE ?', ["%{$folded}%"])
+                ->orWhereRaw($normalizer->foldSeparatorsSql("CONCAT(last_name, ' ', first_name)").' LIKE ?', ["%{$folded}%"])
+                ->orderBy('id')
+                ->pluck('id')
+                ->all();
+
+            $new = DB::table('patients')
+                ->where('first_name_folded', 'LIKE', "%{$folded}%")
+                ->orWhere('last_name_folded', 'LIKE', "%{$folded}%")
+                ->orWhere('full_name_folded', 'LIKE', "%{$folded}%")
+                ->orWhere('full_name_rev_folded', 'LIKE', "%{$folded}%")
+                ->orderBy('id')
+                ->pluck('id')
+                ->all();
+
+            $this->assertSame($old, $new, "term '{$term}' must match exactly the same patient rows as the old fold");
+        }
+
+        // The fixture must actually exercise the parser, not match nothing.
+        $this->assertGreaterThanOrEqual(
+            2,
+            DB::table('patients')->where('full_name_folded', 'LIKE', '%رضائی%')->count(),
+            'the patient parity matrix must match the Arabic-Yeh/ZWNJ fixture',
+        );
+
+        $this->assertNotEmpty(
+            DB::table('patients')->where('full_name_rev_folded', 'LIKE', '%پور علی%')->pluck('id')->all(),
+            'the reversed arm must be pinned by at least one fixture',
+        );
+    }
+
+    // ==================== 4. Plan pins ====================
     /**
      * `applyPerson` is an `EXISTS` semi-join on `persons`, so the folded
      * columns are what let the subplan build a BitmapOr instead of folding
@@ -318,6 +415,41 @@ class FoldedColumnsTest extends TestCase
             'idx_persons_n_code_trgm',
         ] as $index) {
             $this->assertStringContainsString($index, $plan, "applyPerson should use {$index}\n{$plan}");
+        }
+    }
+
+    /**
+     * Issue #1971 — the patient-name predicate must be a bitmap OR over the
+     * four folded patient trigram indexes, not a per-row fold.
+     */
+    public function test_the_patient_search_uses_the_folded_patient_indexes(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('pg_trgm GIN indexes are PostgreSQL-only.');
+        }
+
+        $this->insertRawPatient('3000000000', 'علی', 'رضایی');
+        $this->insertRawPatient('3000000001', 'مریم', 'رضایی‌پور');
+
+        $folded = $this->normalizer()->foldedTerm('رضایی');
+
+        $query = DB::table('patients')
+            ->where('first_name_folded', 'LIKE', "%{$folded}%")
+            ->orWhere('last_name_folded', 'LIKE', "%{$folded}%")
+            ->orWhere('full_name_folded', 'LIKE', "%{$folded}%")
+            ->orWhere('full_name_rev_folded', 'LIKE', "%{$folded}%");
+
+        $plan = implode("\n", $this->planForOr($query->toSql(), $query->getBindings()));
+
+        $this->assertStringContainsString('BitmapOr', $plan, "the folded patient OR must be indexable as a whole\n{$plan}");
+
+        foreach ([
+            'patients_first_name_folded_trgm',
+            'patients_last_name_folded_trgm',
+            'patients_full_name_folded_trgm',
+            'patients_full_name_rev_folded_trgm',
+        ] as $index) {
+            $this->assertStringContainsString($index, $plan, "the patient search should use {$index}\n{$plan}");
         }
     }
 
@@ -499,6 +631,55 @@ class FoldedColumnsTest extends TestCase
         }
 
         $this->assertTrue($this->columnExists('persons', 'full_name_folded'));
+    }
+
+    /**
+     * Issue #1971 — `down()` drops only the four patient folded indexes and
+     * columns; the `kod_melli` registry-key unique index must survive.
+     */
+    public function test_migrating_back_removes_the_patient_folded_columns_and_indexes_only(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Generated columns rely on PostgreSQL IMMUTABLE expressions.');
+        }
+
+        $foldedIndexes = [
+            'patients_first_name_folded_trgm',
+            'patients_last_name_folded_trgm',
+            'patients_full_name_folded_trgm',
+            'patients_full_name_rev_folded_trgm',
+        ];
+
+        $foldedColumns = [
+            'first_name_folded',
+            'last_name_folded',
+            'full_name_folded',
+            'full_name_rev_folded',
+        ];
+
+        $this->artisan('migrate:rollback', [
+            '--path' => 'database/migrations/2026_11_28_000001_add_folded_columns_to_patients.php',
+        ])->assertSuccessful();
+
+        foreach ($foldedIndexes as $index) {
+            $this->assertNotContains($index, $this->indexesOf(), "{$index} must be dropped by down()");
+        }
+
+        foreach ($foldedColumns as $column) {
+            $this->assertFalse($this->columnExists('patients', $column), "down() must drop patients.{$column}");
+        }
+
+        $this->assertContains('patients_kod_melli_unique', $this->indexesOf(), 'down() must leave the registry key index alone');
+
+        $this->artisan('migrate')->assertSuccessful();
+
+        foreach ($foldedIndexes as $index) {
+            $this->assertContains($index, $this->indexesOf(), "a fresh migrate must recreate {$index}");
+        }
+
+        foreach ($foldedColumns as $column) {
+            $this->assertTrue($this->columnExists('patients', $column), "a fresh migrate must recreate patients.{$column}");
+        }
     }
 
     /**

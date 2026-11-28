@@ -643,6 +643,18 @@ test('the index searches patients by name and by national code, folding zwnj, al
         ->set('search', '۰۰۱۳۵۴۲۴۱۹')
         ->instance()->cases()->pluck('id')->all())
         ->toBe([$maryamCase->id]);
+
+    // #1971: the predicate compares the stored folded columns, not a per-row fold.
+    $component = Livewire::test('disease.index')->set('search', 'زهرا آقایی')->instance();
+    $query = DiseaseCase::query();
+    (new ReflectionMethod($component, 'applyPatientSearch'))->invoke($component, $query);
+    $sql = $query->toSql();
+
+    expect($sql)->toContain('first_name_folded')
+        ->toContain('last_name_folded')
+        ->toContain('full_name_folded')
+        ->toContain('full_name_rev_folded')
+        ->not->toContain('regexp_replace');
 });
 
 test('the index paginates by perPage, clamps it, and a filter change resets the page', function () {
