@@ -370,8 +370,16 @@ trait HardwareIndexHelpers
     /**
      * Parse a stored display value back for restore.
      */
-    private function restoreAuditValue(string $displayValue, string $field): mixed
+    private function restoreAuditValue(string|bool $displayValue, string $field): mixed
     {
+        // #1984: bulk-mark writers store the raw boolean in `changes`, while the
+        // observer/import writers store escaped display strings. Take the bool
+        // before the string path coerces `false` to '' (which no branch matches
+        // and no boolean column accepts).
+        if (is_bool($displayValue)) {
+            return $displayValue;
+        }
+
         // #1748: stored audit values are ExcelCell::escape()'d; invert that
         // before the sentinel checks so the column gets the stored value back.
         $displayValue = ExcelCell::unescape($displayValue);
