@@ -1547,6 +1547,12 @@ test('dragging in a non-current month keeps the viewed window and dispatches it'
         'unit_id' => $this->unit->id,
         'title' => 'مهر — بیرون پنجره آبان',
         'start_at' => '2026-10-15 10:00:00',
+        // #1871 made a todo visible in every window its range overlaps, so the
+        // fixture must pin its end: the factory rolls a random `end_at` (70%)
+        // between the start and +1 month, and one that lands after the Aban
+        // window opens makes this "outside" todo legitimately visible in it —
+        // a ~35% flake that failed the whole suite at random.
+        'end_at' => '2026-10-15 11:00:00',
     ]);
     $inside = Todo::factory()->create([
         'unit_id' => $this->unit->id,
