@@ -6,6 +6,7 @@ use App\Support\AttachmentFiles;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
@@ -36,14 +37,21 @@ class Attachment extends Model
      *
      * The `local` disk sets `throw => false` (#1276), so a row whose file is
      * already gone still deletes cleanly.
+     *
+     * The disk write is deferred with `DB::afterCommit`: a rolled-back delete
+     * keeps the file.
      */
     protected static function booted(): void
     {
         static::deleting(function (self $attachment): void {
+            $path = $attachment->file_path;
+
             // The traversal guard (`..`) and the legacy-prefix normalisation
             // live in the shared helper, so the restore path and this hook
             // cannot drift apart (#1776).
-            AttachmentFiles::delete([$attachment->file_path]);
+            DB::afterCommit(function () use ($path): void {
+                AttachmentFiles::delete([$path]);
+            });
         });
     }
 
