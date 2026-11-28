@@ -8,6 +8,24 @@
 #   VERIFY_TESTS="tests/Feature/TodoLivewireTest.php" git push
 set -euo pipefail
 
+# The base a brand-new branch is diffed against. origin/beta is the canonical
+# base; a fork that never fetched it may still have upstream/beta. Prints the
+# merge-base sha, or fails when no candidate resolves / shares no history.
+new_branch_base() {
+    local candidate sha
+
+    for candidate in origin/beta upstream/beta; do
+        if git rev-parse --verify --quiet "${candidate}^{commit}" >/dev/null; then
+            if sha=$(git merge-base HEAD "${candidate}" 2>/dev/null); then
+                printf '%s\n' "$sha"
+                return 0
+            fi
+        fi
+    done
+
+    return 1
+}
+
 # git hands a pre-push hook "<local ref> <local sha> <remote ref> <remote sha>"
 # on stdin — one line per ref being pushed. The INDEX is always empty at this
 # point, so "git diff --cached" cannot answer "what is being pushed"; it only
@@ -19,8 +37,16 @@ pushed_php_files() {
         remote_sha=$remote_sha_in
     done
 
-    # A new branch has no remote sha to compare against: everything is new.
+    # A new branch has no remote sha to compare against: everything since the
+    # merge-base with the base branch is new. Without a base ref (fork without
+    # beta, shallow clone) report EVERY tracked PHP file so the full analysis
+    # still runs — an empty list means "skip", which is the bug this replaces.
     if [ -z "$remote_sha" ] || [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        if base=$(new_branch_base); then
+            git diff --name-only "${base}..HEAD" -- '*.php' || true
+        else
+            git ls-files -- '*.php' || true
+        fi
         return 0
     fi
 
