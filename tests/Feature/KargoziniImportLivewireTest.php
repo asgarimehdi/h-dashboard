@@ -132,7 +132,9 @@ class KargoziniImportLivewireTest extends TestCase
         ['user' => $user] = $this->createUserWithUnit(['manage_personnel']);
         $this->actingAs($user);
 
-        $file = UploadedFile::fake()->createWithContent('test.txt', 'hello');
+        // .pdf is allowed by the temporary-upload endpoint (#1907) but not by
+        // this component's mimes:xlsx,xls,csv rule, so it reaches the component.
+        $file = UploadedFile::fake()->createWithContent('test.pdf', 'hello');
 
         Livewire::test('kargozini.import-persons.import-persons')
             ->set('file', $file)

@@ -178,9 +178,9 @@ new class extends Component
             // `⚡inbox.blade.php:676-677` (`submitAction()`). The allowlist and
             // the 5120KB cap are the ones this component already documents in
             // `updatedFiles()` — deliberately NOT widened to docx/xlsx (out of
-            // scope for #873), and deliberately NOT pushed into
-            // `config/livewire.php`, where a global allowlist would break the
-            // two import components that legitimately take `mimes:xlsx,xls,csv`.
+            // scope for #873). The global temporary-upload allowlist lives in
+            // `config/livewire.php` (#1907) and includes `xlsx,xls,csv`; this
+            // component rule stays as the narrower write-path guard.
             // Issue #1276: the file lands on the private `local` disk now, not
             // `public/storage`.
             'files' => 'nullable|array|max:5',
