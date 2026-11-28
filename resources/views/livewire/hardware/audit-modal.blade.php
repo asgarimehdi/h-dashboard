@@ -65,18 +65,25 @@
                             <div class="space-y-1 mt-1">
                                 @if(\App\Support\HardwareAuditChange::isDiffList($auditChanges))
                                     @foreach($auditChanges as $change)
+                                        @php
+                                            // #1984: bulk-mark rows carry raw booleans; render them
+                                            // as «بله»/«خیر» like every other stored value. Strings
+                                            // (including the '—' sentinel) pass through unchanged.
+                                            $oldDisplay = \App\Support\HardwareAuditChange::formatValueForDisplay($change['old'] ?? null);
+                                            $newDisplay = \App\Support\HardwareAuditChange::formatValueForDisplay($change['new'] ?? null);
+                                        @endphp
                                         <div class="flex items-center justify-between gap-2 text-xs bg-base-300/30 rounded px-2 py-1"
-                                             title="{{ $change['old'] ?? '' }} ← {{ $change['new'] ?? '' }}">
+                                             title="{{ $oldDisplay }} ← {{ $newDisplay }}">
                                             <span class="font-mono">
-                                                <span class="text-error">{{ $change['old'] ?? '—' }}</span>
+                                                <span class="text-error">{{ $oldDisplay }}</span>
                                                 <span class="opacity-50 mx-1">←</span>
-                                                <span class="text-success">{{ $change['new'] ?? '—' }}</span>
+                                                <span class="text-success">{{ $newDisplay }}</span>
                                                 <span class="opacity-50 ms-1">({{ $change['field'] }})</span>
                                             </span>
-                                            @if(in_array($entry['action'], ['updated', 'rollback']) && ($change['old'] ?? '—') !== '—')
+                                            @if(in_array($entry['action'], ['updated', 'rollback', 'bulk_mark']) && ($change['old'] ?? '—') !== '—')
                                                 <button
                                                     wire:click="rollbackHistoryField({{ $entry['id'] }}, '{{ $change['field'] }}')"
-                                                    wire:confirm="آیا از بازگردانی فیلد {{ $change['field'] }} به مقدار «{{ $change['old'] ?? '' }}» مطمئن هستید؟"
+                                                    wire:confirm="آیا از بازگردانی فیلد {{ $change['field'] }} به مقدار «{{ $oldDisplay }}» مطمئن هستید؟"
                                                     class="btn btn-ghost btn-xs text-primary hover:bg-primary/10 shrink-0"
                                                     title="بازگردانی این فیلد"
                                                 >
