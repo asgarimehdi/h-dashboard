@@ -160,6 +160,39 @@ class UnitTreeService
     }
 
     /**
+     * Batch counterpart of `hasChildren()` — which of these units have at
+     * least one in-scope child, in ONE query.
+     *
+     * Scope contract mirrors `hasChildren()` / `childrenOfMany()`: the
+     * requested parents are intersected with the scope first, and a parent
+     * with no in-scope child gets NO key (callers read `isset($set[$id])`).
+     *
+     * @param  array<int>  $unitIds
+     * @param  array<int>  $accessibleIds
+     * @return array<int, true> parent id => true
+     */
+    public function hasChildrenOfMany(array $unitIds, array $accessibleIds): array
+    {
+        $parentIds = array_values(array_intersect($unitIds, $accessibleIds));
+
+        if ($parentIds === []) {
+            return [];
+        }
+
+        $ids = Unit::query()
+            ->where(function ($query) use ($parentIds, $accessibleIds) {
+                $query->whereIn('parent_id', $parentIds)
+                    ->whereIn('id', $accessibleIds);
+            })
+            ->distinct()
+            ->pluck('parent_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        return array_fill_keys($ids, true);
+    }
+
+    /**
      * Scope-restricted units whose name matches the term.
      *
      * Both sides of the comparison are folded: the term through

@@ -116,6 +116,49 @@ test('childrenOfMany yields nothing for an out-of-scope parent', function () {
         ->and(app(UnitTreeService::class)->childrenOf($this->root->id, $ids))->toBeEmpty();
 });
 
+test('hasChildrenOfMany answers exactly like hasChildren', function () {
+    $service = app(UnitTreeService::class);
+    $scope = Unit::descendantIds($this->root->id)->toArray();
+
+    $batch = $service->hasChildrenOfMany(
+        [$this->root->id, $this->mid->id, $this->leaf->id],
+        $scope,
+    );
+
+    expect($batch)->toHaveKeys([$this->root->id, $this->mid->id])
+        ->and($batch[$this->root->id])->toBeTrue()
+        ->and($batch[$this->mid->id])->toBeTrue()
+        ->not->toHaveKey($this->leaf->id);   // leaf has no children
+});
+
+test('hasChildrenOfMany mirrors the hasChildren scope rules', function () {
+    $service = app(UnitTreeService::class);
+
+    // Scope = root and mid only; leaf and professional are outside. mid's only
+    // child is out of scope, so mid must not be advertised as a parent.
+    $scope = [$this->root->id, $this->mid->id];
+
+    expect($service->hasChildrenOfMany([$this->root->id, $this->mid->id], $scope))
+        ->toBe([$this->root->id => true]);
+
+    // An out-of-scope parent gets no key — exactly like hasChildren() = false.
+    expect($service->hasChildrenOfMany([$this->other->id], $scope))->toBe([]);
+});
+
+test('hasChildrenOfMany short-circuits on an empty scope without querying', function () {
+    $this->assertQueryCount(0, function (): void {
+        expect(app(UnitTreeService::class)->hasChildrenOfMany([$this->root->id], []))->toBe([]);
+    });
+});
+
+test('hasChildrenOfMany answers for many parents in one query', function () {
+    $scope = Unit::descendantIds($this->root->id)->toArray();
+
+    $this->assertQueryCount(1, function () use ($scope): void {
+        app(UnitTreeService::class)->hasChildrenOfMany([$this->root->id, $this->mid->id], $scope);
+    });
+});
+
 test('search matches a name inside the scope', function () {
     $ids = Unit::descendantIds($this->root->id)->toArray();
 

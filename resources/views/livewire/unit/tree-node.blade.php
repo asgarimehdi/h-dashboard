@@ -8,20 +8,17 @@
 @props(['unit', 'level' => 0, 'isLast' => false, 'badgeView' => null, 'badgeData' => []])
 
 @php
-    use App\Services\UnitTreeService;
-
     // Children come from the tree's lazy cache. When a node has never been
-    // loaded we still need to know whether to draw a toggle, so ask the
-    // service for an existence check — scoped to what the current user may
-    // see (a node never advertises children the user cannot open) and cheap
-    // enough to run per unloaded node (no rows are fetched).
+    // loaded we still need to know whether to draw a toggle, so ask the tree
+    // for the batched presence map — ONE grouped query per render, scoped to
+    // what the current user may see (a node never advertises children the
+    // user cannot open) (issue #1937).
     $childUnits = $this->lazyChildren[$unit->id] ?? null;
 
     if ($childUnits !== null) {
         $hasChildren = $childUnits->isNotEmpty();
     } else {
-        $hasChildren = app(UnitTreeService::class)
-            ->hasChildren((int) $unit->id, $this->accessibleIds());
+        $hasChildren = $this->hasChildrenFor((int) $unit->id);
     }
 
     $isExpanded = in_array((string) $unit->id, $this->expanded, true);

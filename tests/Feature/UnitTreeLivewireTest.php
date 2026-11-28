@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
@@ -427,6 +428,36 @@ class UnitTreeLivewireTest extends TestCase
             ->set('search', 'کاملا بیرونی');
 
         $this->assertNotContains($outsider->id, array_map('intval', $component->get('expanded')));
+    }
+
+    public function test_visible_unexpanded_nodes_do_not_each_query_for_children(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_hr_dashboard']);
+        $this->actingAs($user);
+
+        // 10 branches → level 3 → level 4. The initial paint opens three
+        // levels, so the ten level-4 nodes are RENDERED BUT UNEXPANDED —
+        // exactly the set that used to cost one exists() each (issue #1937).
+        for ($i = 0; $i < 10; $i++) {
+            $mid = Unit::create(['name' => "شعبه {$i}", 'parent_id' => $unit->id]);
+            $deep = Unit::create(['name' => "سطح سه {$i}", 'parent_id' => $mid->id]);
+            Unit::create(['name' => "سطح چهار {$i}", 'parent_id' => $deep->id]);
+        }
+
+        $component = Livewire::test('unit.tree');
+
+        $exists = 0;
+        DB::listen(function ($query) use (&$exists): void {
+            if (str_contains($query->sql, 'exists') && str_contains($query->sql, '"parent_id"')) {
+                $exists++;
+            }
+        });
+
+        // selectNode only dispatches an event — a pure repaint with no state
+        // change, so the per-node existence checks would all run again.
+        $component->call('selectNode', $unit->id);
+
+        $this->assertSame(0, $exists, "hasChildren() exists queries in one repaint: {$exists}");
     }
 
     public function test_search_query_count_does_not_grow_with_distinct_parents(): void
