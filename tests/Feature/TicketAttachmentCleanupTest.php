@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Attachment;
 use App\Models\Ticket;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Tests\Support\Concerns\InteractsWithApiTokens;
@@ -24,6 +27,10 @@ use Tests\TestCase;
  *
  * Issue #1421 adds the complementary model-level invariant: a DIRECT
  * `$attachment->delete()` takes its file with it.
+ *
+ * Issue #1970 — the disk write is deferred with `DB::afterCommit`, so a delete
+ * that is rolled back (API `atomicDelete()` logs the activity row after the
+ * delete) keeps both its rows and its files.
  */
 #[CoversNothing]
 class TicketAttachmentCleanupTest extends TestCase
@@ -305,5 +312,90 @@ class TicketAttachmentCleanupTest extends TestCase
         // `..` segment must delete nothing.
         Storage::disk('local')->assertExists('attachments/report.pdf');
         $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
+    }
+
+    /**
+     * Issue #1970 — the disk write must not happen before the delete commits.
+     *
+     * `atomicDelete()` keeps working inside its transaction after
+     * `$ticket->delete()` (the activity-log row), so a failure there rolls the
+     * rows back while the files would already be gone.
+     */
+    public function test_a_rolled_back_api_ticket_delete_keeps_the_attachment_file(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        [$user, $ticket, $attachment, $path] = $this->createTicketWithAttachment('api-rollback.pdf');
+
+        $token = $this->createApiToken($user, ['tickets:read', 'tickets:write']);
+
+        // Inject the failure through a model event, never a raw SQL error: the
+        // harness wraps each test in a transaction, so a poisoned connection
+        // would leak into later tests (see TicketsInboxAttachmentAtomicityTest).
+        $event = 'eloquent.creating: '.ActivityLog::class;
+        Event::listen($event, function (): void {
+            throw new \RuntimeException('activity log failed');
+        });
+
+        try {
+            $this->apiDelete("/api/tickets/{$ticket->id}", $token)->assertStatus(500);
+        } finally {
+            // `ActivityLog::flushEventListeners()` is NOT an option: it would
+            // also drop AppServiceProvider's cache-invalidating `created`
+            // listener for every later test.
+            Event::forget($event);
+        }
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticket->id]);
+        $this->assertDatabaseHas('attachments', ['id' => $attachment->id]);
+        $this->assertDatabaseMissing('activity_logs', ['type' => 'deleted', 'subject_id' => $ticket->id]);
+        Storage::disk('local')->assertExists($path);
+    }
+
+    public function test_a_committed_ticket_delete_removes_the_file_only_after_commit(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        [, $ticket, $attachment, $path] = $this->createTicketWithAttachment('commit.pdf');
+
+        DB::transaction(function () use ($ticket, $path): void {
+            $ticket->delete();
+
+            $this->assertDatabaseMissing('tickets', ['id' => $ticket->id]);
+            // Still inside the transaction: the disk write is deferred.
+            Storage::disk('local')->assertExists($path);
+        });
+
+        $this->assertDatabaseMissing('tickets', ['id' => $ticket->id]);
+        $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
+        Storage::disk('local')->assertMissing($path);
+    }
+
+    public function test_a_rolled_back_direct_attachment_delete_keeps_the_file(): void
+    {
+        Storage::fake('local');
+
+        [, , $attachment, $path] = $this->createTicketWithAttachment('direct-rollback.pdf');
+
+        try {
+            DB::transaction(function () use ($attachment, $path): void {
+                $attachment->delete();
+
+                $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
+                // Still inside the transaction: the disk write is deferred.
+                Storage::disk('local')->assertExists($path);
+
+                throw new \RuntimeException('rollback');
+            });
+
+            $this->fail('The transaction should have rolled back.');
+        } catch (\RuntimeException) {
+            // expected
+        }
+
+        $this->assertDatabaseHas('attachments', ['id' => $attachment->id]);
+        Storage::disk('local')->assertExists($path);
     }
 }

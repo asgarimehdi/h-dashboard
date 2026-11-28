@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
@@ -226,10 +227,11 @@ class Ticket extends Model
      * gone and a hook on `Attachment` would never have fired on this path at
      * all.
      *
-     * The rows are deleted explicitly (before the cascade) so the file and its
-     * row disappear as one unit. `config/filesystems.php` sets `throw => false`
-     * on the `local` disk, so a row whose file was already removed by hand
-     * still deletes cleanly.
+     * The rows are deleted explicitly (before the cascade); the disk write is
+     * deferred with `DB::afterCommit`, so a rolled-back ticket delete keeps
+     * both the rows and the files. `config/filesystems.php` sets
+     * `throw => false` on the `local` disk, so a row whose file was already
+     * removed by hand still deletes cleanly.
      */
     protected static function booted(): void
     {
@@ -244,8 +246,11 @@ class Ticket extends Model
 
             if ($paths !== []) {
                 // The traversal guard (`..`) and the legacy-prefix
-                // normalisation live in the shared helper (#1776).
-                AttachmentFiles::delete($paths);
+                // normalisation live in the shared helper (#1776). Deferred:
+                // a rolled-back delete must not touch the file.
+                DB::afterCommit(function () use ($paths): void {
+                    AttachmentFiles::delete($paths);
+                });
             }
 
             $ids = $attachments->pluck('id')->all();
