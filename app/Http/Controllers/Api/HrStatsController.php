@@ -190,14 +190,15 @@ class HrStatsController extends Controller
 
         $p = 'persons.';
         if ($request->filled('search')) {
-            $s = self::normalizeForQuery((string) $validated['search']);
-            $query->where(function ($q) use ($s, $p) {
-                $q->where($p.'n_code', 'LIKE', "%{$s}%")
-                    ->orWhere($p.'f_name', 'LIKE', "%{$s}%")
-                    ->orWhere($p.'l_name', 'LIKE', "%{$s}%")
-                    // Issue #1009: `||` (NOT `concat()`) so the
-                    // `persons_fullname_trgm_idx` expression index applies.
-                    ->orWhereRaw("({$p}f_name || ' ' || {$p}l_name) LIKE ?", ["%{$s}%"]);
+            // #1963: folded columns, exactly like PersonsExportController and
+            // PersonController::index(). The generated columns are maintained
+            // by PostgreSQL on every write path (#815, #940).
+            $term = self::foldedTerm((string) $validated['search']);
+
+            $query->where(function ($q) use ($term, $p) {
+                $q->where($p.'n_code', 'LIKE', "%{$term}%")
+                    ->orWhere($p.'full_name_folded', 'LIKE', "%{$term}%")
+                    ->orWhere($p.'full_name_rev_folded', 'LIKE', "%{$term}%");
             });
         }
         foreach (['unit_id' => 'u_id', 'semat_id' => 's_id', 'tahsil_id' => 't_id', 'estekhdam_id' => 'e_id', 'radif_id' => 'r_id', 'status' => 'status'] as $param => $col) {
