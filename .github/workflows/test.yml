@@ -162,7 +162,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: redis:latest
+        image: redis:8.12.0@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
         options: >
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -445,7 +445,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: redis:latest
+        image: redis:8.12.0@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
         options: >
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -627,7 +627,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: redis:latest
+        image: redis:8.12.0@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
         options: >
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -755,7 +755,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: redis:latest
+        image: redis:8.12.0@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
         options: >
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -884,7 +884,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: redis:latest
+        image: redis:8.12.0@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
         options: >
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -1010,7 +1010,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: redis:latest
+        image: redis:8.12.0@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
         options: >
           --health-cmd "redis-cli ping"
           --health-interval 10s
