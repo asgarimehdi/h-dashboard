@@ -73,18 +73,15 @@ return new class extends Component
     {
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
 
-        $query = Unit::query()
+        // #1993 — aggregate on the base set (scope + unit type). The boundary filter
+        // narrows `total` only; no_boundary/with_boundary deliberately ignore it
+        // (#1821 contract, pinned by ReportsPayloadCacheTest:304-320). Keeping the
+        // filter here would zero one of the two splits.
+        $baseQuery = Unit::query()
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($this->showOnlyNoBoundary !== null, function ($q) {
-                if ($this->showOnlyNoBoundary == '1') {
-                    $q->whereNull('boundary_id');
-                } else {
-                    $q->whereNotNull('boundary_id');
-                }
-            });
+            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId));
 
-        $aggregates = $this->aggregatePayload($accessibleIds, $query);
+        $aggregates = $this->aggregatePayload($accessibleIds, $baseQuery);
 
         $hasBoundaryFilter = $this->showOnlyNoBoundary !== null;
 
@@ -95,19 +92,19 @@ return new class extends Component
         $unitsPage = Unit::query()
             ->with('unitType:id,name', 'region:id,name')
             ->whereIn('id', $accessibleIds)
-            ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
-            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
+            ->when($this->selectedUnitTypeId, fn ($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn ($q) => $q->whereNull('units.boundary_id'))
+            ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn ($q) => $q->whereNotNull('units.boundary_id'))
             ->orderBy('name')
             ->paginate($this->pageSize());
 
         $units = $unitsPage->getCollection()
-            ->map(fn($u) => [
+            ->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'type' => $u->unitType?->name ?? '—',
                 'region' => $u->region?->name ?? '—',
-                'has_boundary' => !is_null($u->boundary_id),
+                'has_boundary' => ! is_null($u->boundary_id),
             ])
             ->all();
 
@@ -144,7 +141,27 @@ return new class extends Component
             'report_units',
             \App\Support\ScopeCacheKey::hash($accessibleIds),
             function () use ($accessibleIds, $query): array {
-                $total = (clone $query)->count();
+                $stats = (clone $query)
+                    ->selectRaw(
+                        'COUNT(*) AS total, '
+                        .'COUNT(*) FILTER (WHERE units.boundary_id IS NULL) AS no_boundary, '
+                        .'COUNT(*) FILTER (WHERE units.boundary_id IS NOT NULL) AS with_boundary'
+                    )
+                    ->toBase()
+                    ->first();
+
+                $noBoundary = (int) ($stats->no_boundary ?? 0);
+                $withBoundary = (int) ($stats->with_boundary ?? 0);
+                $total = (int) ($stats->total ?? 0);
+
+                // #1993 — preserve #1821's contract: the boundary filter narrows `total`
+                // only; the split stays over the whole base set. The cache key carries
+                // `boundary`, so each state is cached separately.
+                if ($this->showOnlyNoBoundary == '1') {
+                    $total = $noBoundary;
+                } elseif ($this->showOnlyNoBoundary == '0') {
+                    $total = $withBoundary;
+                }
 
                 $hasBoundaryFilter = $this->showOnlyNoBoundary !== null;
 
@@ -152,24 +169,12 @@ return new class extends Component
                     ->selectRaw('COALESCE(unit_types.name, ?) as type_name, COUNT(units.id) as count', ['نامشخص'])
                     ->leftJoin('unit_types', 'units.unit_type_id', '=', 'unit_types.id')
                     ->whereIn('units.id', $accessibleIds)
-                    ->when($this->selectedUnitTypeId, fn($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
-                    ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn($q) => $q->whereNull('units.boundary_id'))
-                    ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn($q) => $q->whereNotNull('units.boundary_id'))
+                    ->when($this->selectedUnitTypeId, fn ($q) => $q->where('units.unit_type_id', $this->selectedUnitTypeId))
+                    ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '1', fn ($q) => $q->whereNull('units.boundary_id'))
+                    ->when($hasBoundaryFilter && $this->showOnlyNoBoundary == '0', fn ($q) => $q->whereNotNull('units.boundary_id'))
                     ->groupBy('type_name')
                     ->pluck('count', 'type_name')
                     ->toArray();
-
-                $noBoundary = Unit::query()
-                    ->whereIn('id', $accessibleIds)
-                    ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-                    ->whereNull('boundary_id')
-                    ->count();
-
-                $withBoundary = Unit::query()
-                    ->whereIn('id', $accessibleIds)
-                    ->when($this->selectedUnitTypeId, fn($q) => $q->where('unit_type_id', $this->selectedUnitTypeId))
-                    ->whereNotNull('boundary_id')
-                    ->count();
 
                 return [
                     'total' => $total,

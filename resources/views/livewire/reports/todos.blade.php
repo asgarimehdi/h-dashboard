@@ -162,10 +162,23 @@ return new class extends Component
             \App\Support\ScopeCacheKey::hash($accessibleIds),
             function () use ($query): array {
                 $now = now();
-                $completed = (clone $query)->where('is_completed', true)->count();
-                $pending = (clone $query)->where('is_completed', false)->count();
-                $overdue = (clone $query)->where('is_completed', false)
-                    ->whereNotNull('end_at')->where('end_at', '<', $now)->count();
+
+                // #1993 — one conditional aggregate instead of three counts; predicates are
+                // identical to the old where() chains. `toBase()->first()` + `?? 0` is the
+                // advanced report's PHPStan-clean pattern (advanced.blade.php:377-391).
+                $stats = (clone $query)
+                    ->selectRaw(
+                        'COUNT(*) FILTER (WHERE is_completed) AS completed, '
+                        .'COUNT(*) FILTER (WHERE NOT is_completed) AS pending, '
+                        .'COUNT(*) FILTER (WHERE NOT is_completed AND end_at IS NOT NULL AND end_at < ?) AS overdue',
+                        [$now]
+                    )
+                    ->toBase()
+                    ->first();
+
+                $completed = (int) ($stats->completed ?? 0);
+                $pending = (int) ($stats->pending ?? 0);
+                $overdue = (int) ($stats->overdue ?? 0);
 
                 // #1858 — the unit bars describe the same window as the totals:
                 // cloning the filtered query carries the scope, `selectedUnitId`
