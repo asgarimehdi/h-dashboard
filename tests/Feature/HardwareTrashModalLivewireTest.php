@@ -929,4 +929,248 @@ class HardwareTrashModalLivewireTest extends TestCase
 
         $this->assertDatabaseHas('hardwares', ['id' => $hw->id, 'pc_name' => 'PC-LeaveList']);
     }
+
+    // ==================== Cache (#1991) ====================
+
+    /**
+     * #1991: reopening the trash modal must not rescan the whole candidate
+     * set. The ordered index is cached, so a second open costs the cache hit
+     * plus the single per-page model fetch — no `limit 500` chunk scan.
+     */
+    public function test_second_open_does_not_rescan_the_candidate_set(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        for ($i = 1; $i <= 3; $i++) {
+            $this->createHardwareForUser($data['user'], $data['unit'], [
+                'pc_name' => "PC-Cache-Open-{$i}",
+            ])->delete();
+        }
+
+        $capture = false;
+        $queries = [];
+        DB::listen(function ($query) use (&$capture, &$queries): void {
+            if ($capture) {
+                $queries[] = $query->sql;
+            }
+        });
+
+        $component = Livewire::test('hardware.index')->call('loadDeletedHardware');
+        $total = $component->get('trashTotal');
+
+        $capture = true;
+        $queries = [];
+        $component->call('loadDeletedHardware');
+        $capture = false;
+
+        $scans = array_values(array_filter(
+            $queries,
+            fn (string $sql): bool => str_contains($sql, 'hardware_audits')
+                && preg_match('/\blimit\s+500\b/i', $sql) === 1
+        ));
+        $auditQueries = array_values(array_filter(
+            $queries,
+            fn (string $sql): bool => str_contains($sql, 'hardware_audits')
+        ));
+
+        $this->assertSame([], $scans, 'the second open must not rerun the chunked candidate scan');
+        $this->assertLessThanOrEqual(2, count($auditQueries), 'the second open should only fetch the current page');
+        $this->assertSame($total, $component->get('trashTotal'));
+    }
+
+    /**
+     * #1991: paging the modal reuses the cached ordered index instead of
+     * walking the candidate set again.
+     */
+    public function test_second_page_uses_the_cached_index(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        for ($i = 1; $i <= 25; $i++) {
+            $this->createHardwareForUser($data['user'], $data['unit'], [
+                'pc_name' => "PC-Cache-Page-{$i}",
+            ])->delete();
+        }
+
+        $component = Livewire::test('hardware.index')->call('loadDeletedHardware');
+
+        $capture = false;
+        $queries = [];
+        DB::listen(function ($query) use (&$capture, &$queries): void {
+            if ($capture) {
+                $queries[] = $query->sql;
+            }
+        });
+
+        $capture = true;
+        $queries = [];
+        $component->call('trashPage', 2);
+        $capture = false;
+
+        $scans = array_values(array_filter(
+            $queries,
+            fn (string $sql): bool => str_contains($sql, 'hardware_audits')
+                && preg_match('/\blimit\s+500\b/i', $sql) === 1
+        ));
+
+        $this->assertSame([], $scans, 'paging must not rerun the chunked candidate scan');
+        $this->assertSame(5, count($component->get('trashRows')));
+        $component->assertSet('trashCurrentPage', 2);
+    }
+
+    /**
+     * #1991: a delete bumps `hardware_stats`, so the cached index must not
+     * keep hiding the newly deleted row.
+     */
+    public function test_delete_invalidates_the_cached_list(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadDeletedHardware')
+            ->assertSet('trashTotal', 0);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-Cache-Delete',
+        ]);
+        $hw->delete();
+
+        $component->call('loadDeletedHardware')
+            ->assertSet('trashTotal', 1)
+            ->assertSee('PC-Cache-Delete');
+    }
+
+    /**
+     * #1991: a restore commits a hardware write; the post-commit bump must
+     * drop the restored row from the cached index.
+     */
+    public function test_restore_invalidates_the_cached_list(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'PC-Cache-Restore',
+        ]);
+        $audit = $this->getCreatedAudit($hw);
+        $hw->delete();
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadDeletedHardware')
+            ->assertSet('trashTotal', 1);
+
+        $component->call('restoreRecord', $audit->id);
+
+        $component->assertSet('trashTotal', 0)
+            ->assertSet('trashRows', []);
+    }
+
+    /**
+     * #1991: the cache key must carry the caller's scope — one scope's index
+     * may never be served to another scope.
+     */
+    public function test_cache_key_is_scoped(): void
+    {
+        $a = $this->createUserWithUnit(['manage_hardware']);
+        $b = $this->createUserWithUnit(['manage_hardware']);
+
+        $hwA = $this->createHardwareForUser($a['user'], $a['unit'], [
+            'pc_name' => 'PC-Cache-Scope-A',
+        ]);
+        $hwA->delete();
+
+        $hwB = Hardware::create([
+            'n_code' => $b['user']->n_code,
+            'pc_name' => 'PC-Cache-Scope-B',
+            'type' => 'PC',
+        ]);
+        $hwB->delete();
+
+        Session::put('current_unit_id', $a['unit']->id);
+        $this->actingAs($a['user']);
+        $rowsA = collect(Livewire::test('hardware.index')->call('loadDeletedHardware')->get('trashRows'))
+            ->pluck('hardware_id')->all();
+
+        Session::put('current_unit_id', $b['unit']->id);
+        $this->actingAs($b['user']);
+        $rowsB = collect(Livewire::test('hardware.index')->call('loadDeletedHardware')->get('trashRows'))
+            ->pluck('hardware_id')->all();
+
+        Session::put('current_unit_id', $a['unit']->id);
+        $this->actingAs($a['user']);
+        $rowsAAgain = collect(Livewire::test('hardware.index')->call('loadDeletedHardware')->get('trashRows'))
+            ->pluck('hardware_id')->all();
+
+        $this->assertSame([$hwA->id], $rowsA);
+        $this->assertSame([$hwB->id], $rowsB);
+        $this->assertSame([$hwA->id], $rowsAAgain);
+    }
+
+    /**
+     * #1991: an empty scope is "in scope of nothing" — the cached index must
+     * be empty, never the whole organization.
+     */
+    public function test_empty_scope_is_cached_as_empty(): void
+    {
+        $owner = $this->createUserWithUnit(['manage_hardware']);
+        $this->createHardwareForUser($owner['user'], $owner['unit'], [
+            'pc_name' => 'PC-Cache-Empty-Scope',
+        ])->delete();
+
+        $nobody = User::factory()->create();
+        $nobody->givePermissionTo('manage_hardware');
+
+        Session::forget('current_unit_id');
+        $this->actingAs($nobody);
+
+        $component = Livewire::test('hardware.index')->call('loadDeletedHardware');
+        $component->assertSet('trashTotal', 0)
+            ->assertSet('trashRows', []);
+
+        $component->call('loadDeletedHardware')
+            ->assertSet('trashTotal', 0)
+            ->assertSet('trashRows', []);
+    }
+
+    /**
+     * #1991: a person moving between units changes which audits the scope
+     * resolves to. `unit_hierarchy` rides in the cache key so the move
+     * invalidates the trash index without a hardware write.
+     */
+    public function test_person_unit_move_invalidates_the_cache(): void
+    {
+        $unitA = Unit::factory()->create();
+        $unitB = Unit::factory()->create();
+
+        $person = Person::factory()->create(['u_id' => $unitA->id]);
+        $user = User::factory()->create(['n_code' => $person->n_code]);
+        $user->givePermissionTo('manage_hardware');
+        $user->units()->attach($unitA->id, ['role' => 'staff', 'is_primary' => true]);
+        $user->units()->attach($unitB->id, ['role' => 'staff', 'is_primary' => false]);
+
+        Session::put('current_unit_id', $unitB->id);
+        $this->actingAs($user);
+
+        Hardware::create([
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-Cache-Move',
+            'type' => 'PC',
+        ])->delete();
+
+        $component = Livewire::test('hardware.index')
+            ->call('loadDeletedHardware')
+            ->assertSet('trashTotal', 0);
+
+        $person->update(['u_id' => $unitB->id]);
+
+        $component->call('loadDeletedHardware')
+            ->assertSet('trashTotal', 1);
+    }
 }

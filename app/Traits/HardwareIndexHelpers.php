@@ -6,11 +6,12 @@ use App\Models\Hardware;
 use App\Models\HardwareAudit;
 use App\Models\User;
 use App\Observers\HardwareAuditObserver;
+use App\Services\CacheInvalidationServiceInterface;
 use App\Services\HardwareAuditScope;
 use App\Support\ExcelCell;
 use App\Support\HardwareAuditChange;
+use App\Support\ScopeCacheKey;
 use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -401,10 +402,13 @@ trait HardwareIndexHelpers
      *
      * #1170 (option B): the candidate set is scanned in chunks of 500 with
      * the scope resolved per chunk through `HardwareAuditScope::unitIdsForAudits()`
-     * (same deny-by-default predicate the PHP filter below always applied),
-     * and only allowed rows reach the `LengthAwarePaginator` the modal
-     * displays — same rows, same users, newest first, delivered one page at
-     * a time so the public payload never carries the whole history.
+     * (same deny-by-default predicate the PHP filter always applied).
+     *
+     * #1991: that scan produces a cached, ordered index (see `trashIndex()`),
+     * so opening the modal, paging it or restoring a row does not rescan the
+     * candidate set; only the current page's rows are fetched from it — same
+     * rows, same users, newest first, so the public payload never carries the
+     * whole history.
      */
     public function loadDeletedHardware(): void
     {
@@ -425,9 +429,51 @@ trait HardwareIndexHelpers
     }
 
     /**
-     * The trash scan + scope filter + pagination for the CURRENT page.
+     * #1991: the trash index for the caller's scope, cached for five minutes
+     * under the shared `hardware_stats` namespace (every hardware write bumps
+     * it — `Hardware::flushStatsCache()`) plus the `unit_hierarchy` version,
+     * so a person moving between units also invalidates it.
+     *
+     * The scope is part of the key: two callers with different accessible
+     * units can never read each other's index. An empty scope is a legitimate
+     * answer and hashes to its own (empty) index — never the whole org.
+     *
+     * @param  array<int>  $accessibleIds
+     * @return list<array{id: int, hardware_id: int, created_at: string, deleted_at: string|null}>
      */
-    private function fetchTrashPage(): void
+    private function trashIndex(array $accessibleIds): array
+    {
+        $cache = app(CacheInvalidationServiceInterface::class);
+
+        /** @var list<array{id: int, hardware_id: int, created_at: string, deleted_at: string|null}> $index */
+        $index = $cache->remember(
+            'hardware_stats',
+            ScopeCacheKey::hash($accessibleIds),
+            fn (): array => $this->buildTrashIndex($accessibleIds),
+            5,
+            [
+                // Distinguishes this entry from the hardware stats payload,
+                // which shares the namespace and scope hash.
+                'trash_index' => true,
+                // A person's unit move (`Person::saved`) bumps this version;
+                // scope resolves through live `persons.u_id`, so the index
+                // must not outlive it.
+                'hierarchy' => $cache->getVersion('unit_hierarchy'),
+            ],
+        );
+
+        return $index;
+    }
+
+    /**
+     * Build the ordered trash index for a scope: the scan, the deny-by-default
+     * scope filter, the delete timestamps and the newest-first sort — all of
+     * it, once, so page reads are an `array_slice`.
+     *
+     * @param  array<int>  $accessibleIds
+     * @return list<array{id: int, hardware_id: int, created_at: string, deleted_at: string|null}>
+     */
+    private function buildTrashIndex(array $accessibleIds): array
     {
         // Single efficient query: find created audits for deleted hardware
         // whose live row is really gone — #1026: "deleted" is every action
@@ -437,8 +483,8 @@ trait HardwareIndexHelpers
         // so the scanned set is already the final candidate set.
         //
         // The scan ends in `pluck('id')`: it yields candidate IDS only, so
-        // the eager load and the column list below belong to the per-page
-        // model fetch, not here.
+        // the eager load and the column list of the per-page fetch live in
+        // `trashRowsFor()`, not here.
         $scan = HardwareAudit::query()
             ->where('action', 'created')
             ->whereIn('hardware_id', function ($q) {
@@ -453,19 +499,18 @@ trait HardwareIndexHelpers
             });
 
         // #1170: the scope is resolved from the audit's `changes` JSON in
-        // PHP (HardwareAuditScope contract, shared with the API) — so it
-        // cannot move into SQL. Deny-by-default: the accessible set may be
-        // legitimately EMPTY (`[]` = in scope of nothing), and the filter
-        // below must never be guarded around it.
-        $accessibleIds = $this->accessibleUnitIds();
-
+        // PHP (HardwareAuditScope contract, shared with the API) — the
+        // deny-by-default filter below must never be guarded around the
+        // accessible set, which may be legitimately EMPTY (`[]` = in scope
+        // of nothing).
         /** @var Collection<int, HardwareAudit> $allowed */
         $allowed = collect();
 
-        // The scan itself is bounded to chunks of 500 audits (option B): the
-        // id page is resolved first, then the models for exactly that page
-        // are fetched with the eager-loaded `user`. `orderBy('id')` keeps
-        // the offset pagination deterministic.
+        // The scan itself is bounded to chunks of 500 audits (option B):
+        // the id page is resolved first, then the models for the candidates
+        // of that chunk are fetched WITHOUT the eager-loaded `user` — scope
+        // resolution only needs `changes`. `orderBy('id')` keeps the offset
+        // pagination deterministic.
         $page = 0;
 
         do {
@@ -475,15 +520,12 @@ trait HardwareIndexHelpers
                 break;
             }
 
-            // #1041: select only what the trash list turns into a row below.
-            // `*` would pull the whole audit, and rows live in a public
-            // Livewire property re-serialized on every round-trip; `user_id`
-            // is needed for the eager-loaded `user` to match; `changes` for
-            // the badges and the restore guard.
+            // #1041: select only what the scope filter and the row below
+            // need. `user_id` and the eager-loaded `user` belong to the
+            // per-page fetch, not to the cached index.
             $chunk = HardwareAudit::query()
-                ->with('user:id,n_code')
                 ->whereKey($pageIds->all())
-                ->get(['id', 'hardware_id', 'user_id', 'changes', 'created_at']);
+                ->get(['id', 'hardware_id', 'changes', 'created_at']);
 
             $unitIds = app(HardwareAuditScope::class)->unitIdsForAudits($chunk);
 
@@ -499,11 +541,7 @@ trait HardwareIndexHelpers
         } while ($pageIds->count() === 500);
 
         if ($allowed->isEmpty()) {
-            $this->trashCurrentPage = 1;
-            $this->trashTotal = 0;
-            $this->trashRows = [];
-
-            return;
+            return [];
         }
 
         // Batch-load the delete timestamps for ALLOWED ids only, so no
@@ -537,54 +575,125 @@ trait HardwareIndexHelpers
                 });
         }
 
-        $rows = $allowed
-            ->map(function (HardwareAudit $audit) use ($deleteTimestamps) {
-                // #1041: hand the modal plain scalars, not the model. The
-                // public property is re-serialized on every Livewire
-                // round-trip, so an Eloquent row — with its `changes` JSON and
-                // eager-loaded `user` — is the real cost here, not the query.
-                //
-                // The eager-loaded relation is read directly (not
-                // `$audit->user?->n_code`): the model's PHPDoc declares `user`
-                // non-nullable, so the nullsafe spelling is reported as
-                // unnecessary even though a `user_id = null` row is real.
-                $user = $audit->getRelation('user');
-
+        // #1170: newest first — the row the modal shows is keyed on the
+        // delete timestamp, with the created audit's own timestamps as
+        // deterministic tie-breakers. #1991: sort while the values are still
+        // Carbon, then serialize to ISO for the cache — converting first
+        // would compare strings and could reorder equal timestamps.
+        $sorted = $allowed
+            ->map(function (HardwareAudit $audit) use ($deleteTimestamps): array {
                 return [
                     'id' => (int) $audit->id,
                     'hardware_id' => (int) $audit->hardware_id,
-                    'changes' => $audit->changes,
                     'created_at' => $audit->created_at,
                     'deleted_at' => $deleteTimestamps->get($audit->hardware_id),
-                    'user_n_code' => $user instanceof User ? $user->n_code : null,
                 ];
             })
-            // #1170: newest first — the row the modal shows is keyed on the
-            // delete timestamp, with the created audit's own timestamps as
-            // deterministic tie-breakers.
             ->sort(function (array $a, array $b): int {
                 return [$b['deleted_at'], $b['created_at'], $b['id']]
                     <=> [$a['deleted_at'], $a['created_at'], $a['id']];
             })
             ->values();
 
-        $this->trashTotal = $rows->count();
+        return $sorted
+            ->map(fn (array $entry): array => [
+                'id' => $entry['id'],
+                'hardware_id' => $entry['hardware_id'],
+                'created_at' => $entry['created_at']->toIso8601String(),
+                'deleted_at' => $entry['deleted_at']?->toIso8601String(),
+            ])
+            ->all();
+    }
 
+    /**
+     * Fetch the rows for the given index entries — one query for the page,
+     * mapped back in index order with the modal's small-row shape.
+     *
+     * #1991: the index carries ids and timestamps only; `changes` and the
+     * LIVE `user.n_code` are read here, per page. Reading `user` live keeps
+     * the soft-deleted-user label («سیستم») correct without invalidating the
+     * index on a user write.
+     *
+     * @param  list<array{id: int, hardware_id: int, created_at: string, deleted_at: string|null}>  $entries
+     * @return array<int, array<string, mixed>>
+     */
+    private function trashRowsFor(array $entries): array
+    {
+        if ($entries === []) {
+            return [];
+        }
+
+        /** @var Collection<int, HardwareAudit> $audits */
+        $audits = HardwareAudit::query()
+            ->with('user:id,n_code')
+            ->whereKey(array_column($entries, 'id'))
+            ->get(['id', 'hardware_id', 'user_id', 'changes', 'created_at'])
+            ->keyBy('id');
+
+        $rows = [];
+
+        foreach ($entries as $entry) {
+            $audit = $audits->get($entry['id']);
+
+            if (! $audit instanceof HardwareAudit) {
+                continue;
+            }
+
+            // #1041: hand the modal plain scalars, not the model. The public
+            // property is re-serialized on every Livewire round-trip, so an
+            // Eloquent row — with its `changes` JSON and eager-loaded `user`
+            // — is the real cost here, not the query.
+            //
+            // The eager-loaded relation is read directly (not
+            // `$audit->user?->n_code`): the model's PHPDoc declares `user`
+            // non-nullable, so the nullsafe spelling is reported as
+            // unnecessary even though a `user_id = null` row is real.
+            $user = $audit->getRelation('user');
+
+            $rows[] = [
+                'id' => $entry['id'],
+                'hardware_id' => $entry['hardware_id'],
+                'changes' => $audit->changes,
+                'created_at' => Carbon::parse($entry['created_at']),
+                'deleted_at' => $entry['deleted_at'] === null ? null : Carbon::parse($entry['deleted_at']),
+                'user_n_code' => $user instanceof User ? $user->n_code : null,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The trash index + pagination for the CURRENT page.
+     *
+     * #1991: the candidate set is scanned once per cache entry (five
+     * minutes, invalidated by any hardware write or unit-hierarchy change),
+     * not once per modal open, per page or per restore. The page itself is an
+     * `array_slice` of the cached index plus one model fetch.
+     */
+    private function fetchTrashPage(): void
+    {
+        $accessibleIds = $this->accessibleUnitIds();
+        $index = $this->trashIndex($accessibleIds);
+
+        $this->trashTotal = count($index);
+
+        if ($this->trashTotal === 0) {
+            $this->trashCurrentPage = 1;
+            $this->trashRows = [];
+
+            return;
+        }
+
+        // The last page depends on the caller's scope, so the clamp lives
+        // here — after a restore the previous page may no longer exist.
         $lastPage = max(1, (int) ceil($this->trashTotal / self::TRASH_PER_PAGE));
         $this->trashCurrentPage = min($this->trashCurrentPage, $lastPage);
 
-        $pageRows = $rows->forPage($this->trashCurrentPage, self::TRASH_PER_PAGE)->values()->all();
+        $offset = ($this->trashCurrentPage - 1) * self::TRASH_PER_PAGE;
+        $pageEntries = array_slice($index, $offset, self::TRASH_PER_PAGE);
 
-        // The paginator is the single source of the page's shape and count —
-        // the modal's «تعداد کل» counter reads the total from here.
-        $paginator = new LengthAwarePaginator(
-            $pageRows,
-            $this->trashTotal,
-            self::TRASH_PER_PAGE,
-            $this->trashCurrentPage
-        );
-
-        $this->trashRows = $paginator->items();
+        $this->trashRows = $this->trashRowsFor($pageEntries);
     }
 
     /**
@@ -720,6 +829,13 @@ trait HardwareIndexHelpers
         }
 
         $this->success("سخت‌افزار {$pcName} با موفقیت بازگردانده شد.", position: 'toast-bottom');
+
+        // #1991: `Hardware::save()` above bumped `hardware_stats` INSIDE the
+        // transaction, so a concurrent reader could have re-cached the
+        // pre-restore list under the post-bump version. Bump again after
+        // commit so this request's own reload — and any later reader — sees
+        // the restored row drop out of the index.
+        Hardware::flushStatsCache();
 
         // #1170: only the current page reloads after a restore — the restored
         // row drops out, the total decrements, and the operator stays where
