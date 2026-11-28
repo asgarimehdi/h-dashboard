@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\CacheInvalidationServiceInterface;
+use App\Support\ScopeCacheKey;
 use App\Support\UnitAncestry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -195,6 +196,46 @@ class Unit extends Model
         }
 
         return $roots;
+    }
+
+    /**
+     * Scope-rooted unit tree for the units-chart page, cached under
+     * `unit_hierarchy` (#1999).
+     *
+     * Key = the accessible-id SET (ScopeCacheKey), not the user: the tree
+     * carries no user data. `extra` keeps this entry disjoint from
+     * OrgChartController::loadSubtree() and OptionCatalog::units(), which
+     * share the same namespace + scope hash with their own `extra`.
+     *
+     * Invalidation: Unit::created/updated/deleted (AppServiceProvider) and
+     * UnitType::booted() bump `unit_hierarchy`, so create/update/delete/
+     * reparent/rename/type-change makes the entry unreachable. TTL 15 min
+     * mirrors descendantIds(). Bulk DB::table() writes bypass model events —
+     * same known limit as descendantIds(); the TTL bounds it.
+     *
+     * @param  array<int>  $accessibleIds
+     * @return Collection<int, static>
+     */
+    public static function treeForScope(array $accessibleIds): Collection
+    {
+        /** @var Collection<int, static> $tree */
+        $tree = app(CacheInvalidationServiceInterface::class)->remember(
+            'unit_hierarchy',
+            ScopeCacheKey::hash($accessibleIds),
+            function () use ($accessibleIds): Collection {
+                $rootIds = self::query()
+                    ->whereNull('parent_id')
+                    ->whereIn('id', $accessibleIds)
+                    ->pluck('id')
+                    ->all();
+
+                return self::buildTree($rootIds, $accessibleIds);
+            },
+            15,
+            ['surface' => 'units-chart'],
+        );
+
+        return $tree;
     }
 
     public function assignedUsers(): BelongsToMany
