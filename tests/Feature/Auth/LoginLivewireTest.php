@@ -214,6 +214,28 @@ class LoginLivewireTest extends TestCase
             ->assertHasErrors(['n_code', 'password']);
     }
 
+    public function test_n_code_longer_than_ten_characters_is_rejected(): void
+    {
+        Livewire::test('auth.login')
+            ->set('n_code', str_repeat('9', 11))
+            ->set('password', 'secret123')
+            ->call('login')
+            ->assertHasErrors(['n_code' => 'max']);
+
+        $this->assertFalse(Auth::check());
+    }
+
+    public function test_password_longer_than_255_characters_is_rejected(): void
+    {
+        Livewire::test('auth.login')
+            ->set('n_code', '1234567890')
+            ->set('password', str_repeat('a', 256))
+            ->call('login')
+            ->assertHasErrors(['password' => 'max']);
+
+        $this->assertFalse(Auth::check());
+    }
+
     public function test_rate_limit_kicks_in_after_too_many_attempts(): void
     {
         $this->makeUser('1234567890', 'secret123');

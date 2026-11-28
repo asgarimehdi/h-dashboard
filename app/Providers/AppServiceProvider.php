@@ -133,6 +133,12 @@ class AppServiceProvider extends ServiceProvider
             // limiter never 500s on a hostile body.
             $account = is_string($nCode) || is_int($nCode) ? (string) $nCode : '';
 
+            // Bound pre-validation work: the route caps n_code at max:10, but
+            // this limiter runs BEFORE validation. Character-based (matches
+            // max:10) and suffix-free — Str::limit would append '...' and is
+            // width-based.
+            $account = Str::substr($account, 0, 10);
+
             $limits = [
                 Limit::perMinute(5)->by('ip:'.$request->ip()),
             ];

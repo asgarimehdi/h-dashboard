@@ -36,6 +36,28 @@ class ApiLoginTest extends TestCase
             ->assertJsonStructure(['token']);
     }
 
+    public function test_login_rejects_n_code_longer_than_ten_characters(): void
+    {
+        $response = $this->postJson('/api/login', [
+            'n_code' => str_repeat('9', 11),
+            'password' => 'password',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['n_code']);
+    }
+
+    public function test_login_rejects_password_longer_than_255_characters(): void
+    {
+        $response = $this->postJson('/api/login', [
+            'n_code' => '1234567890',
+            'password' => str_repeat('a', 256),
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
+    }
+
     public function test_login_returns_401_with_invalid_credentials(): void
     {
         ['user' => $user] = $this->createUserWithUnit();
