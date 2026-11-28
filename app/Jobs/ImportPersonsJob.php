@@ -95,7 +95,9 @@ class ImportPersonsJob implements ShouldQueue
                 ImportStatus::publish($this->userId, $this->statusToken, $results);
             }
 
-            ImportStatus::release($this->userId);
+            // #1981: pass the dispatch token — a null token is a deliberate
+            // no-op, so a stale job can never free a newer claim.
+            ImportStatus::release($this->userId, $this->statusToken);
         }
 
         Log::info('ImportPersonsJob: completed', [
@@ -122,7 +124,9 @@ class ImportPersonsJob implements ShouldQueue
                 ImportStatus::publishFailure($this->userId, $this->statusToken, $exception->getMessage());
             }
 
-            ImportStatus::release($this->userId);
+            // #1981: pass the dispatch token — a null token is a deliberate
+            // no-op, so a stale job can never free a newer claim.
+            ImportStatus::release($this->userId, $this->statusToken);
         }
 
         Log::error('ImportPersonsJob failed', [

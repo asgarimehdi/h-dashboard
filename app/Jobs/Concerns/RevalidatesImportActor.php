@@ -108,7 +108,9 @@ trait RevalidatesImportActor
                 );
             }
 
-            ImportStatus::release($userId);
+            // #1981: pass the dispatch token — a null token is a deliberate
+            // no-op, so an abort cannot free a newer claim.
+            ImportStatus::release($userId, $statusToken);
         }
 
         Log::warning(static::class.': import aborted — the dispatch-time authorization no longer holds', [
