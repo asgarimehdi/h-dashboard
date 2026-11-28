@@ -268,13 +268,7 @@ export function registerMaryComponents(Alpine) {
     },
 
     isPageFullSelected() {
-      return (
-        this.pageIds.length &&
-        [...this.selection]
-          .sort((a, b) => b - a)
-          .toString()
-          .includes([...this.pageIds].sort((a, b) => b - a).toString())
-      );
+      return this.pageIds.length > 0 && this.pageIds.every((/** @type {any} */ id) => this.selection.includes(id));
     },
 
     /**
@@ -400,7 +394,11 @@ export function registerMaryComponents(Alpine) {
     },
 
     get isAllSelected() {
-      return this.options.length == this.selection.length;
+      return (
+        this.options.length > 0 &&
+        Array.isArray(this.selection) &&
+        this.options.every((option) => this.selection.includes(option[this.optionValueKey()]))
+      );
     },
 
     get isSelectionEmpty() {

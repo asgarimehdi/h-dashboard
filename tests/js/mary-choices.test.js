@@ -68,15 +68,24 @@ describe('maryChoices multi selection', () => {
     expect(choices.selectedOptions).toEqual([{ id: 1, label: 'A' }, undefined]);
   });
 
-  it('isAllSelected is true when both lists are empty', () => {
-    // Known rough edge, pinned deliberately (issue #1944 finding) — do NOT fix here.
+  it('isAllSelected is false when there are no options', () => {
     const choices = makeChoices({ single: false, options: [], selection: [] });
 
-    expect(choices.isAllSelected).toBe(true);
+    expect(choices.isAllSelected).toBe(false);
     expect(choices.isSelectionEmpty).toBe(true);
   });
 
-  it('isAllSelected follows the option count', () => {
+  it('isAllSelected is false when the selection does not cover every option', () => {
+    const options = [
+      { id: 1, label: 'A' },
+      { id: 2, label: 'B' },
+    ];
+    const choices = makeChoices({ single: false, options, selection: [1, 3] });
+
+    expect(choices.isAllSelected).toBe(false);
+  });
+
+  it('isAllSelected is true only when every option value is selected', () => {
     const options = [
       { id: 1, label: 'A' },
       { id: 2, label: 'B' },

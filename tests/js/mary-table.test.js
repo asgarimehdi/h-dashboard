@@ -55,12 +55,12 @@ describe('maryTable selection', () => {
     expect(table.isPageFullSelected()).toBe(true);
   });
 
-  it('isPageFullSelected is falsy for an empty page', () => {
+  it('isPageFullSelected is false for an empty page', () => {
     const table = makeTable();
     table.pageIds = [];
     table.selection = [];
 
-    expect(table.isPageFullSelected()).toBeFalsy();
+    expect(table.isPageFullSelected()).toBe(false);
   });
 
   it('isPageFullSelected is false when a page id is missing', () => {
@@ -71,12 +71,26 @@ describe('maryTable selection', () => {
     expect(table.isPageFullSelected()).toBe(false);
   });
 
-  it('pins the current substring match: pageIds [23] vs selection [123] is true', () => {
-    // Known bug, pinned deliberately (issue #1944 finding) — do NOT fix here.
-    // isPageFullSelected compares the joined id strings with `includes()`.
+  it('isPageFullSelected does not treat a page id as a substring of a larger selection id', () => {
     const table = makeTable();
     table.pageIds = [23];
     table.selection = [123];
+
+    expect(table.isPageFullSelected()).toBe(false);
+  });
+
+  it('isPageFullSelected does not match across id boundaries', () => {
+    const table = makeTable();
+    table.pageIds = [1, 2];
+    table.selection = [1, 12];
+
+    expect(table.isPageFullSelected()).toBe(false);
+  });
+
+  it('isPageFullSelected is true when every page id is present alongside other selections', () => {
+    const table = makeTable();
+    table.pageIds = [23];
+    table.selection = [123, 23];
 
     expect(table.isPageFullSelected()).toBe(true);
   });
