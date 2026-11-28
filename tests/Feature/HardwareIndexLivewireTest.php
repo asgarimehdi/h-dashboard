@@ -12,6 +12,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -45,6 +46,52 @@ class HardwareIndexLivewireTest extends TestCase
             'ram' => '8GB',
             'hdd' => '256GB SSD',
         ], $overrides));
+    }
+
+    /**
+     * Hardware whose person lives in a unit outside the actor's scope.
+     *
+     * @param  array<string, mixed>  $overrides
+     */
+    protected function createHardwareOutsideScope(array $overrides = []): Hardware
+    {
+        $unit = Unit::factory()->create();
+        $person = Person::factory()->create(['u_id' => $unit->id]);
+
+        return Hardware::create(array_merge([
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-Out-'.fake()->unique()->bothify('####'),
+            'type' => 'PC',
+            'os' => 'Windows 10',
+            'cpu' => 'Intel i5',
+            'ram' => '8GB',
+            'hdd' => '256GB SSD',
+            'mark' => false,
+        ], $overrides));
+    }
+
+    /**
+     * MaryUI's toast is an `xjs` effect, not a validation error or flash.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function toasts(Testable $component): array
+    {
+        $toasts = [];
+
+        foreach (array_column($component->effects['xjs'] ?? [], 'expression') as $expression) {
+            if (! is_string($expression) || ! str_starts_with($expression, 'toast(')) {
+                continue;
+            }
+
+            $decoded = json_decode(substr($expression, 6, -1), true);
+
+            if (is_array($decoded) && is_array($decoded['toast'] ?? null)) {
+                $toasts[] = $decoded['toast'];
+            }
+        }
+
+        return $toasts;
     }
 
     // ==================== S1: Smoke Tests ====================
@@ -894,6 +941,158 @@ class HardwareIndexLivewireTest extends TestCase
             ->set('selected', [1, 2, 3])
             ->call('clearSelection')
             ->assertSet('selected', []);
+    }
+
+    public function test_bulk_mark_refuses_a_mixed_in_scope_and_out_of_scope_selection(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $inScope = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkMixed-Mark-In',
+            'mark' => false,
+        ]);
+        $outOfScope = $this->createHardwareOutsideScope([
+            'pc_name' => 'BulkMixed-Mark-Out',
+            'mark' => false,
+        ]);
+
+        $component = Livewire::test('hardware.index')
+            ->set('selected', [$inScope->id, $outOfScope->id])
+            ->call('bulkMark', true);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $inScope->id, 'mark' => false]);
+        $this->assertDatabaseHas('hardwares', ['id' => $outOfScope->id, 'mark' => false]);
+        $this->assertSame(0, HardwareAudit::query()
+            ->whereIn('hardware_id', [$inScope->id, $outOfScope->id])
+            ->where('action', 'bulk_mark')
+            ->count());
+
+        $toasts = $this->toasts($component);
+        $titles = array_column($toasts, 'title');
+        $this->assertContains('برخی از دستگاه‌های انتخاب شده در محدوده دسترسی شما نیستند.', $titles);
+        $this->assertNotContains('وضعیت علامت‌گذاری تغییر کرد.', $titles);
+        $this->assertSame('error', $toasts[0]['type'] ?? null);
+        $component->assertSet('selected', [$inScope->id, $outOfScope->id]);
+    }
+
+    public function test_bulk_delete_refuses_a_mixed_in_scope_and_out_of_scope_selection(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $inScope = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkMixed-Delete-In',
+        ]);
+        $outOfScope = $this->createHardwareOutsideScope([
+            'pc_name' => 'BulkMixed-Delete-Out',
+        ]);
+
+        $component = Livewire::test('hardware.index')
+            ->set('selected', [$inScope->id, $outOfScope->id])
+            ->call('bulkDelete');
+
+        $this->assertDatabaseHas('hardwares', ['id' => $inScope->id]);
+        $this->assertDatabaseHas('hardwares', ['id' => $outOfScope->id]);
+        $this->assertSame(0, HardwareAudit::query()
+            ->whereIn('hardware_id', [$inScope->id, $outOfScope->id])
+            ->where('action', 'bulk_delete')
+            ->count());
+
+        $titles = array_column($this->toasts($component), 'title');
+        $this->assertContains('برخی از دستگاه‌های انتخاب شده در محدوده دسترسی شما نیستند.', $titles);
+        $this->assertNotContains('دستگاه‌های انتخاب شده حذف شدند.', $titles);
+        $component->assertSet('selected', [$inScope->id, $outOfScope->id]);
+    }
+
+    public function test_bulk_mark_refuses_a_selection_containing_a_nonexistent_id(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $inScope = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkMissing-Mark-In',
+            'mark' => false,
+        ]);
+        $missingId = ((int) Hardware::query()->max('id')) + 1;
+
+        $component = Livewire::test('hardware.index')
+            ->set('selected', [$inScope->id, $missingId])
+            ->call('bulkMark', true);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $inScope->id, 'mark' => false]);
+        $this->assertContains(
+            'برخی از دستگاه‌های انتخاب شده در محدوده دسترسی شما نیستند.',
+            array_column($this->toasts($component), 'title'),
+        );
+    }
+
+    public function test_bulk_mark_still_accepts_duplicate_ids_in_the_selection(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $hw = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkDup-Mark',
+            'mark' => false,
+        ]);
+
+        Livewire::test('hardware.index')
+            ->set('selected', [$hw->id, $hw->id])
+            ->call('bulkMark', true);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $hw->id, 'mark' => true]);
+        $this->assertSame(1, HardwareAudit::query()
+            ->where('hardware_id', $hw->id)
+            ->where('action', 'bulk_mark')
+            ->count());
+    }
+
+    public function test_bulk_mark_rejects_a_non_integer_selection_entry(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $inScope = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkMalformed-Mark-In',
+            'mark' => false,
+        ]);
+
+        $component = Livewire::test('hardware.index')
+            ->set('selected', [$inScope->id, ['not-an-id']])
+            ->call('bulkMark', true);
+
+        $this->assertDatabaseHas('hardwares', ['id' => $inScope->id, 'mark' => false]);
+        $this->assertContains(
+            'شناسه‌های انتخاب شده معتبر نیستند.',
+            array_column($this->toasts($component), 'title'),
+        );
+    }
+
+    public function test_bulk_delete_rejects_a_non_integer_selection_entry(): void
+    {
+        $data = $this->createUserWithUnit(['manage_hardware']);
+        $this->actingAs($data['user']);
+        Session::put('current_unit_id', $data['unit']->id);
+
+        $inScope = $this->createHardwareForUser($data['user'], $data['unit'], [
+            'pc_name' => 'BulkMalformed-Delete-In',
+        ]);
+
+        $component = Livewire::test('hardware.index')
+            ->set('selected', [$inScope->id, ['not-an-id']])
+            ->call('bulkDelete');
+
+        $this->assertDatabaseHas('hardwares', ['id' => $inScope->id]);
+        $this->assertContains(
+            'شناسه‌های انتخاب شده معتبر نیستند.',
+            array_column($this->toasts($component), 'title'),
+        );
     }
 
     // ==================== S8: Export ====================

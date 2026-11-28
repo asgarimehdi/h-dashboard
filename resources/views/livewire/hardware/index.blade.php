@@ -42,6 +42,32 @@ return new class extends Component
     }
 
     /**
+     * #1973: normalise the client-settable bulk selection.
+     *
+     * `$selected` is public Livewire state, so `/livewire/update` can carry
+     * strings or nested arrays. Accept only integers and digit-only strings,
+     * cast to int, and collapse duplicates (#1670). A non-id entry returns
+     * null so the caller can refuse the request instead of letting `whereIn`
+     * throw a 500.
+     *
+     * @return list<int>|null
+     */
+    private function normalizedSelectedIds(): ?array
+    {
+        $ids = [];
+
+        foreach ($this->selected as $id) {
+            if (! is_int($id) && ! (is_string($id) && ctype_digit($id))) {
+                return null;
+            }
+
+            $ids[] = (int) $id;
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
      * Apply organizational scope to a hardware query.
      */
     private function applyOrgScope($query)
@@ -479,15 +505,37 @@ return new class extends Component
             return;
         }
 
+        // #1973: `$selected` is public Livewire state, so /livewire/update can
+        // carry strings, nested arrays or foreign ids. Normalise once; reject
+        // anything that is not an id instead of letting `whereIn` throw a 500.
+        $selectedIds = $this->normalizedSelectedIds();
+        if ($selectedIds === null) {
+            $this->error('شناسه‌های انتخاب شده معتبر نیستند.', position: 'toast-bottom');
+
+            return;
+        }
+
         $accessibleIds = $this->accessibleUnitIds();
         // #1026/#1675: load the rows, not just the ids — the pre-update `mark`
         // is the audit diff's `old`, exactly like HardwareController::bulkMark().
-        $hardwares = Hardware::whereIn('id', $this->selected)
+        $hardwares = Hardware::whereIn('id', $selectedIds)
             ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
             ->get();
 
         if ($hardwares->isEmpty()) {
             $this->error('هیچ ردیفی در محدوده دسترسی شما نیست.', position: 'toast-bottom');
+
+            return;
+        }
+
+        // #1973: refuse the WHOLE request when any distinct submitted id is not
+        // in the accessible subset — the API twin returns 403 here. Refusing
+        // (not acting on the subset) makes a partial bulk delete impossible and
+        // keeps `$this->selected` intact so the operator can correct it.
+        // #1670: compare against the DISTINCT count, so a retried `[5, 5]` is
+        // not treated as inaccessible.
+        if ($hardwares->count() !== count($selectedIds)) {
+            $this->error('برخی از دستگاه‌های انتخاب شده در محدوده دسترسی شما نیستند.', position: 'toast-bottom');
 
             return;
         }
@@ -607,13 +655,28 @@ return new class extends Component
             return;
         }
 
+        // #1973: see bulkMark() — same normalisation, same refusal.
+        $selectedIds = $this->normalizedSelectedIds();
+        if ($selectedIds === null) {
+            $this->error('شناسه‌های انتخاب شده معتبر نیستند.', position: 'toast-bottom');
+
+            return;
+        }
+
         $accessibleIds = $this->accessibleUnitIds();
-        $hardwares = Hardware::whereIn('id', $this->selected)
+        $hardwares = Hardware::whereIn('id', $selectedIds)
             ->whereHas('person', fn ($q) => $q->whereIn('u_id', $accessibleIds))
             ->get();
 
         if ($hardwares->isEmpty()) {
             $this->error('هیچ ردیفی در محدوده دسترسی شما نیست.', position: 'toast-bottom');
+
+            return;
+        }
+
+        // #1973: a partial delete reported as complete must be impossible.
+        if ($hardwares->count() !== count($selectedIds)) {
+            $this->error('برخی از دستگاه‌های انتخاب شده در محدوده دسترسی شما نیستند.', position: 'toast-bottom');
 
             return;
         }
