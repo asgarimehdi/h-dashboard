@@ -8,6 +8,7 @@ use App\Models\Radif;
 use App\Models\Semat;
 use App\Models\Tahsil;
 use App\Models\Unit;
+use App\Models\User;
 use App\Services\CacheInvalidationServiceInterface;
 use App\Traits\PersianNormalizer;
 use Maatwebsite\Excel\Concerns\ToCollection;
@@ -44,6 +45,21 @@ class PersonImport extends AbstractImportPipeline implements ToCollection, WithC
 
     /** Did any queued write create a person or move one between units? */
     private bool $touchesMapScope = false;
+
+    /**
+     * #1900: persons whose `u_id` this import moves, keyed by person id.
+     *
+     * Recorded at detection time because `AbstractImportPipeline::flushPendingWrites()`
+     * empties `pendingUpdates` before it calls `afterFlush()`; nothing is left
+     * to derive the transfers from at that point. `from` is the first-seen
+     * (pre-write) value; `to` is the last queued value, which is exactly what
+     * the upsert applies — the same last-write-wins order `flushPendingWrites()`
+     * uses when it dedupes by id. A net no-op transfer (`from === to`) is
+     * dropped before the pivot is touched.
+     *
+     * @var array<int, array{from: int, to: int}>
+     */
+    private array $unitTransfers = [];
 
     // Pre-loaded related models to avoid N+1 queries
     private array $units = [];
@@ -410,6 +426,14 @@ class PersonImport extends AbstractImportPipeline implements ToCollection, WithC
 
                     if ((int) $existing['record']->u_id !== (int) $writeData['u_id']) {
                         $this->touchesMapScope = true;
+
+                        // #1900: `$existing['record']->u_id` is still the
+                        // pre-row value here (`detectChanges()` ran before the
+                        // `fill()` below). Keep the first-seen `from` and the
+                        // last queued `to`, matching the upsert's last-write-wins.
+                        $personId = (int) $existing['record']->id;
+                        $this->unitTransfers[$personId] ??= ['from' => (int) $existing['record']->u_id, 'to' => 0];
+                        $this->unitTransfers[$personId]['to'] = (int) $writeData['u_id'];
                     }
 
                     $this->pendingUpdates[] = [
@@ -573,6 +597,11 @@ class PersonImport extends AbstractImportPipeline implements ToCollection, WithC
      */
     protected function afterFlush(): void
     {
+        // #1900: the bulk upsert fires no model events, so the linked user's
+        // primary unit must be synced here — after every chunk has been written
+        // and before the (batched, deferred) cache versions are bumped.
+        $this->syncTransferredPersonsPrimaryUnits();
+
         $cache = app(CacheInvalidationServiceInterface::class);
         $cache->increment('hr_stats');
         $cache->increment('dashboard');
@@ -588,6 +617,57 @@ class PersonImport extends AbstractImportPipeline implements ToCollection, WithC
             // without model events, so the manual block must bump
             // `unit_hierarchy` too.
             $cache->increment('unit_hierarchy');
+        }
+    }
+
+    /**
+     * #1900: `persons.u_id` and the linked user's `user_units.is_primary` are
+     * one invariant (#1803 / #1896). The bulk path writes with `upsert()` — no
+     * model events, no hydrated model — so `PersonService::update()` cannot be
+     * reused here; the sync runs once, after the writes, for the affected users.
+     *
+     * One query for all users (never one per person) and `setPrimaryUnit()` as
+     * the only sanctioned writer of `is_primary` — the partial unique index
+     * `user_units_one_primary_per_user` is preserved by its clear-then-set
+     * order. Trashed users are deliberately skipped: `User` is soft-deleted, so
+     * `$person->user` skips them too (#1896 behaviour); their pivots are
+     * re-synced if the account is restored. A person without a linked user is
+     * a no-op, and a created person cannot have one (the FK
+     * `users.n_code → persons.n_code` makes that impossible).
+     */
+    private function syncTransferredPersonsPrimaryUnits(): void
+    {
+        // A net no-op transfer (two sheet rows cancelling out) must not touch
+        // the pivot at all.
+        $transfers = array_filter(
+            $this->unitTransfers,
+            static fn (array $transfer): bool => $transfer['from'] !== $transfer['to'],
+        );
+
+        if ($transfers === []) {
+            return;
+        }
+
+        /** @var array<int, string|null> $nCodesByPersonId */
+        $nCodesByPersonId = Person::query()
+            ->whereIn('id', array_keys($transfers))
+            ->pluck('n_code', 'id')
+            ->all();
+
+        /** @var array<string, User> $usersByNCode */
+        $usersByNCode = User::query()
+            ->whereIn('n_code', array_values(array_filter($nCodesByPersonId)))
+            ->get(['id', 'n_code'])
+            ->keyBy('n_code')
+            ->all();
+
+        foreach ($nCodesByPersonId as $personId => $nCode) {
+            if ($nCode === null) {
+                continue;
+            }
+
+            $user = $usersByNCode[$nCode] ?? null;
+            $user?->setPrimaryUnit($transfers[$personId]['to']);
         }
     }
 
