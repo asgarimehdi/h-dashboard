@@ -53,6 +53,46 @@ final class OptionCatalog
     }
 
     /**
+     * Render-on-open unit-picker rows (#1955).
+     *
+     * Same scope/invalidation contract as units(), but the tree picker also
+     * needs parent_id and the unit-type label.
+     *
+     * @param  array<int|string>  $accessibleUnitIds
+     * @return list<array{id: int, name: string, parent_id: int|null, unit_type_name: string|null}>
+     */
+    public static function unitsForPicker(array $accessibleUnitIds): array
+    {
+        /** @var list<array{id: int, name: string, parent_id: int|null, unit_type_name: string|null}> $rows */
+        $rows = app(CacheInvalidationServiceInterface::class)->remember(
+            'unit_hierarchy',
+            ScopeCacheKey::hash($accessibleUnitIds),
+            static function () use ($accessibleUnitIds): array {
+                // Unconditional whereIn: [] must compile to 0 = 1 (fail-closed).
+                // Never wrap this predicate in when()/! empty().
+                return Unit::query()
+                    ->with('unitType:id,name')
+                    ->whereIn('id', $accessibleUnitIds)
+                    ->where('is_active', true)
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'parent_id', 'unit_type_id'])
+                    ->map(static fn (Unit $unit): array => [
+                        'id' => (int) $unit->id,
+                        'name' => (string) $unit->name,
+                        'parent_id' => $unit->parent_id !== null ? (int) $unit->parent_id : null,
+                        'unit_type_name' => $unit->unitType?->name !== null ? (string) $unit->unitType->name : null,
+                    ])
+                    ->values()
+                    ->all();
+            },
+            60,
+            ['view' => 'option-catalog.unit-picker', 'active_only' => true],
+        );
+
+        return $rows;
+    }
+
+    /**
      * @return list<array{value: int, label: string}>
      */
     public static function diseases(bool $activeOnly): array

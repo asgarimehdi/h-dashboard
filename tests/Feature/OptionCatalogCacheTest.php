@@ -2,6 +2,7 @@
 
 use App\Models\Disease;
 use App\Models\Unit;
+use App\Models\UnitType;
 use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -185,4 +186,53 @@ test('a disease write invalidates the catalogue and the two pickers stay separat
 
 test('a disease write bumps the disease_catalog namespace', function () {
     $this->assertCacheInvalidated('disease_catalog', fn () => Disease::factory()->create());
+});
+
+test('a warm disease-index unit picker does not re-read units while the modal is open', function () {
+    $reads = option_cache_reads('select "id", "name", "parent_id", "unit_type_id" from "units"');
+
+    $component = Livewire::test('disease.index');
+    $component->set('unitModal', true);          // cold: picker builds
+    $cold = $reads();
+    expect($cold)->toBeGreaterThan(0);
+
+    $component->call('$refresh');                // warm: modal still open
+    expect($reads())->toBe($cold);
+});
+
+test('a warm disease-create unit picker does not re-read units while the modal is open', function () {
+    $reads = option_cache_reads('select "id", "name", "parent_id", "unit_type_id" from "units"');
+
+    $component = Livewire::test('disease.create');
+    $component->set('unitModal', true);
+    $cold = $reads();
+    expect($cold)->toBeGreaterThan(0);
+
+    $component->call('$refresh');
+    expect($reads())->toBe($cold);
+});
+
+test('a unit written while the picker is warm appears on the next picker render', function () {
+    $component = Livewire::test('disease.index')->set('unitModal', true);
+
+    Unit::create(['name' => 'واحد تازه ۱۹۵۵', 'parent_id' => $this->actorUnit->id]);
+
+    $names = array_column($component->call('$refresh')->instance()->unitTree(), 'name');
+    expect($names)->toContain('واحد تازه ۱۹۵۵');
+});
+
+test('a unit-type rename is reflected in the picker rows', function () {
+    $type = UnitType::create(['name' => 'نوع الف ۱۹۵۵']);
+    $unit = Unit::factory()->create([
+        'name' => 'واحد نوع‌دار ۱۹۵۵',
+        'parent_id' => $this->actorUnit->id,
+        'unit_type_id' => $type->id,
+    ]);
+
+    $component = Livewire::test('disease.index')->set('unitModal', true);
+
+    $type->update(['name' => 'نوع ب ۱۹۵۵']);
+
+    $rows = collect($component->call('$refresh')->instance()->unitTree());
+    expect($rows->firstWhere('id', $unit->id)['unit_type_name'])->toBe('نوع ب ۱۹۵۵');
 });
