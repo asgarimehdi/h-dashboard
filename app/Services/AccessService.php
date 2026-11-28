@@ -68,10 +68,7 @@ class AccessService
         if ($currentUnitId) {
             $baseUnitIds = [$currentUnitId];
         } else {
-            // Membership (`user_units`) is the sole source of scope. A person's
-            // `u_id` is an HR field, not an access grant: falling back to it
-            // resurrected a unit whose membership had been revoked (#1830).
-            $baseUnitIds = $user->units()->pluck('units.id')->toArray();
+            $baseUnitIds = $this->baseUnitIds($user);
         }
 
         if (empty($baseUnitIds)) {
@@ -89,6 +86,49 @@ class AccessService
         );
 
         return $this->memo[$memoKey] = $ids;
+    }
+
+    /**
+     * قانون پایهٔ scope کاربر — تنها پیاده‌سازی این قانون در برنامه (#1972).
+     *
+     * پایه فقط از ردیف‌های `user_units` می‌آید: عضویت، تنها منبع scope است.
+     * `persons.u_id` یک فیلد منابع انسانی است نه مجوز دسترسی — fallback به آن
+     * واحدی را زنده می‌کرد که عضویتش لغو شده بود (#1830). `[]` یعنی «در دامنهٔ
+     * هیچ واحدی» و هرگز به «همهٔ واحدها» تبدیل نمی‌شود.
+     *
+     * مقادیر را cast نمی‌کند: کلید کش `accessible_units:` از
+     * `md5(json_encode($sortedBase))` ساخته می‌شود و تغییر نوع مقادیر
+     * (int ↔ string) کلید را عوض می‌کند.
+     *
+     * @return array<int>
+     */
+    private function baseUnitIds(User $user): array
+    {
+        return $user->units()->pluck('units.id')->toArray();
+    }
+
+    /**
+     * Scope تازهٔ کاربر برای مسیر worker (#1972): پایه + تمام زیرمجموعه‌ها.
+     *
+     * برخلاف `accessibleUnitIds()` نه `session()`، نه `$this->memo` و نه کش
+     * `accessible_units:` را می‌خواند یا می‌نویسد — پس در queue worker همان
+     * جوابی را می‌دهد که در تست با session پر. با این حال «cache-free» مطلق
+     * نیست: کش نسخه‌دار `unit_descendants:` که `Unit::descendantIds()` دارد
+     * دست‌نخورده باقی است (کلیدش با نسخهٔ `unit_hierarchy` باطل می‌شود).
+     *
+     * `[]` یعنی «در دامنهٔ هیچ واحدی» — هرگز null و هرگز «همهٔ واحدها».
+     *
+     * @return array<int, int>
+     */
+    public function freshAccessibleUnitIds(User $user): array
+    {
+        $baseUnitIds = $this->baseUnitIds($user);
+
+        if ($baseUnitIds === []) {
+            return [];
+        }
+
+        return array_map('intval', Unit::descendantIds($baseUnitIds)->toArray());
     }
 
     /**
@@ -136,7 +176,7 @@ class AccessService
             $sessionUnitId = session('current_unit_id', 'none');
             $baseUnitIds = $currentUnitId
                 ? [$currentUnitId]
-                : $user->units()->pluck('units.id')->toArray();
+                : $this->baseUnitIds($user);
 
             // Forget the legacy unversioned key too.
             $cacheKey = "accessible_units:{$user->id}:{$sessionUnitId}:".md5(json_encode($baseUnitIds));
