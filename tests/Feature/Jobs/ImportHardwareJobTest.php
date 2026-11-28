@@ -12,6 +12,7 @@ use Database\Seeders\PermissionSeeder;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -549,5 +550,32 @@ class ImportHardwareJobTest extends TestCase
         $this->assertSame('boom', $result['error']);
 
         $this->assertTrue(ImportStatus::claim($user->id, 'next-token'));
+    }
+
+    /**
+     * #1981: a stale job must not free the claim a newer dispatch took after
+     * its own claim expired. This pins the real job wiring, not just the
+     * ImportStatus primitive.
+     */
+    public function test_a_stale_job_release_does_not_free_a_newer_claim(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['manage_hardware']);
+        $stale = 'stale-job-token';
+        $fresh = 'fresh-claim-token';
+
+        $this->assertTrue(ImportStatus::claim($user->id, $stale));
+        Cache::forget(ImportStatus::claimKey($user->id));
+        $this->assertTrue(ImportStatus::claim($user->id, $fresh));
+
+        (new ImportHardwareJob(
+            path: 'imports/missing.csv',
+            compareKey: 'pc_name',
+            selectedActions: [],
+            accessibleUnitIds: [],
+            userId: $user->id,
+            statusToken: $stale,
+        ))->failed(new \RuntimeException('stale'));
+
+        $this->assertSame($fresh, Cache::get(ImportStatus::claimKey($user->id)));
     }
 }

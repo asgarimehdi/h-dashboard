@@ -75,10 +75,32 @@ final class ImportStatus
     /**
      * Release the import slot — called by the worker when the import ended,
      * successfully or not.
+     *
+     * #1981: the claim stores the dispatch token as its value, so release is a
+     * compare-and-delete: it only frees the slot when the same token still
+     * owns it. A stale job whose claim already expired must not free the
+     * newer claim a later dispatch took in the meantime — that would let a
+     * third import start while the second one is still running.
+     *
+     * A null token is deliberately a no-op (fail-closed): without the token
+     * ownership cannot be proven, so the slot stays held until the TTL
+     * expires. Freeing it unproven is exactly the bug this guards against.
+     *
+     * `get` + `forget` is not atomic: the key could expire between the two
+     * calls and a new claim win in that window. With per-dispatch UUID tokens
+     * the residual risk is negligible (a stale value can never equal a fresh
+     * one). Zero-race would need a shared `Cache::lock()` around both claim
+     * and release — a follow-up, not part of this fix.
      */
-    public static function release(int $userId): void
+    public static function release(int $userId, ?string $token = null): void
     {
-        Cache::forget(self::claimKey($userId));
+        if ($token === null) {
+            return;
+        }
+
+        if (Cache::get(self::claimKey($userId)) === $token) {
+            Cache::forget(self::claimKey($userId));
+        }
     }
 
     /**

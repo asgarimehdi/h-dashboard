@@ -297,7 +297,7 @@ return new class extends Component
             // #1194: the job was never queued, so nothing will release the
             // claim — free the slot here.
             if (isset($token)) {
-                ImportStatus::release((int) Auth::id());
+                ImportStatus::release((int) Auth::id(), $token);
             }
 
             $this->error('خطا در انجام ایمپورت: '.$e->getMessage(), 'خطا');
