@@ -11,6 +11,7 @@ use App\Models\Unit;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\Concerns\InteractsWithApiTokens;
@@ -41,6 +42,41 @@ class GisApiTest extends TestCase
             'lat' => $lat,
             'lng' => $lng,
         ]);
+    }
+
+    /**
+     * Bulk-insert located child units under $parent.
+     *
+     * Raw inserts on purpose: 1,000+ factory rows would dominate the suite's
+     * runtime, and the endpoints only need rows the scope CTE can find.
+     *
+     * @return array<int, int> child ids ascending
+     */
+    private function seedLocatedUnits(int $parentId, int $count): array
+    {
+        $now = now();
+        $rows = [];
+
+        for ($i = 1; $i <= $count; $i++) {
+            $rows[] = [
+                'name' => 'Located '.$i,
+                'parent_id' => $parentId,
+                'lat' => 36.5 + ($i / 100000),
+                'lng' => 48.5 + ($i / 100000),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        foreach (array_chunk($rows, 500) as $chunk) {
+            Unit::insert($chunk);
+        }
+
+        return Unit::where('parent_id', $parentId)
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     /**
@@ -410,6 +446,186 @@ class GisApiTest extends TestCase
 
         $this->assertCount(2, $gisIds);
         $this->assertSame($apiIds, $gisIds);
+    }
+
+    /**
+     * #1964: when the layer is truncated at 1000 rows, the kept subset must be
+     * the lowest ids — the same subset on every call, not an arbitrary slice.
+     *
+     * @test
+     */
+    public function test_gis_units_truncation_keeps_the_lowest_ids_deterministically(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUser();
+        $childIds = $this->seedLocatedUnits($unit->id, 1004); // 1005 located units in scope
+        $allIds = array_merge([(int) $unit->id], $childIds);
+        sort($allIds);
+        $expected = array_slice($allIds, 0, 1000);
+
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        // No bbox: the spatial filter is a no-op and every located unit is in scope.
+        $first = array_map('intval', collect(
+            $this->apiGet('/api/gis/units', $token)->assertOk()->json('features')
+        )->pluck('id')->all());
+
+        Cache::flush(); // without this the second call is served from cache and proves nothing
+
+        $second = array_map('intval', collect(
+            $this->apiGet('/api/gis/units', $token)->assertOk()->json('features')
+        )->pluck('id')->all());
+
+        $this->assertCount(1000, $first);
+        $this->assertSame($expected, $first);
+        $this->assertSame($first, $second);
+        $this->assertNotContains($allIds[1000], $first);
+    }
+
+    /**
+     * @test
+     */
+    public function test_gis_hardware_truncation_keeps_the_lowest_ids_deterministically(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'manage_hardware']);
+        $person = Person::where('u_id', $unit->id)->firstOrFail();
+
+        $now = now();
+        $rows = [];
+        for ($i = 1; $i <= 1001; $i++) {
+            $rows[] = [
+                'n_code' => $person->n_code,
+                'pc_name' => "PC-{$i}",
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        foreach (array_chunk($rows, 500) as $chunk) {
+            DB::table('hardwares')->insert($chunk);
+        }
+
+        $expected = DB::table('hardwares')
+            ->where('n_code', $person->n_code)
+            ->orderBy('id')
+            ->limit(1000)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        $first = array_map('intval', collect(
+            $this->apiGet('/api/gis/hardware', $token)->assertOk()->json('features')
+        )->pluck('id')->all());
+
+        Cache::flush();
+
+        $second = array_map('intval', collect(
+            $this->apiGet('/api/gis/hardware', $token)->assertOk()->json('features')
+        )->pluck('id')->all());
+
+        $this->assertCount(1000, $first);
+        $this->assertSame($expected, $first);
+        $this->assertSame($first, $second);
+        $this->assertNotContains((int) DB::table('hardwares')->max('id'), $first);
+    }
+
+    /**
+     * @test
+     */
+    public function test_gis_tickets_truncation_keeps_the_lowest_ids_deterministically(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'view_all_tickets']);
+
+        $now = now();
+        $rows = [];
+        for ($i = 1; $i <= 1001; $i++) {
+            $rows[] = [
+                'ticket_code' => "TKT-{$i}",
+                'user_id' => $user->id,
+                'unit_id' => $unit->id,
+                'subject' => "T-{$i}",
+                'content' => 'x',
+                'priority' => 'normal',
+                'status' => 'created',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        foreach (array_chunk($rows, 500) as $chunk) {
+            DB::table('tickets')->insert($chunk);
+        }
+
+        $expected = DB::table('tickets')
+            ->where('unit_id', $unit->id)
+            ->orderBy('id')
+            ->limit(1000)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        $first = array_map('intval', collect(
+            $this->apiGet('/api/gis/tickets', $token)->assertOk()->json('features')
+        )->pluck('id')->all());
+
+        Cache::flush();
+
+        $second = array_map('intval', collect(
+            $this->apiGet('/api/gis/tickets', $token)->assertOk()->json('features')
+        )->pluck('id')->all());
+
+        $this->assertCount(1000, $first);
+        $this->assertSame($expected, $first);
+        $this->assertSame($first, $second);
+        $this->assertNotContains((int) DB::table('tickets')->max('id'), $first);
+    }
+
+    /**
+     * Structural guard: the truncation must be ordered on the driving table's
+     * unique id, so a future refactor cannot silently drop the tie-breaker.
+     *
+     * @test
+     */
+    public function test_gis_truncated_queries_carry_an_order_by_on_the_driving_table(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createBBoxUserWith(['map', 'manage_hardware', 'view_all_tickets']);
+        $person = Person::where('u_id', $unit->id)->firstOrFail();
+
+        Hardware::create([
+            'n_code' => $person->n_code,
+            'pc_name' => 'PC-ORDER',
+        ]);
+        Ticket::create([
+            'ticket_code' => 'TKT-ORDER',
+            'user_id' => $user->id,
+            'unit_id' => $unit->id,
+            'subject' => 'Order By',
+            'content' => 'x',
+            'priority' => 'normal',
+            'status' => 'created',
+        ]);
+
+        $token = $this->createApiToken($user, ['gis:read']);
+
+        DB::enableQueryLog();
+        foreach ([
+            ['/api/gis/units', 'order by "units"."id" asc'],
+            ['/api/gis/hardware', 'order by "hardwares"."id" asc'],
+            ['/api/gis/tickets', 'order by "tickets"."id" asc'],
+        ] as [$uri, $needle]) {
+            Cache::flush();
+            DB::flushQueryLog();
+
+            $this->apiGet($uri, $token)->assertOk();
+
+            $sqls = array_column(DB::getQueryLog(), 'query');
+            $this->assertTrue(
+                collect($sqls)->contains(fn (string $sql) => str_contains($sql, $needle)),
+                "{$uri} lacks `{$needle}`"
+            );
+        }
+        DB::disableQueryLog();
     }
 
     /** @test */
