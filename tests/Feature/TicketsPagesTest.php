@@ -119,6 +119,7 @@ test('monitoring page renders tickets and displays Persian status', function () 
 
 test('tickets pages are protected by RBAC', function () {
     $noPermUser = User::factory()->create();
+    $noPermUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
     // Inbox requires 'view_assigned_tickets'
     $this->actingAs($noPermUser)

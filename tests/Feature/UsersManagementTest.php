@@ -136,6 +136,7 @@ test('roles and permissions pages render and allow modifications', function () {
 
 test('users management pages are protected by RBAC', function () {
     $noPermUser = User::factory()->create();
+    $noPermUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
     $urls = ['/users', '/roles', '/permissions'];
 

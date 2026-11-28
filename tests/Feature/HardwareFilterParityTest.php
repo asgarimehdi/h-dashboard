@@ -54,6 +54,11 @@ class HardwareFilterParityTest extends TestCase
         $this->user = $this->createUserWithUnit(['manage_hardware'])['user'];
 
         $unitA = Unit::factory()->create(['name' => 'مرکز حسین آباد']);   // Arabic alef
+        // #1830: `unit_context` now re-validates the session unit against
+        // `user_units`, so the acting user must actually be a member of the
+        // unit the session is parked on (this fixture used to rely on the
+        // missing membership check).
+        $this->user->units()->attach($unitA->id, ['role' => 'staff', 'is_primary' => false]);
         // A CHILD of unitA: with `current_unit_id` set, the accessible scope is
         // that unit plus its active descendants, so both rows below are in scope
         // on every surface (a sibling unit would only be reachable via `units()`).

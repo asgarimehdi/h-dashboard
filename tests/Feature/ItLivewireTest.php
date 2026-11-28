@@ -36,6 +36,12 @@ beforeEach(function () {
     ]);
 
     $this->user->givePermissionTo('map');
+
+    // Membership (`user_units`) is the sole source of scope (#1830, owner
+    // decision D1=B). The fixture must hold it explicitly instead of leaning
+    // on the person's HR `u_id`, which is no longer an access grant.
+    $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+
     Session::put('current_unit_id', $this->unit->id);
 });
 
@@ -47,6 +53,9 @@ test('networks page requires authentication', function () {
 
 test('networks page requires map permission', function () {
     $noPermUser = User::factory()->create();
+    // A memberless account is bounced to the picker before the permission
+    // gate is reached (#1830, D1=B), so the fixture needs a real membership.
+    $noPermUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
     Session::put('current_unit_id', $this->unit->id);
 
     $this->actingAs($noPermUser)
@@ -93,6 +102,9 @@ test('wireless page requires authentication', function () {
 
 test('wireless page requires map permission', function () {
     $noPermUser = User::factory()->create();
+    // A memberless account is bounced to the picker before the permission
+    // gate is reached (#1830, D1=B), so the fixture needs a real membership.
+    $noPermUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
     Session::put('current_unit_id', $this->unit->id);
 
     $this->actingAs($noPermUser)

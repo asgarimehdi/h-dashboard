@@ -26,6 +26,7 @@ beforeEach(function () {
     $this->user = User::factory()->create([
         'password' => Hash::make('password'),
     ]);
+    $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 });
 
 test('guest is redirected from settings page', function () {

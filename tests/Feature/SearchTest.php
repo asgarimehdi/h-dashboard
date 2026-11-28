@@ -35,6 +35,11 @@ beforeEach(function () {
         'n_code' => '1234567890',
         'password' => Hash::make('password'),
     ]);
+
+    // Membership (`user_units`) is the sole source of scope (#1830, owner
+    // decision D1=B). The fixture must hold it explicitly instead of leaning
+    // on the person's HR `u_id`, which is no longer an access grant.
+    $this->user->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 });
 
 test('guest is redirected from search page', function () {

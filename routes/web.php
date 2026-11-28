@@ -24,9 +24,10 @@ Route::post('/csp-report', CspReportController::class)
     ->middleware('throttle:60,1')
     ->name('csp.report');
 
-// Hardware routes — require authentication and manage_hardware permission
-// (Issue #216: guests must NOT see sensitive hardware data)
-Route::middleware(['auth', 'role_or_permission:manage_hardware'])->group(function () {
+// Hardware routes — require authentication, a valid unit context and the
+// manage_hardware permission (Issue #216: guests must NOT see sensitive
+// hardware data; #1830: a revoked session unit must not stay in scope).
+Route::middleware(['auth', 'unit_context', 'role_or_permission:manage_hardware'])->group(function () {
     Route::livewire('/hardware', 'hardware.index');
     Route::livewire('/hardware/import', 'hardware.import-hardware.import-hardware')->name('hardware.import');
     Route::get('/hardware/export', [HardwareExportController::class, 'export'])

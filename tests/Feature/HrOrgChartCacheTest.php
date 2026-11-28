@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\OrgChartController;
 use App\Models\Person;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\AccessService;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -200,7 +201,7 @@ class HrOrgChartCacheTest extends TestCase
         );
     }
 
-    public function test_the_accessible_set_refreshes_when_a_unitless_users_person_changes_unit(): void
+    public function test_the_accessible_set_comes_from_membership_and_ignores_the_person_unit(): void
     {
         $unitA = Unit::create(['name' => 'واحد الف']);
         $unitB = Unit::create(['name' => 'واحد ب']);
@@ -215,18 +216,27 @@ class HrOrgChartCacheTest extends TestCase
         $user->givePermissionTo('view_hr_dashboard');
         $token = $this->createApiToken($user, ['hr:read']);
 
-        // No user_units rows and no session unit: the fallback reads the
-        // person's unit.
+        // No user_units rows and no session unit: the person's unit is an HR
+        // field, not an access grant (#1830, owner decision D1=B).
         Session::forget('current_unit_id');
+
+        $this->apiGet("/api/hr/org-chart/subtree/{$unitA->id}", $token)->assertStatus(403);
+        $this->apiGet("/api/hr/org-chart/subtree/{$unitB->id}", $token)->assertStatus(403);
+
+        // A membership is what grants scope — and, exactly like the users form
+        // does when it changes a membership, it invalidates the cached set.
+        $user->units()->attach($unitA->id, ['role' => 'staff', 'is_primary' => true]);
+        app(AccessService::class)->clearCache($user);
 
         $this->apiGet("/api/hr/org-chart/subtree/{$unitA->id}", $token)->assertStatus(200);
         $this->apiGet("/api/hr/org-chart/subtree/{$unitB->id}", $token)->assertStatus(403);
 
+        // Moving the person to another unit bumps the `unit_hierarchy`
+        // version, so the cached set is recomputed — and it comes out
+        // unchanged, because the membership is the only source of scope.
         $user->person->update(['u_id' => $unitB->id]);
 
-        // The `unit_hierarchy` version is part of the accessible-set cache
-        // key, so the bump on the Person write must refresh the set at once.
-        $this->apiGet("/api/hr/org-chart/subtree/{$unitA->id}", $token)->assertStatus(403);
-        $this->apiGet("/api/hr/org-chart/subtree/{$unitB->id}", $token)->assertStatus(200);
+        $this->apiGet("/api/hr/org-chart/subtree/{$unitA->id}", $token)->assertStatus(200);
+        $this->apiGet("/api/hr/org-chart/subtree/{$unitB->id}", $token)->assertStatus(403);
     }
 }

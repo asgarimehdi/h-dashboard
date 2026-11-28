@@ -98,6 +98,7 @@ test('person import component shows preview and confirms import', function () {
 
 test('import components are protected by RBAC', function () {
     $guestUser = User::factory()->create(); // No permissions
+    $guestUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
     // Test hardware import route middleware
     $this->actingAs($guestUser)
@@ -137,13 +138,13 @@ test('person import requires manage_personnel inside the component', function ()
 // ایشو #839 (Plan 50): حساب بدون واحد، `accessibleUnitIds()` خالی می‌گیرد.
 // پیش از این پلن، مجوز درست بود اما لایه‌ی اسکوپ زیرش fail-open بود، پس یک
 // ایمپورتِ بی‌صدای کل‌سازمان شروع می‌شد. اکنون باید صریح رد شود.
-// `beforeEach` یک `current_unit_id` در سشن می‌گذارد و `AccessService` آن
-// را به هر کاربری نسبت می‌دهد؛ برای ساختن اسکوپِ واقعاً خالی باید پاک شود.
+// `beforeEach` یک `current_unit_id` در سشن می‌گذارد؛ برای ساختن اسکوپِ
+// واقعاً خالی باید پاک شود.
 //
-// نکته: `UserFactory` همیشه یک `Person` پشتِ کاربر می‌سازد و آن را به یک
-// واحد وصل می‌کند، پس کاربرِ ساخته‌شده با factory **هرگز** اسکوپ خالی ندارد —
-// `AccessService` به `person.u_id` می‌رسد. برای بازتولید مسیر `[]` باید
-// `u_id` صریحاً `null` شود.
+// نکته: از #1830 (تصمیم D1=B) عضویت `user_units` تنها منبع اسکوپ است و
+// `persons.u_id` دیگر fallback نیست. کاربرِ ساخته‌شده با factory هیچ ردیف
+// `user_units` ندارد، پس اسکوپش خالی است؛ `u_id` را هم صریحاً null می‌کنیم
+// تا fixture روی رفتار قدیمی تکیه نکند.
 function unitlessUserWithManagePermissions(): User
 {
     Session::forget('current_unit_id');

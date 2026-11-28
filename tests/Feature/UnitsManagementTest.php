@@ -74,6 +74,7 @@ test('unit map renders for accessible unit and denies out-of-scope', function ()
 
 test('units pages are protected by RBAC', function () {
     $noPermUser = User::factory()->create();
+    $noPermUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
 
     $this->actingAs($noPermUser)
         ->get('/units')
@@ -84,7 +85,9 @@ test('ValidateUnitContext middleware resolves context correctly', function () {
     // Use a throwaway route to test middleware
     Route::middleware('unit_context')->get('/test-context', fn () => 'ok');
 
-    // Case 1: User with no units but person has u_id -> set from person
+    // Case 1: User with no membership but a person u_id -> the person field is
+    // NOT a scope source (#1830, owner decision D1=B). The stale session value
+    // is cleared and the user is sent to /select-context; no unit is adopted.
     Person::create([
         'n_code' => '1111111111',
         'f_name' => 'تست',
@@ -95,8 +98,8 @@ test('ValidateUnitContext middleware resolves context correctly', function () {
     $user1 = User::create(['n_code' => '1111111111', 'password' => bcrypt('password')]);
 
     $this->actingAs($user1);
-    $this->get('/test-context');
-    expect(Session::get('current_unit_id'))->toBe($this->unit->id);
+    $this->get('/test-context')->assertRedirect('/select-context');
+    expect(Session::get('current_unit_id'))->toBeNull();
 
     // Case 2: User with multiple units and no current_unit_id -> redirect to /select-context
     Person::create([

@@ -367,12 +367,6 @@ parameters:
 			path: app/Http/Controllers/TicketAttachmentController.php
 
 		-
-			message: '#^Expression on left side of \?\? is not nullable\.$#'
-			identifier: nullCoalesce.expr
-			count: 1
-			path: app/Http/Middleware/ValidateUnitContext.php
-
-		-
 			message: '#^Method App\\Http\\Requests\\UnitScopedRequest\:\:accessibleIds\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -2679,12 +2673,6 @@ parameters:
 		-
 			message: '#^Method Livewire\\Component@anonymous/resources/views/livewire/select\-context\.blade\.php\:6\:\:with\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: resources/views/livewire/select-context.blade.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: resources/views/livewire/select-context.blade.php
 
