@@ -19,7 +19,9 @@ return new class extends Component
     #[Rule('required')]
     public string $n_code = '';
 
-    #[Rule('required')]
+    // #1912: max:255 is a size cap only — a 300-char password is valid today
+    // (no config/hashing.php, Hash::make has no length limit).
+    #[Rule(['required', 'max:255'])]
     public string $password = '';
 
     public bool $remember = false;
@@ -34,31 +36,37 @@ return new class extends Component
 
     public function login()
     {
-        $this->validate();
+        try {
+            $this->validate();
 
-        $this->ensureIsNotRateLimited();
+            $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt(['n_code' => $this->n_code, 'password' => $this->password], $this->remember)) {
-            RateLimiter::hit($this->throttleKey());
-            RateLimiter::hit($this->accountThrottleKey());
+            if (! Auth::attempt(['n_code' => $this->n_code, 'password' => $this->password], $this->remember)) {
+                RateLimiter::hit($this->throttleKey());
+                RateLimiter::hit($this->accountThrottleKey());
 
-            throw ValidationException::withMessages([
-                'n_code' => __('نام کاربری یا رمز عبور اشتباه است'),
-            ]);
+                throw ValidationException::withMessages([
+                    'n_code' => __('نام کاربری یا رمز عبور اشتباه است'),
+                ]);
+            }
+
+            RateLimiter::clear($this->throttleKey());
+            RateLimiter::clear($this->accountThrottleKey());
+
+            // لاگین موفق - سشن ری‌جنریت میشه خودکار توسط Laravel
+            Session::regenerate();
+
+            // ثبت فعالیت ورود
+            \App\Services\ActivityLogService::login();
+
+            // در Livewire 3 از redirect() برای ناوبری کامل استفاده می‌کنیم
+            // navigate: true باعث میشه Livewire به جای full reload، wire:navigate استفاده کنه
+            return $this->redirect('/', navigate: true);
+        } finally {
+            // #1912: رمز هرگز نباید در snapshot برگردد. try/finally همهٔ مسیرهای
+            // خروج (validate، throttle، رمز اشتباه، موفقیت) را پوشش می‌دهد.
+            $this->reset('password');
         }
-
-        RateLimiter::clear($this->throttleKey());
-        RateLimiter::clear($this->accountThrottleKey());
-
-        // لاگین موفق - سشن ری‌جنریت میشه خودکار توسط Laravel
-        Session::regenerate();
-
-        // ثبت فعالیت ورود
-        \App\Services\ActivityLogService::login();
-
-        // در Livewire 3 از redirect() برای ناوبری کامل استفاده می‌کنیم
-        // navigate: true باعث میشه Livewire به جای full reload، wire:navigate استفاده کنه
-        return $this->redirect('/', navigate: true);
     }
 
     /**

@@ -188,6 +188,50 @@ class ChangePasswordTest extends TestCase
             ->assertHasErrors(['currentPassword']);
     }
 
+    // #1912: the three plaintext password fields must never survive in the
+    // public component state — the snapshot reaches the browser unencrypted.
+    public function test_change_password_clears_all_fields_after_wrong_current(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        $component = Livewire::test('auth.changepassword')
+            ->set('currentPassword', 'wrong-current')
+            ->set('newPassword', 'new-password-123')
+            ->set('newPasswordConfirmation', 'new-password-123')
+            ->call('changePassword')
+            ->assertHasErrors(['currentPassword']);
+
+        $component->assertSet('currentPassword', '');
+        $component->assertSet('newPassword', '');
+        $component->assertSet('newPasswordConfirmation', '');
+
+        $snapshot = json_encode($component->snapshot);
+        $this->assertStringNotContainsString('wrong-current', $snapshot);
+        $this->assertStringNotContainsString('new-password-123', $snapshot);
+    }
+
+    public function test_change_password_clears_all_fields_after_validation_error(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit();
+        $this->actingAs($user);
+
+        $component = Livewire::test('auth.changepassword')
+            ->set('currentPassword', 'current-secret-xyz')
+            ->set('newPassword', 'short')
+            ->set('newPasswordConfirmation', 'short')
+            ->call('changePassword')
+            ->assertHasErrors(['newPassword']);
+
+        $component->assertSet('currentPassword', '');
+        $component->assertSet('newPassword', '');
+        $component->assertSet('newPasswordConfirmation', '');
+
+        $snapshot = json_encode($component->snapshot);
+        $this->assertStringNotContainsString('current-secret-xyz', $snapshot);
+        $this->assertStringNotContainsString('"short"', $snapshot);
+    }
+
     public function test_change_password_fails_when_new_matches_current(): void
     {
         ['user' => $user] = $this->createUserWithUnit();

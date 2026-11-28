@@ -142,6 +142,58 @@ class LoginLivewireTest extends TestCase
         $this->assertFalse(Auth::check());
     }
 
+    // #1912: the plaintext password must never survive in the public component
+    // state — Livewire snapshots are checksummed, not encrypted, so the value
+    // would otherwise reach the browser in wire:snapshot and every update.
+    public function test_failed_login_clears_password_from_state_and_snapshot(): void
+    {
+        $this->makeUser('1234567890', 'secret123');
+
+        $component = Livewire::test('auth.login')
+            ->set('n_code', '1234567890')
+            ->set('password', 'wrong-password')
+            ->call('login')
+            ->assertHasErrors('n_code');
+
+        $component->assertSet('password', '');
+        // n_code is an identifier, not a secret: it stays so the user only retypes the password.
+        $component->assertSet('n_code', '1234567890');
+        $this->assertStringNotContainsString('wrong-password', json_encode($component->snapshot));
+    }
+
+    public function test_successful_login_clears_password_from_state_and_snapshot(): void
+    {
+        $this->makeUser('1234567890', 'secret123');
+
+        $component = Livewire::test('auth.login')
+            ->set('n_code', '1234567890')
+            ->set('password', 'secret123')
+            ->call('login')
+            ->assertHasNoErrors()
+            ->assertRedirect('/');
+
+        $component->assertSet('password', '');
+        $this->assertStringNotContainsString('secret123', json_encode($component->snapshot));
+    }
+
+    public function test_rate_limited_login_clears_password_from_state_and_snapshot(): void
+    {
+        $this->makeUser('1234567890', 'secret123');
+
+        for ($i = 0; $i < 5; $i++) {
+            RateLimiter::hit($this->ipKey());
+        }
+
+        $component = Livewire::test('auth.login')
+            ->set('n_code', '1234567890')
+            ->set('password', 'wrong-password')
+            ->call('login')
+            ->assertHasErrors('n_code');
+
+        $component->assertSet('password', '');
+        $this->assertStringNotContainsString('wrong-password', json_encode($component->snapshot));
+    }
+
     public function test_nonexistent_user_throws_validation_error(): void
     {
         Livewire::test('auth.login')
