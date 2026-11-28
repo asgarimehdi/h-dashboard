@@ -26,6 +26,11 @@ which is worse than no hook. CI stays the only authority.
 - `pre-push` runs PHPStan over the **whole project**, not the staged subset — a
   staged-only path is an analysis route CI never exercises, so errors surfacing only
   through dependencies would never be seen locally.
+- On the **first push of a new branch** there is no remote sha, so `pre-push` diffs the
+  branch from the merge-base with the base branch (`origin/beta`, then `upstream/beta`)
+  and falls back to **every tracked PHP file** when no base ref resolves (fork without
+  `beta`, shallow clone) — the gate runs instead of silently skipping. A docs-only new
+  branch still skips.
 - **Test selection is manual, never heuristic.** Livewire components are single-file
   Blade views, so no `app/… → tests/…` mapping exists. A heuristic could report green
   without ever running the failing test — an intermittently broken gate is worse than

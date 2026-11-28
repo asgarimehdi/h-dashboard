@@ -22,6 +22,20 @@ class GitHooksTest extends TestCase
 {
     private const HOOKS = ['pre-commit', 'pre-push'];
 
+    /** @var list<string> */
+    private array $sandboxes = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->sandboxes as $sandbox) {
+            exec('rm -rf '.escapeshellarg($sandbox));
+        }
+
+        $this->sandboxes = [];
+
+        parent::tearDown();
+    }
+
     private function hookPath(string $hook): string
     {
         return base_path(".githooks/{$hook}");
@@ -147,5 +161,182 @@ class GitHooksTest extends TestCase
 
         $this->assertStringContainsString('..HEAD', $commands);
         $this->assertStringContainsString('0000000000000000000000000000000000000000', $commands);
+    }
+
+    // ──────────────────────────────────────────────
+    // Issue #1997 — the first push of a new branch must not skip PHPStan
+    // ──────────────────────────────────────────────
+
+    public function test_the_pre_push_hook_resolves_a_new_branch_from_the_merge_base(): void
+    {
+        // A new branch has no remote sha; the gate has to diff against the
+        // base branch instead of returning an empty list (which means "skip").
+        // The fallback must be a non-empty file list, so `ls-files`, not `return 0`.
+        $commands = $this->commands('pre-push');
+
+        $this->assertStringContainsString('merge-base', $commands);
+        $this->assertStringContainsString('ls-files', $commands);
+        $this->assertStringContainsString('beta', $commands);
+    }
+
+    public function test_the_first_push_of_a_new_branch_runs_phpstan(): void
+    {
+        [$repo, $base] = $this->makeRepo();
+
+        $this->git($repo, 'update-ref', 'refs/remotes/origin/beta', $base);
+        $this->git($repo, 'checkout', '-q', '-b', 'feature');
+        $this->commitFile($repo, 'app/Foo.php');
+
+        [$exit, $output] = $this->runHook($repo, $this->newBranchStdin($repo, 'feature'));
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertFileExists($repo.'/phpstan.ran', 'a new branch with PHP changes must run PHPStan');
+        $this->assertStringContainsString('PHPStan (full analysis)', $output);
+        $this->assertStringNotContainsString('skipping PHPStan', $output);
+    }
+
+    public function test_a_docs_only_new_branch_still_skips_phpstan(): void
+    {
+        // The fix must not turn every new branch into a full analysis: a
+        // docs-only branch has nothing for PHPStan to see.
+        [$repo, $base] = $this->makeRepo();
+
+        $this->git($repo, 'update-ref', 'refs/remotes/origin/beta', $base);
+        $this->git($repo, 'checkout', '-q', '-b', 'docs-only');
+        $this->commitFile($repo, 'docs/note.md');
+
+        [$exit, $output] = $this->runHook($repo, $this->newBranchStdin($repo, 'docs-only'));
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertFileDoesNotExist($repo.'/phpstan.ran');
+        $this->assertStringContainsString('skipping PHPStan', $output);
+    }
+
+    public function test_a_new_branch_without_a_base_ref_analyses_every_tracked_php_file(): void
+    {
+        // No origin/beta and no upstream/beta (a fork that never fetched beta):
+        // the safe fallback is every tracked PHP file, never an empty list.
+        [$repo] = $this->makeRepo();
+
+        $this->git($repo, 'checkout', '-q', '-b', 'feature');
+        $this->commitFile($repo, 'app/Foo.php');
+
+        [$exit, $output] = $this->runHook($repo, $this->newBranchStdin($repo, 'feature'));
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertFileExists($repo.'/phpstan.ran', 'the fallback must run PHPStan, not skip it');
+        $this->assertStringContainsString('PHPStan (full analysis)', $output);
+    }
+
+    public function test_an_existing_branch_still_diffs_against_the_remote_sha(): void
+    {
+        // Regression guard for the path that already worked: a real remote sha
+        // keeps deciding the range, and an unchanged range still skips.
+        [$repo, $base] = $this->makeRepo();
+
+        $this->git($repo, 'update-ref', 'refs/remotes/origin/beta', $base);
+        $this->commitFile($repo, 'app/Foo.php');
+
+        [$exit, $output] = $this->runHook($repo, $this->existingBranchStdin($repo, $base));
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertFileExists($repo.'/phpstan.ran');
+        $this->assertStringContainsString('PHPStan (full analysis)', $output);
+
+        unlink($repo.'/phpstan.ran');
+
+        [$exit, $output] = $this->runHook($repo, $this->existingBranchStdin($repo, $this->git($repo, 'rev-parse', 'HEAD')));
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertFileDoesNotExist($repo.'/phpstan.ran');
+        $this->assertStringContainsString('skipping PHPStan', $output);
+    }
+
+    /**
+     * A throw-away repo with a base commit and a stubbed vendor/bin/phpstan that
+     * only records that it ran.
+     *
+     * @return array{0: string, 1: string} [repo path, base sha]
+     */
+    private function makeRepo(): array
+    {
+        $repo = sys_get_temp_dir().'/pre-push-'.bin2hex(random_bytes(6));
+        $this->sandboxes[] = $repo;
+
+        mkdir($repo.'/vendor/bin', 0o777, true);
+
+        file_put_contents(
+            $repo.'/vendor/bin/phpstan',
+            "#!/usr/bin/env bash\ntouch ".escapeshellarg($repo.'/phpstan.ran')."\nexit 0\n"
+        );
+        chmod($repo.'/vendor/bin/phpstan', 0o755);
+
+        $this->git($repo, 'init', '-q', '-b', 'main');
+        $this->git($repo, 'commit', '-q', '--allow-empty', '-m', 'base');
+
+        return [$repo, $this->git($repo, 'rev-parse', 'HEAD')];
+    }
+
+    private function commitFile(string $repo, string $path): void
+    {
+        $full = $repo.'/'.$path;
+
+        if (! is_dir(dirname($full))) {
+            mkdir(dirname($full), 0o777, true);
+        }
+
+        file_put_contents($full, "content\n");
+        $this->git($repo, 'add', $path);
+        $this->git($repo, 'commit', '-q', '-m', 'add '.$path);
+    }
+
+    private function git(string $repo, string ...$args): string
+    {
+        $command = 'cd '.escapeshellarg($repo)
+            .' && git -c user.name=Test -c user.email=test@example.com '
+            .implode(' ', array_map(escapeshellarg(...), $args)).' 2>&1';
+
+        $output = [];
+        exec($command, $output, $exit);
+
+        $this->assertSame(0, $exit, "git {$args[0]} failed: ".implode("\n", $output));
+
+        return trim(implode("\n", $output));
+    }
+
+    /**
+     * @return array{0: int, 1: string}
+     */
+    private function runHook(string $repo, string $stdin): array
+    {
+        // git passes no arguments to a pre-push hook; everything arrives on stdin.
+        $command = 'cd '.escapeshellarg($repo)
+            .' && printf %s '.escapeshellarg($stdin)
+            .' | VERIFY_TESTS= bash '.escapeshellarg($this->hookPath('pre-push')).' 2>&1';
+
+        $output = [];
+        exec($command, $output, $exit);
+
+        return [$exit, implode("\n", $output)];
+    }
+
+    private function newBranchStdin(string $repo, string $branch): string
+    {
+        return sprintf(
+            "refs/heads/%s %s refs/heads/%s %s\n",
+            $branch,
+            $this->git($repo, 'rev-parse', 'HEAD'),
+            $branch,
+            str_repeat('0', 40)
+        );
+    }
+
+    private function existingBranchStdin(string $repo, string $remoteSha): string
+    {
+        return sprintf(
+            "refs/heads/feature %s refs/heads/feature %s\n",
+            $this->git($repo, 'rev-parse', 'HEAD'),
+            $remoteSha
+        );
     }
 }
