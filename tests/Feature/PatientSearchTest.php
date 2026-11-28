@@ -113,6 +113,34 @@ class PatientSearchTest extends TestCase
             ->assertDontSee('حسن‌زاده');
     }
 
+    public function test_the_registry_search_compares_the_stored_folded_columns(): void
+    {
+        $this->makePatient(['first_name' => 'آرش', 'last_name' => 'حسن‌زاده']);
+
+        $sqls = [];
+        DB::listen(function ($query) use (&$sqls): void {
+            $sqls[] = $query->sql;
+        });
+
+        Livewire::test('disease.patients')
+            ->set('searchName', 'حسن زاده')
+            ->assertSee('حسن‌زاده');
+
+        // The initial mount renders an empty page (`where 1 = 0`); the search
+        // statement is the one carrying the LIKE arms.
+        $sql = collect($sqls)->first(
+            fn (string $statement): bool => str_contains($statement, 'from "patients"') && str_contains($statement, 'LIKE')
+        );
+
+        $this->assertNotNull($sql, 'the registry search must query patients');
+
+        foreach (['first_name_folded', 'last_name_folded', 'full_name_folded', 'full_name_rev_folded'] as $column) {
+            $this->assertStringContainsString($column, $sql);
+        }
+
+        $this->assertStringNotContainsString('regexp_replace', $sql);
+    }
+
     public function test_persian_digits_find_the_same_patient(): void
     {
         $this->makePatient(['kod_melli' => '0499370899', 'first_name' => 'آرش', 'last_name' => 'حسن‌زاده']);

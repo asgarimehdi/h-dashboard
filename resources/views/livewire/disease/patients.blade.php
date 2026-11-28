@@ -289,13 +289,15 @@ return new class extends Component
                 $folded = PersianNormalizer::foldedTerm($term);
 
                 $query->where(function (Builder $termQuery) use ($folded): void {
-                    // The column is folded too: `patients` has no save hook, so
-                    // a stored «آ»/ZWNJ must still match the folded term.
+                    // #1971: compare the stored folded columns directly (the
+                    // migration generates them with the normalizer's fold
+                    // expression), so the trigram indexes can serve the
+                    // predicate.
                     $termQuery
-                        ->whereRaw(PersianNormalizer::foldSeparatorsSql('first_name').' LIKE ?', ["%{$folded}%"])
-                        ->orWhereRaw(PersianNormalizer::foldSeparatorsSql('last_name').' LIKE ?', ["%{$folded}%"])
-                        ->orWhereRaw(PersianNormalizer::foldSeparatorsSql("CONCAT(first_name, ' ', last_name)").' LIKE ?', ["%{$folded}%"])
-                        ->orWhereRaw(PersianNormalizer::foldSeparatorsSql("CONCAT(last_name, ' ', first_name)").' LIKE ?', ["%{$folded}%"]);
+                        ->where('first_name_folded', 'LIKE', "%{$folded}%")
+                        ->orWhere('last_name_folded', 'LIKE', "%{$folded}%")
+                        ->orWhere('full_name_folded', 'LIKE', "%{$folded}%")
+                        ->orWhere('full_name_rev_folded', 'LIKE', "%{$folded}%");
                 });
             }
         }
