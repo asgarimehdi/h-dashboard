@@ -252,6 +252,18 @@ class ReportsPayloadCacheTest extends TestCase
         $this->assertNoAggregateSql($warm, 'todos');
     }
 
+    public function test_todos_counts_come_from_one_conditional_aggregate(): void
+    {
+        app(CacheInvalidationServiceInterface::class)->increment('report_todos');
+        $sql = $this->captureSql(fn () => Livewire::test('reports.todos'));
+        $aggregates = array_values(array_filter(
+            $sql,
+            fn (string $s): bool => str_contains($s, 'from "todos"')
+                && str_contains($s, 'FILTER (WHERE'),
+        ));
+        $this->assertCount(1, $aggregates, "expected one conditional aggregate:\n".implode("\n---\n", $sql));
+    }
+
     public function test_todos_date_range_change_runs_aggregates_and_changes_by_day(): void
     {
         app(CacheInvalidationServiceInterface::class)->increment('report_todos');
@@ -299,6 +311,41 @@ class ReportsPayloadCacheTest extends TestCase
 
         $warm = $this->captureSql(fn () => Livewire::test('reports.units'));
         $this->assertNoAggregateSql($warm, 'units');
+    }
+
+    public function test_units_counts_split_boundary_and_honour_the_type_filter(): void
+    {
+        DB::statement(
+            'INSERT INTO boundaries (boundary, created_at, updated_at) VALUES '
+            ."(ST_GeomFromText('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)))', 4326), now(), now())"
+        );
+        $this->child->update(['boundary_id' => (int) DB::getPdo()->lastInsertId()]);
+        app(CacheInvalidationServiceInterface::class)->increment('report_units');
+
+        $component = Livewire::test('reports.units');
+        $chart = $component->instance()->chartPayload();
+
+        $this->assertSame(2, $chart['total']);
+        $this->assertSame(1, $chart['no_boundary']);
+        $this->assertSame(1, $chart['with_boundary']);
+
+        // selectedUnitTypeId باید روی هر سه عدد اثر بگذارد.
+        $chart = $component->set('selectedUnitTypeId', $this->childType->id)->instance()->chartPayload();
+        $this->assertSame(1, $chart['total']);
+        $this->assertSame(0, $chart['no_boundary']);
+        $this->assertSame(1, $chart['with_boundary']);
+    }
+
+    public function test_units_counts_come_from_one_conditional_aggregate(): void
+    {
+        app(CacheInvalidationServiceInterface::class)->increment('report_units');
+        $sql = $this->captureSql(fn () => Livewire::test('reports.units'));
+        $aggregates = array_values(array_filter(
+            $sql,
+            fn (string $s): bool => str_contains($s, 'from "units"')
+                && str_contains($s, 'FILTER (WHERE'),
+        ));
+        $this->assertCount(1, $aggregates, "expected one conditional aggregate:\n".implode("\n---\n", $sql));
     }
 
     public function test_units_boundary_filter_change_runs_aggregates(): void
