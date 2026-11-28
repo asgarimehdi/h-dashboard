@@ -9,6 +9,7 @@ use App\Models\Radif;
 use App\Models\Unit;
 use App\Models\UnitType;
 use App\Models\User;
+use App\Services\CacheInvalidationServiceInterface;
 use Closure;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -708,8 +709,8 @@ class PersonLivewireTest extends TestCase
 
     public function test_save_person_syncs_linked_user_units(): void
     {
-        // A user sharing the person's n_code gets attached to the person's
-        // unit on save (update branch).
+        // #1896: a transfer (u_id change) moves the linked user's primary
+        // unit with it — the person and the pivot must not diverge.
         $userNCode = (string) fake()->unique()->numerify('##########');
         // Person first (users.n_code FK -> persons.n_code), then the user.
         $person = PersonModel::create($this->personData(['n_code' => $userNCode]));
@@ -717,6 +718,9 @@ class PersonLivewireTest extends TestCase
         $this->assertFalse(
             $linkedUser->units()->where('units.id', $this->unit->id)->exists()
         );
+
+        // Child of the acting user's unit, so the target is inside scope.
+        $target = Unit::create(['name' => 'واحد فرزند', 'parent_id' => $this->unit->id]);
 
         $component = Livewire::test('kargozini.person')
             ->call('editPerson', $person->id);
@@ -728,15 +732,44 @@ class PersonLivewireTest extends TestCase
             'e_id' => $this->eId,
             's_id' => $this->sId,
             'r_id' => $this->rId,
-            'u_id' => $this->unit->id,
+            'u_id' => $target->id,
         ]);
         $component->call('savePerson');
 
-        $this->assertDatabaseHas('persons', ['n_code' => $userNCode, 'f_name' => 'همراه']);
-        // The linked user is now attached to the person's unit.
-        $this->assertTrue(
-            $linkedUser->units()->where('units.id', $this->unit->id)->exists()
-        );
+        $this->assertDatabaseHas('persons', [
+            'n_code' => $userNCode,
+            'f_name' => 'همراه',
+            'u_id' => $target->id,
+        ]);
+        // The linked user's primary unit followed the transfer.
+        $this->assertSame($target->id, $linkedUser->fresh()->primaryUnit()?->id);
+    }
+
+    /**
+     * #1896 no-op contract: editing a person without changing their unit must
+     * not rewrite the pivot or invalidate the access cache.
+     */
+    public function test_save_person_with_same_unit_does_not_touch_the_pivot(): void
+    {
+        $nCode = (string) fake()->unique()->numerify('##########');
+        $person = PersonModel::create($this->personData(['n_code' => $nCode]));
+        $linkedUser = User::create(['n_code' => $nCode, 'password' => Hash::make('password')]);
+        $linkedUser->units()->attach($this->unit->id, ['role' => 'staff', 'is_primary' => true]);
+
+        $cache = app(CacheInvalidationServiceInterface::class);
+        $versionBefore = $cache->getVersion('unit_hierarchy');
+
+        $component = Livewire::test('kargozini.person')
+            ->call('editPerson', $person->id);
+        $this->fillForm($component, $this->personData([
+            'n_code' => $nCode,
+            'u_id' => $this->unit->id,
+        ]));
+        $component->call('savePerson');
+
+        $this->assertSame($this->unit->id, $linkedUser->fresh()->primaryUnit()?->id);
+        $this->assertSame(1, DB::table('user_units')->where('user_id', $linkedUser->id)->count());
+        $this->assertSame($versionBefore, $cache->getVersion('unit_hierarchy'));
     }
 
     public function test_transferring_a_person_twice_leaves_exactly_one_primary_unit(): void

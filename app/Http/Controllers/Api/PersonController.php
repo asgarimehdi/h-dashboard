@@ -8,6 +8,7 @@ use App\Models\Hardware;
 use App\Models\Person;
 use App\Models\User;
 use App\Rules\PerPage;
+use App\Services\PersonService;
 use App\Support\PersonRules;
 use App\Traits\PersianNormalizer;
 use Illuminate\Http\JsonResponse;
@@ -183,7 +184,7 @@ class PersonController extends Controller
             return response()->json(['message' => 'Unit not accessible.'], 403);
         }
 
-        $person->update($validated);
+        app(PersonService::class)->update($person, $validated);
 
         $data = Person::query()
             ->select(self::PERSON_COLUMNS)
