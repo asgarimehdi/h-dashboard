@@ -64,6 +64,19 @@ class TicketsInboxLivewireTest extends TestCase
         return $user;
     }
 
+    /**
+     * The ticket factory used by the whole file.
+     *
+     * The defaults are the acting user's own unit and the acting user. They used
+     * to come from `first()` — a `LIMIT 1` with no `ORDER BY` — so Postgres could
+     * answer with any row: the ticket then landed outside the caller's scope, the
+     * inbox's scope gate refused it and the modal/forward silently no-op'd (the
+     * random-order flake behind #1882).
+     *
+     * `RefreshDatabase` rolls back but does not truncate, so anchoring on the
+     * acting user's unit is the only deterministic choice; the id-ordered
+     * lookups below are the fallback for tests that do not act as a user.
+     */
     protected function createTicket(array $overrides = []): Ticket
     {
         // Never default to `Unit::first()`: `RefreshDatabase` rolls back but
@@ -129,6 +142,25 @@ class TicketsInboxLivewireTest extends TestCase
                 return $this->inner->connection()->select($query, $bindings, $useReadPdo);
             }
         });
+    }
+
+    /**
+     * The factory must anchor its default unit on the acting user's own unit,
+     * never on whatever row `Unit::first()` happens to return. A ticket outside
+     * the caller's scope is refused by the inbox's gate (the modal stays closed,
+     * the forward no-ops) — the random-order flake behind #1882.
+     */
+    public function test_the_ticket_factory_defaults_to_the_acting_users_unit(): void
+    {
+        $decoy = Unit::create(['name' => 'واحد اول']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets']);
+        $this->actingAs($user);
+
+        $ticket = $this->createTicket(['status' => 'created']);
+
+        $this->assertNotSame($decoy->id, $ticket->unit_id);
+        $this->assertSame($unit->id, $ticket->unit_id);
+        $this->assertSame($user->id, $ticket->user_id);
     }
 
     // =====================================================================
@@ -3645,16 +3677,22 @@ class TicketsInboxLivewireTest extends TestCase
     {
         Storage::fake('local');
 
-        ['user' => $user] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['view_assigned_tickets', 'manage_unit_tickets']);
         $this->actingAs($user);
 
         $target = $this->createTargetUnit();
-        $a = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
-        $b = $this->createTicket(['status' => 'accepted', 'current_assignee_id' => $user->id]);
+        $a = $this->createTicket(['unit' => $unit, 'user' => $user, 'status' => 'accepted', 'current_assignee_id' => $user->id]);
+        $b = $this->createTicket(['unit' => $unit, 'user' => $user, 'status' => 'accepted', 'current_assignee_id' => $user->id]);
         $file = UploadedFile::fake()->create('a.pdf', 10, 'application/pdf');
 
         Livewire::test('tickets.inbox')
             ->call('openCompletionModal', $a->id)
+            // The modal's markup is always rendered, so `assertSeeHtml` says
+            // nothing about the open. Assert the state too: a ticket outside
+            // the caller's scope is refused by the gate and the modal stays
+            // closed — the failure must point at the FIRST open, not at the
+            // last assertion of the chain.
+            ->assertSet('isCompletionModalOpen', true)
             ->assertSeeHtml('wire:click="closeCompletionModal"')
             ->set('completionNote', 'یادداشت تیکت الف')
             ->set('completionFiles', [$file])
