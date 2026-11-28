@@ -1016,4 +1016,102 @@ class HardwareImportEdgeCasesTest extends TestCase
             'HardwareImport deliberately does not implement WithValidation (see #890).'
         );
     }
+
+    // -----------------------------------------------------------
+    //  ایشو #1851: «0» روی فیلد متنی نباید با «خالی» یکی شود
+    // -----------------------------------------------------------
+
+    public function test_text_field_zero_is_previewed_and_written_over_empty(): void
+    {
+        $this->createPerson();
+        $hardware = $this->seedHardware(['port' => null]);
+
+        $file = $this->writeCsv([$this->row(['port' => '0'])]);
+
+        $preview = $this->scopedImport();
+        Excel::import($preview, $file);
+        $results = $preview->getImportResults();
+
+        $this->assertSame('update', $results['preview'][0]['status']);
+        $this->assertArrayHasKey('port', $results['preview'][0]['changes']);
+        $this->assertNull($results['preview'][0]['changes']['port']['old']);
+        $this->assertSame('0', $results['preview'][0]['changes']['port']['new']);
+
+        $confirm = $this->scopedImport();
+        $confirm->setSelectedActions(['row_2' => 'update']);
+        Excel::import($confirm, $file);
+
+        $this->assertSame('0', $hardware->fresh()->port);
+        $this->assertSame(1, HardwareAudit::where('action', 'updated')->count());
+
+        @unlink($file);
+    }
+
+    public function test_text_field_zero_is_cleared_by_an_empty_sheet_cell(): void
+    {
+        $this->createPerson();
+        $hardware = $this->seedHardware(['port' => '0']);
+
+        $file = $this->writeCsv([$this->row(['port' => ''])]);
+
+        $preview = $this->scopedImport();
+        Excel::import($preview, $file);
+
+        $row = $preview->getImportResults()['preview'][0];
+        $this->assertSame('update', $row['status']);
+        $this->assertArrayHasKey('port', $row['changes']);
+        $this->assertSame('0', $row['changes']['port']['old']);
+        $this->assertNull($row['changes']['port']['new']);
+
+        $confirm = $this->scopedImport();
+        $confirm->setSelectedActions(['row_2' => 'update']);
+        Excel::import($confirm, $file);
+
+        $this->assertNull($hardware->fresh()->port);
+
+        @unlink($file);
+    }
+
+    public function test_boolean_shutdown_still_collapses_empty_and_zero(): void
+    {
+        $this->createPerson();
+        $hardware = $this->seedHardware(['shutdown' => false]);
+
+        foreach (['', '0'] as $cell) {
+            $file = $this->writeCsv([$this->row(['shutdown' => $cell])]);
+
+            $import = $this->scopedImport();
+            $import->setSelectedActions(['row_2' => 'update']);
+            Excel::import($import, $file);
+
+            $results = $import->getImportResults();
+            $this->assertSame([], $results['changes'], "shutdown cell '{$cell}' must not be a change");
+            $this->assertSame(0, $results['updated']);
+            $this->assertSame(1, $results['skipped']);
+
+            @unlink($file);
+        }
+
+        $this->assertFalse($hardware->fresh()->shutdown);
+    }
+
+    public function test_boolean_shutdown_true_is_a_change(): void
+    {
+        $this->createPerson();
+        $hardware = $this->seedHardware(['shutdown' => false]);
+
+        $file = $this->writeCsv([$this->row(['shutdown' => '1'])]);
+
+        $preview = $this->scopedImport();
+        Excel::import($preview, $file);
+        $this->assertArrayHasKey('shutdown', $preview->getImportResults()['preview'][0]['changes']);
+
+        $confirm = $this->scopedImport();
+        $confirm->setSelectedActions(['row_2' => 'update']);
+        Excel::import($confirm, $file);
+
+        $this->assertTrue($hardware->fresh()->shutdown);
+
+        @unlink($file);
+    }
 }

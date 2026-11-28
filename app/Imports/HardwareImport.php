@@ -876,8 +876,13 @@ class HardwareImport extends AbstractImportPipeline implements ToCollection, Wit
         // spelled ten backslashes (five at runtime, since single quotes halve
         // them) so it could never match the real token; a raw `\N` fell through
         // to trim() as the two characters `\` and `N`.
+        // #1851: null / '' / '\N' are the "no value" sentinel. It must NOT
+        // collapse into the literal string '0' — a text column (port, vlan,
+        // switch, comments, …) may legitimately store "0". Booleans are the
+        // only values that get the 0/1 collapse, and both sides of
+        // shutdown/mark are real PHP bools (model casts + parseBoolean()).
         if ($value === null || $value === '' || $value === '\\N') {
-            return '0'; // Treat null/empty as false for boolean comparison
+            return '';
         }
         if (is_bool($value)) {
             return $value ? '1' : '0';
