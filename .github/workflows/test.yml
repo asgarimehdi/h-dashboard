@@ -3,11 +3,12 @@ name: Tests
 on:
   pull_request:
     branches: [main, beta, test]
-  # The `mutation` job below runs on PRs too (re-enabled 2026-10-25,
-  # reversing the manual-only gate from #1012) and blocks since #1502
-  # (`--min=41`): it runs in parallel with E2E, so while green it adds no
-  # wall time. A manual run executes every job, so read the mutation job's
-  # own result, not the run's overall conclusion.
+  # The three `mutation-*` jobs below run on PRs too (re-enabled 2026-10-25,
+  # reversing the manual-only gate from #1012) and block since #1502 (each
+  # with its own `--min=41` starting ratchet): they run in parallel with
+  # E2E, so while green they add no wall time. A manual run executes every
+  # job, so read each mutation job's own result, not the run's overall
+  # conclusion.
   workflow_dispatch:
 
 permissions:
@@ -853,18 +854,14 @@ jobs:
           grep -qE '[0-9]+ passed' smoke-list.log
           test "${EXECUTED}" -gt 0
 
-  mutation:
-    name: Mutation Testing
-    # Runs on every PR (re-enabled 2026-10-25, reversing the manual-only
-    # gate from #1012) and blocks since #1502: each run is expensive
-    # (checkout, composer install and migrations before the single
-    # `pest --mutate` line below, ~30 minutes as of 2026-10-28), but it
-    # runs in parallel with E2E, so while it is green it adds no wall time.
-    # `--min=41` is a ratchet on the measured beta floor (41.84%,
-    # 359/858 mutants on 46f9cbc): raise it as coverage lands, never lower
-    # it without an open tracking issue.
-    # Cap 45 minutes (raised from 30 on 2026-10-28 after the job hit the
-    # 30-minute timeout on #1270 and #1271).
+  mutation-http:
+    name: Mutation Testing (HTTP)
+    # Shard of the split mutation run (2026-11-28): mutates App\Http, App\View, App\Policies, App\Providers, App\Exceptions and App\Observers.
+    # The single `mutation` job hit its 45-minute timeout twice on
+    # 2026-11-28 (the manual beta run and #1950), so the run is split by
+    # namespace into three parallel jobs. Each shard keeps the same
+    # `--min=41` starting ratchet — calibrate it from this shard's measured
+    # score on the first run, never silently lower it.
     runs-on: ubuntu-latest
     timeout-minutes: 45
     # Blocking: a score below the threshold fails this job and the PR.
@@ -939,7 +936,175 @@ jobs:
         # `--min=41` is a ratchet on the measured beta floor (41.84% on
         # 46f9cbc, #1502). The `=` is load-bearing: a bare `--min 41` is
         # swallowed by Pest's coverage plugin, the gate never arms.
-        run: ./vendor/bin/pest --mutate --parallel --covered-only --min=41
+        run: ./vendor/bin/pest --mutate --parallel --covered-only --min=41 --class='App\Http,App\View,App\Policies,App\Providers,App\Exceptions,App\Observers'
+
+  mutation-domain:
+    name: Mutation Testing (Domain)
+    # Shard of the split mutation run (2026-11-28): mutates App\Models and App\Services.
+    # The single `mutation` job hit its 45-minute timeout twice on
+    # 2026-11-28 (the manual beta run and #1950), so the run is split by
+    # namespace into three parallel jobs. Each shard keeps the same
+    # `--min=41` starting ratchet — calibrate it from this shard's measured
+    # score on the first run, never silently lower it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Blocking: a score below the threshold fails this job and the PR.
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_test
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer download cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Assert the lock is present and current
+        run: |
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
+
+      # Issue #1185: no Node, no Vite build. `Tests\TestCase::setUp()` calls
+      # `withoutVite()` for the whole suite and no test reads the Vite manifest
+      # or the built bundle — the build was never asserted on, only paid for.
+      # The `e2e` job still builds: it drives a real browser.
+      - name: Copy .env for testing
+        run: bash scripts/build-env-testing.sh
+
+      - name: Generate application key
+        run: php artisan key:generate --env=testing
+
+      - name: Run migrations
+        run: php artisan migrate --env=testing --force
+
+      - name: Run mutation tests
+        # @covers declarations scope mutations to tested code.
+        # `--min=41` is a ratchet on the measured beta floor (41.84% on
+        # 46f9cbc, #1502). The `=` is load-bearing: a bare `--min 41` is
+        # swallowed by Pest's coverage plugin, the gate never arms.
+        run: ./vendor/bin/pest --mutate --parallel --covered-only --min=41 --class='App\Models,App\Services'
+
+  mutation-support:
+    name: Mutation Testing (Support)
+    # Shard of the split mutation run (2026-11-28): mutates App\Support, App\Console, App\Jobs, App\Rules, App\Traits, App\Exports, App\Imports and Database\Seeders.
+    # The single `mutation` job hit its 45-minute timeout twice on
+    # 2026-11-28 (the manual beta run and #1950), so the run is split by
+    # namespace into three parallel jobs. Each shard keeps the same
+    # `--min=41` starting ratchet — calibrate it from this shard's measured
+    # score on the first run, never silently lower it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Blocking: a score below the threshold fails this job and the PR.
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: h_dashboard_test
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:latest
+        options: >
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.5'
+          extensions: pgsql, redis, pcntl, bcmath, zip, curl, mbstring
+          tools: composer:latest
+
+      - name: Cache Composer download cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Assert the lock is present and current
+        run: |
+          test -f composer.lock
+          composer validate --strict --check-lock
+          git diff --exit-code -- composer.lock
+
+      # Issue #1185: no Node, no Vite build. `Tests\TestCase::setUp()` calls
+      # `withoutVite()` for the whole suite and no test reads the Vite manifest
+      # or the built bundle — the build was never asserted on, only paid for.
+      # The `e2e` job still builds: it drives a real browser.
+      - name: Copy .env for testing
+        run: bash scripts/build-env-testing.sh
+
+      - name: Generate application key
+        run: php artisan key:generate --env=testing
+
+      - name: Run migrations
+        run: php artisan migrate --env=testing --force
+
+      - name: Run mutation tests
+        # @covers declarations scope mutations to tested code.
+        # `--min=41` is a ratchet on the measured beta floor (41.84% on
+        # 46f9cbc, #1502). The `=` is load-bearing: a bare `--min 41` is
+        # swallowed by Pest's coverage plugin, the gate never arms.
+        run: ./vendor/bin/pest --mutate --parallel --covered-only --min=41 --class='App\Support,App\Console,App\Jobs,App\Rules,App\Traits,App\Exports,App\Imports,Database\Seeders'
 
   phpstan:
     name: PHPStan Static Analysis
