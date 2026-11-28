@@ -43,8 +43,9 @@ class DatabaseSeeder extends Seeder
         // the batch would abort every seeder after it there. isAllowed() keeps
         // that decision owned by the seeder itself.
         //
-        // It must stay *before* RoleSeeder below, which grants `admin` to users
-        // with id 1..3 — the ids these three accounts get on a fresh database.
+        // It must stay *before* RoleSeeder below, which grants `admin` to the demo
+        // accounts by n_code (UsersTableSeeder::DEMO_N_CODES). In production neither
+        // the accounts nor the grant exist (#1847).
         if (UsersTableSeeder::isAllowed()) {
             $this->call(UsersTableSeeder::class);
         }
