@@ -10,6 +10,7 @@ use App\Models\UnitTypeRelationship;
 use App\Rules\PerPage;
 use App\Services\AccessService;
 use App\Services\UnitDeletionService;
+use App\Support\RootUnitPrivilege;
 use Illuminate\Http\JsonResponse;
 
 class UnitController extends Controller
@@ -117,6 +118,16 @@ class UnitController extends Controller
             if ($childTypeId !== UnitType::ROOT_ID) {
                 return response()->json(['message' => 'A parent unit is required for this unit type.'], 422);
             }
+
+            // Issue #1864: minting a root is a top-level action — a root has no
+            // scope anchor, so the parent-scope check above never runs for it.
+            // Kept inside the null-parent branch: the #1649 contract
+            // (non-root without a parent is 422) must not become 403.
+            if (! RootUnitPrivilege::allows($request->user())) {
+                return response()->json([
+                    'message' => 'Only an administrator can create or move a unit to the hierarchy root.',
+                ], 403);
+            }
         } else {
             $parentTypeId = Unit::query()->whereKey($validated['parent_id'])->value('unit_type_id');
 
@@ -193,6 +204,19 @@ class UnitController extends Controller
                 if ($finalParentId === null) {
                     if ($finalTypeId !== UnitType::ROOT_ID) {
                         return response()->json(['message' => 'A parent unit is required for this unit type.'], 422);
+                    }
+
+                    // Issue #1864: privileged only when this update MOVES the
+                    // unit to the root. Re-submitting the stored parent/type of
+                    // a unit that is already a root must stay editable by
+                    // whoever has it in scope (legacy/data-repair edits).
+                    $alreadyRoot = $unit->parent_id === null
+                        && (int) $unit->unit_type_id === UnitType::ROOT_ID;
+
+                    if (! $alreadyRoot && ! RootUnitPrivilege::allows($request->user())) {
+                        return response()->json([
+                            'message' => 'Only an administrator can create or move a unit to the hierarchy root.',
+                        ], 403);
                     }
                 } else {
                     $parentTypeId = Unit::query()->whereKey($finalParentId)->value('unit_type_id');

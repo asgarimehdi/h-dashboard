@@ -9,8 +9,10 @@ use App\Models\Ticket;
 use App\Models\Todo;
 use App\Models\Unit;
 use App\Models\UnitPopulation;
+use App\Models\UnitType;
 use App\Models\User;
 use App\Services\AccessService;
+use App\Support\RoleGuard;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
@@ -21,6 +23,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
 
@@ -1543,5 +1546,63 @@ class UnitsIndexLivewireTest extends TestCase
 
         $stored = Unit::find($target->id)->description;
         $this->assertSame(20000, mb_strlen($stored));
+    }
+
+    // ==================== #1864: root creation/move is admin-only ====================
+
+    public function test_scoped_manager_cannot_create_root_via_save_unit(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(['organization']);
+        $unit->update(['unit_type_id' => 2, 'region_id' => 1]); // province level, id != 1
+        $this->actingAs($user);
+
+        Livewire::test('units.index')
+            ->set('name', 'ریشه جعلی')
+            ->set('unit_type_id', UnitType::ROOT_ID) // forged: the dropdown never offers it
+            ->set('parent_id', null)
+            ->call('saveUnit');
+
+        $this->assertDatabaseMissing('units', ['name' => 'ریشه جعلی']);
+    }
+
+    public function test_scoped_manager_cannot_move_unit_to_root(): void
+    {
+        ['user' => $user, 'unit' => $parent] = $this->createUserWithUnit(['organization']);
+        $parent->update(['unit_type_id' => 2, 'region_id' => 1]);
+        $child = Unit::create([
+            'name' => 'فرزند', 'unit_type_id' => 3,
+            'region_id' => 1, 'parent_id' => $parent->id,
+        ]);
+        $this->actingAs($user);
+
+        Livewire::test('units.index')
+            ->call('editUnit', $child->id)
+            ->set('unit_type_id', UnitType::ROOT_ID)
+            ->set('parent_id', null)
+            ->call('saveUnit');
+
+        $fresh = $child->fresh();
+        $this->assertSame($parent->id, $fresh->parent_id);
+        $this->assertSame(3, (int) $fresh->unit_type_id);
+    }
+
+    public function test_admin_can_create_root_via_save_unit(): void
+    {
+        ['user' => $user] = $this->createUserWithUnit(['organization']);
+        Role::firstOrCreate(['name' => RoleGuard::ADMIN, 'guard_name' => 'web']);
+        $user->assignRole(RoleGuard::ADMIN);
+        $this->actingAs($user->fresh());
+
+        Livewire::test('units.index')
+            ->set('name', 'ریشه مجاز')
+            ->set('unit_type_id', UnitType::ROOT_ID)
+            ->set('parent_id', null)
+            ->call('saveUnit');
+
+        $this->assertDatabaseHas('units', [
+            'name' => 'ریشه مجاز',
+            'unit_type_id' => UnitType::ROOT_ID,
+            'parent_id' => null,
+        ]);
     }
 }

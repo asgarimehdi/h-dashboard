@@ -5,10 +5,13 @@ namespace Tests\Feature;
 use App\Http\Controllers\Api\UnitController;
 use App\Models\Unit;
 use App\Models\UnitType;
+use App\Models\User;
+use App\Support\RoleGuard;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
+use Spatie\Permission\Models\Role;
 use Tests\Support\Concerns\InteractsWithApiTokens;
 use Tests\Support\Concerns\InteractsWithTestSetup;
 use Tests\TestCase;
@@ -38,6 +41,8 @@ class ApiUnitParentTypeTest extends TestCase
     private Unit $university;
 
     private Unit $deputy;
+
+    private User $user;
 
     private string $token;
 
@@ -69,6 +74,7 @@ class ApiUnitParentTypeTest extends TestCase
 
         $setup = $this->createUserWithUnit(['organization']);
         $user = $setup['user'];
+        $this->user = $user;
         $this->root = $setup['unit'];
         $this->root->update(['unit_type_id' => UnitType::ROOT_ID]);
 
@@ -84,6 +90,15 @@ class ApiUnitParentTypeTest extends TestCase
         ]);
 
         $this->token = $this->createApiToken($user, ['units:read', 'units:write']);
+    }
+
+    /**
+     * Issue #1864: creating/moving to the hierarchy root is admin-only.
+     */
+    private function promoteToAdmin(): void
+    {
+        Role::firstOrCreate(['name' => RoleGuard::ADMIN, 'guard_name' => 'web']);
+        $this->user->assignRole(RoleGuard::ADMIN);
     }
 
     /**
@@ -147,8 +162,11 @@ class ApiUnitParentTypeTest extends TestCase
         $this->assertDatabaseMissing('units', ['name' => 'بی‌والد']);
     }
 
-    public function test_store_accepts_root_without_parent(): void
+    public function test_admin_store_accepts_root_without_parent(): void
     {
+        // Issue #1864: minting a root is admin-only.
+        $this->promoteToAdmin();
+
         $response = $this->apiPost('/api/units', [
             'name' => 'وزارت دوم',
             'unit_type_id' => UnitType::ROOT_ID,
@@ -161,6 +179,20 @@ class ApiUnitParentTypeTest extends TestCase
             'unit_type_id' => UnitType::ROOT_ID,
             'parent_id' => null,
         ]);
+    }
+
+    public function test_scoped_manager_cannot_create_root_without_parent(): void
+    {
+        // Issue #1864: the default actor here is a plain `organization` user.
+        $response = $this->apiPost('/api/units', [
+            'name' => 'ریشه غیرمجاز',
+            'unit_type_id' => UnitType::ROOT_ID,
+        ], $this->token);
+
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Only an administrator can create or move a unit to the hierarchy root.']);
+
+        $this->assertDatabaseMissing('units', ['name' => 'ریشه غیرمجاز']);
     }
 
     public function test_store_rejects_root_with_parent(): void
@@ -304,7 +336,7 @@ class ApiUnitParentTypeTest extends TestCase
         $this->assertSame($this->deputy->id, $network->fresh()->parent_id);
     }
 
-    public function test_update_allows_clearing_parent_on_root(): void
+    public function test_admin_update_allows_clearing_parent_on_root(): void
     {
         // Set up directly: no write surface can create a root WITH a parent.
         $root2 = Unit::create([
@@ -312,6 +344,9 @@ class ApiUnitParentTypeTest extends TestCase
             'unit_type_id' => UnitType::ROOT_ID,
             'parent_id' => $this->root->id,
         ]);
+
+        // Issue #1864: moving a unit to the root is admin-only.
+        $this->promoteToAdmin();
 
         $response = $this->apiPut("/api/units/{$root2->id}", [
             'parent_id' => null,

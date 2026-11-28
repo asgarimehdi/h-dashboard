@@ -38,13 +38,17 @@ class ApiAbilityTest extends TestCase
 
     /**
      * Create a user with a real Sanctum token bearing specific abilities.
-     * Optionally assign Spatie permissions so role_or_permission middleware passes.
+     * Optionally assign Spatie permissions so role_or_permission middleware passes,
+     * and/or a Spatie role (issue #1864: root writes need the `admin` role).
      */
-    private function createTokenWithAbilities(array $abilities, array $permissions = []): string
+    private function createTokenWithAbilities(array $abilities, array $permissions = [], ?string $role = null): string
     {
         $args = [];
         if ($permissions) {
             $args['permissions'] = $permissions;
+        }
+        if ($role) {
+            $args['role'] = $role;
         }
         ['user' => $user] = $this->createUserWithUnit(...$args);
 
@@ -133,6 +137,9 @@ class ApiAbilityTest extends TestCase
 
     public function test_units_write_allowed_with_ability(): void
     {
+        // Issue #1864: creating a root is admin-only.
+        $this->seed(RoleSeeder::class);
+
         // Issue #1649: non-root units need an allowed parent, so pin the root
         // type id instead of relying on the sequence.
         DB::table('unit_types')->insert([
@@ -142,7 +149,7 @@ class ApiAbilityTest extends TestCase
             'updated_at' => now(),
         ]);
         $this->resyncSequence('unit_types');
-        $token = $this->createTokenWithAbilities(['units:read', 'units:write'], ['organization']);
+        $token = $this->createTokenWithAbilities(['units:read', 'units:write'], ['organization'], 'admin');
         $this->apiPost('/api/units', [
             'name' => 'Test Unit',
             'unit_type_id' => UnitType::ROOT_ID,
