@@ -250,6 +250,47 @@ class Unit extends Model
     }
 
     /**
+     * کل زنجیرهٔ اجداد (همهٔ سطوح) برای یک مجموعه id — یک Recursive CTE.
+     *
+     * برخلاف ancestorIds() که فقط والد مستقیم را می‌دهد، این متد تا ریشه
+     * بالا می‌رود. خود idهای ورودی فقط اگر جدِ ورودی دیگری باشند در نتیجه
+     * می‌آیند (هم‌رفتار با expandParents قدیم در چارت واحدها).
+     *
+     * UNION (نه UNION ALL) عمدی است: چرخهٔ parent_id را خاتمه می‌دهد؛
+     * UNION ALL روی چرخه تا ابد می‌چرخد. بی‌کش: مجموعهٔ idها هر جستجو
+     * متفاوت است، پس کلید کش تقریباً هرگز hit نمی‌شود.
+     *
+     * @param  array<int>  $unitIds
+     * @return Collection<int, int>
+     */
+    public static function ancestorChainIds(array $unitIds): Collection
+    {
+        $ids = array_values(array_filter($unitIds));
+
+        if (empty($ids)) {
+            return collect();
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $results = DB::select("
+            WITH RECURSIVE unit_ancestors AS (
+                SELECT p.id, p.parent_id
+                FROM units p
+                INNER JOIN units base ON base.parent_id = p.id
+                WHERE base.id IN ({$placeholders})
+                UNION
+                SELECT p.id, p.parent_id
+                FROM units p
+                INNER JOIN unit_ancestors a ON p.id = a.parent_id
+            )
+            SELECT DISTINCT id FROM unit_ancestors
+        ", $ids);
+
+        return collect($results)->pluck('id')->map(fn ($id): int => (int) $id)->values();
+    }
+
+    /**
      * تمام id های زیرمجموعه (شامل خود واحدهای ورودی) با Recursive CTE
      *
      * @param  int|array<int>  $unitIds
