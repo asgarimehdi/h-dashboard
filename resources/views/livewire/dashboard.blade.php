@@ -77,6 +77,13 @@ return new class extends Component
         $accessibleIds = app(AccessService::class)->accessibleUnitIds();
         $this->emptyScope = $accessibleIds === [];
         $scopeKey = \App\Support\ScopeCacheKey::hash($accessibleIds);
+        $userId = auth()->id();
+        // Issue #1872: `[]` must compile to `0 = 1`, never to `IN ()`
+        // (invalid SQL) and never to a dropped predicate (fail-open, #819).
+        $idList = implode(',', array_fill(0, count($accessibleIds), '?'));
+        $unitIn = fn (string $column): string => $accessibleIds === []
+            ? '0 = 1'
+            : "{$column} IN ({$idList})";
         // Issue #1290: version lookup and key shape are the service's job.
         $cache = app(\App\Services\CacheInvalidationServiceInterface::class);
 
@@ -91,28 +98,15 @@ return new class extends Component
         $this->totalRoles = $globalStats['totalRoles'];
 
         // Scoped stats — consolidated with PostgreSQL FILTER
-        $stats = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
-            if ($accessibleIds === []) {
-                return [
-                    'totalPersons' => 0,
-                    'totalUnits' => 0,
-                    'totalTickets' => 0,
-                    'openTickets' => 0,
-                    'completedTickets' => 0,
-                    'totalTodos' => 0,
-                    'pendingTodos' => 0,
-                    'completedTodos' => 0,
-                    'linkedTodos' => 0,
-                ];
-            }
-
-            $idList = implode(',', array_fill(0, count($accessibleIds), '?'));
-
+        // #1872: the empty-scope early return is gone. Persons/units/tickets
+        // already fail closed via `0 = 1`; only the todo counters are
+        // user-dependent (a null-unit todo belongs to its creator, #838).
+        $stats = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds, $unitIn, $userId) {
             // Persons + Units in one shot
             $row = DB::selectOne("
                 SELECT
-                    (SELECT COUNT(*) FROM persons WHERE u_id IN ({$idList})) AS total_persons,
-                    (SELECT COUNT(*) FROM units WHERE id IN ({$idList})) AS total_units
+                    (SELECT COUNT(*) FROM persons WHERE {$unitIn('u_id')}) AS total_persons,
+                    (SELECT COUNT(*) FROM units WHERE {$unitIn('id')}) AS total_units
             ", array_merge($accessibleIds, $accessibleIds));
 
             // Tickets: total, open, completed
@@ -123,25 +117,28 @@ return new class extends Component
                     COUNT(*) AS total_tickets,
                     COUNT(*) FILTER (WHERE {$openExpr}) AS open_tickets,
                     COUNT(*) FILTER (WHERE status = 'completed') AS completed_tickets
-                FROM tickets WHERE unit_id IN ({$idList})
+                FROM tickets WHERE {$unitIn('unit_id')}
             ", $accessibleIds);
 
             // Todos: total, pending, completed
+            // #1872 — same null-unit contract as Todo::accessibleTo(): a
+            // unit-less todo belongs to its creator. `user_id = NULL` is never
+            // true in Postgres, so a null actor stays fail-closed.
             $todoRow = DB::selectOne("
                 SELECT
                     COUNT(*) AS total_todos,
                     COUNT(*) FILTER (WHERE is_completed = false) AS pending_todos,
                     COUNT(*) FILTER (WHERE is_completed = true) AS completed_todos
-                FROM todos WHERE unit_id IN ({$idList})
-            ", $accessibleIds);
+                FROM todos WHERE ({$unitIn('unit_id')} OR (unit_id IS NULL AND user_id = ?))
+            ", array_merge($accessibleIds, [$userId]));
 
             // Linked todos (tickets.task_id -> todos.id)
             $linkedTodos = DB::selectOne("
                 SELECT COUNT(DISTINCT t.id) AS cnt
                 FROM todos t
-                WHERE t.unit_id IN ({$idList})
+                WHERE ({$unitIn('t.unit_id')} OR (t.unit_id IS NULL AND t.user_id = ?))
                   AND EXISTS (SELECT 1 FROM tickets WHERE task_id = t.id)
-            ", $accessibleIds);
+            ", array_merge($accessibleIds, [$userId]));
 
             return [
                 'totalPersons' => (int) ($row->total_persons ?? 0),
@@ -154,18 +151,13 @@ return new class extends Component
                 'completedTodos' => (int) ($todoRow->completed_todos ?? 0),
                 'linkedTodos' => (int) ($linkedTodos->cnt ?? 0),
             ];
-        }, 5, ['segment' => 'stats']);
+        }, 5, ['segment' => 'stats', 'uid' => $userId]);
 
         // Today stats — 1 consolidated query
-        $todayStats = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
-            if ($accessibleIds === []) {
-                return [
-                    'todayTickets' => 0,
-                    'todayTodos' => 0,
-                    'todayActivities' => 0,
-                ];
-            }
-
+        // #1872: no empty-scope early return — only todo counts are
+        // user-dependent, and todayTickets/todayActivities fail closed on
+        // their own (`whereIn` on `[]` compiles to `0 = 1`).
+        $todayStats = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds, $userId) {
             $today = now()->startOfDay()->toDateTimeString();
             // #1057: this is an ACCESS list, not a display list. Soft-deleted
             // users inside the unit scope keep their audit rows; widening only
@@ -182,12 +174,12 @@ return new class extends Component
             return [
                 'todayTickets' => Ticket::whereIn('unit_id', $accessibleIds)
                     ->where('created_at', '>=', $today)->count(),
-                'todayTodos' => Todo::whereIn('unit_id', $accessibleIds)
+                'todayTodos' => Todo::accessibleTo($accessibleIds, $userId)
                     ->where('created_at', '>=', $today)->count(),
                 'todayActivities' => ActivityLog::whereIn('user_id', $userIds)
                     ->where('created_at', '>=', $today)->count(),
             ];
-        }, 2, ['segment' => 'today']);
+        }, 2, ['segment' => 'today', 'uid' => $userId]);
 
         // Ticket details — 1 consolidated query
         $details = $cache->remember('dashboard', $scopeKey, function () use ($accessibleIds) {
