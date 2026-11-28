@@ -26,6 +26,8 @@
  * attributes — never `x-on:click="someGlobal(...)"`.
  */
 
+import { escapeHtml } from './escape-html';
+
 /** @type {HTMLElement | null} */
 let countySetupEl = null;
 
@@ -443,7 +445,9 @@ function setupMapNoBoundary() {
           fillOpacity: 0.9,
         }).addTo(map);
 
-        marker.bindPopup(`<strong>${unit.name}</strong><br>${unit.type}<br>${unit.region}`);
+        marker.bindPopup(
+          `<strong>${escapeHtml(unit.name)}</strong><br>${escapeHtml(unit.type)}<br>${escapeHtml(unit.region)}`,
+        );
 
         if (!markers[unit.id]) {
           markers[unit.id] = [];

@@ -52,6 +52,8 @@
  * module re-runs setup on `livewire:init` / `livewire:navigated`.
  */
 
+import { escapeHtml } from './escape-html';
+
 /** @type {any} */
 let unitMapCurrent = null;
 let unitListenersRegistered = false;
@@ -231,7 +233,7 @@ function setupPointMap() {
         for (; mi < end; mi++) {
           const loc = locations[mi];
           L.marker([loc.lat, loc.lng], { icon: getIcon(loc.unit_type_id) })
-            .bindPopup(loc.name)
+            .bindPopup(escapeHtml(loc.name))
             .addTo(markersLayer);
         }
         if (mi < locations.length) {
