@@ -204,6 +204,58 @@ class TicketApiTest extends TestCase
             ->assertJson(['data' => ['subject' => 'Show Me', 'content' => 'Body']]);
     }
 
+    public function test_show_caps_activities_at_the_newest_50_by_id(): void
+    {
+        ['user' => $user, 'unit' => $unit] = $this->createUserWithUnit(
+            ['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'],
+            'admin'
+        );
+
+        $ticket = Ticket::create([
+            'ticket_code' => 'T-1965',
+            'user_id' => $user->id,
+            'unit_id' => $unit->id,
+            'subject' => 'Long history',
+            'content' => 'Body',
+            'priority' => 'normal',
+            'status' => 'created',
+        ]);
+
+        // #1965: 60 activities. created_at DESCENDS as id ASCENDS on purpose:
+        // the fix must select the newest 50 by id (the web modal's
+        // `latest('id')`), not by created_at. A `latest()` regression returns
+        // the other 50 rows here.
+        $rows = collect(range(1, 60))->map(fn (int $i): array => [
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'action' => 'created',
+            'description' => "activity {$i}",
+            'is_internal' => false,
+            'created_at' => now()->subMinutes($i),
+            'updated_at' => now()->subMinutes($i),
+        ])->all();
+
+        DB::table('task_activities')->insert($rows);
+
+        // The Postgres sequence is not reset between tests, so read the ids
+        // back instead of assuming they start at 1.
+        $ids = DB::table('task_activities')
+            ->where('ticket_id', $ticket->id)
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        $token = $this->createApiToken($user, ['tickets:read']);
+        $response = $this->apiGet("/api/tickets/{$ticket->id}", $token);
+
+        $response->assertStatus(200)->assertJsonCount(50, 'data.activities');
+
+        $expected = array_map('intval', array_reverse(array_slice($ids, -50)));
+        $returned = array_map('intval', collect($response->json('data.activities'))->pluck('id')->all());
+
+        $this->assertSame($expected, $returned);
+    }
+
     public function test_user_can_create_ticket(): void
     {
         ['user' => $user, 'unit' => $unit] = $this->createUserWithReceivingUnit(['create_ticket', 'view_assigned_tickets', 'view_all_tickets', 'manage_unit_tickets'], 'admin');
